@@ -1,0 +1,15 @@
+<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" role="img">
+  <title>Batwa</title>
+  <style>
+    :root { --ink:#17133A; --accent:#6248F5; }
+    @media (prefers-color-scheme: dark) {
+      :root { --ink:#F5F4FC; --accent:#8B6EF9; }
+    }
+  </style>
+  <mask id="wms">
+    <rect width="24" height="24" fill="#fff"/>
+    <rect x="8.6" y="2.4" width="11.6" height="10.6" rx="2.6" fill="#000" transform="rotate(-20 14.4 7.7)"/>
+  </mask>
+  <rect x="2.5" y="9" width="19" height="12" rx="4.5" fill="var(--ink)" mask="url(#wms)"/>
+  <rect x="10" y="3.8" width="8.8" height="7.8" rx="1.6" fill="var(--accent)" transform="rotate(-20 14.4 7.7)"/>
+</svg>

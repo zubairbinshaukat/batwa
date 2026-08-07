@@ -1,0 +1,92 @@
+/* ============================================================
+   Batwa — design tokens
+   Everything visual derives from here. Change with intent.
+   ============================================================ */
+:root {
+  /* ---- Canvas & surfaces ---- */
+  --c-bg:            #F5F4FC;
+  --c-bg-deep:       #EEEBFA;
+  --c-surface:       #FFFFFF;
+  --c-surface-2:     #FAF9FE;
+  --c-border:        rgba(23, 19, 58, 0.07);
+  --c-border-strong: rgba(23, 19, 58, 0.14);
+
+  /* ---- Ink ---- */
+  --c-ink:        #17133A;
+  --c-ink-soft:   #4A4668;
+  --c-muted:      #837FA3;
+  --c-faint:      #B4B1CC;
+  --c-on-grad:    #FFFFFF;
+  --c-on-grad-dim: rgba(255, 255, 255, 0.72);
+
+  /* ---- Brand ---- */
+  --c-violet:      #6248F5;
+  --c-violet-deep: #4630C9;
+  --c-violet-soft: #EEEAFE;
+  --c-aqua:        #2FB6E9;
+  --c-aqua-soft:   #E3F5FC;
+
+  /* ---- Semantic ---- */
+  --c-pos:        #12B77F;   /* income / positive */
+  --c-pos-soft:   #E2F8EF;
+  --c-warn:       #E8930C;   /* committed / caution */
+  --c-warn-soft:  #FFF3DE;
+  --c-neg:        #EF4667;   /* overdue / negative */
+  --c-neg-soft:   #FDE9ED;
+
+  /* ---- Recurrence system (stripe + badge, used everywhere) ---- */
+  --rec-once:    #94A0B8;
+  --rec-weekly:  #2FB6E9;
+  --rec-monthly: #7C55F7;
+
+  /* ---- Gradients ---- */
+  --grad-hero:   linear-gradient(140deg, #4F33E8 0%, #7C55F7 46%, #9E7BFF 72%, #3FBCF8 125%);
+  --grad-action: linear-gradient(135deg, #5B3DF0 0%, #8257F6 100%);
+  --grad-mint:   linear-gradient(135deg, #0E9F6E 0%, #16C79A 100%);
+  --grad-danger: linear-gradient(140deg, #E23A5F 0%, #F97362 100%);
+  --grad-page:
+    radial-gradient(60% 40% at 12% -6%, rgba(124, 85, 247, 0.14), transparent 70%),
+    radial-gradient(50% 36% at 96% 2%,  rgba(63, 188, 248, 0.12), transparent 70%),
+    radial-gradient(42% 30% at 70% 26%, rgba(18, 183, 127, 0.05), transparent 70%);
+
+  /* ---- Elevation (soft, layered) ---- */
+  --shadow-xs:    0 1px 2px rgba(23, 19, 58, 0.05);
+  --shadow-card:  0 1px 2px rgba(23, 19, 58, 0.04), 0 10px 28px -10px rgba(23, 19, 58, 0.12);
+  --shadow-lift:  0 2px 6px rgba(23, 19, 58, 0.06), 0 18px 44px -12px rgba(23, 19, 58, 0.18);
+  --shadow-hero:  0 14px 36px -10px rgba(79, 51, 232, 0.48);
+  --shadow-btn:   0 8px 20px -6px rgba(91, 61, 240, 0.45);
+  --shadow-sheet: 0 -14px 56px rgba(23, 19, 58, 0.20);
+
+  /* ---- Radius ---- */
+  --r-sm:   10px;
+  --r-md:   16px;
+  --r-lg:   22px;
+  --r-xl:   28px;
+  --r-pill: 999px;
+
+  /* ---- Spacing scale ---- */
+  --s-1: 4px;  --s-2: 8px;  --s-3: 12px; --s-4: 16px;
+  --s-5: 20px; --s-6: 24px; --s-7: 32px; --s-8: 40px; --s-9: 56px;
+
+  /* ---- Type ---- */
+  --font: "Outfit", -apple-system, "Segoe UI", Roboto, sans-serif;
+  --fs-xs:   0.75rem;   /* 12 */
+  --fs-sm:   0.8125rem; /* 13 */
+  --fs-base: 0.9375rem; /* 15 */
+  --fs-md:   1.0625rem; /* 17 */
+  --fs-lg:   1.375rem;  /* 22 */
+  --fs-xl:   1.75rem;   /* 28 */
+  --fs-hero: 2.625rem;  /* 42 */
+
+  /* ---- Motion ---- */
+  --t-fast: 160ms;
+  --t-med:  260ms;
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+
+  /* ---- Layout ---- */
+  --max-w: 480px;
+  --max-w-wide: 1080px;
+  --nav-h: 64px;
+  --safe-b: env(safe-area-inset-bottom, 0px);
+  --safe-t: env(safe-area-inset-top, 0px);
+}

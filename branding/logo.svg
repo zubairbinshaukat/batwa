@@ -1,0 +1,26 @@
+<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" role="img">
+  <title>Batwa mark — a card sliding into the wallet slot</title>
+  <defs>
+    <!-- gaps are true holes (mask), so the mark works on any background -->
+    <mask id="wm">
+      <rect width="24" height="24" fill="#fff"/>
+      <rect x="9" y="3" width="10.4" height="9.4" rx="2.2" fill="#000" transform="rotate(-20 14.2 7.7)"/>
+    </mask>
+    <mask id="wms">
+      <rect width="24" height="24" fill="#fff"/>
+      <rect x="8.6" y="2.4" width="11.6" height="10.6" rx="2.6" fill="#000" transform="rotate(-20 14.4 7.7)"/>
+    </mask>
+
+    <!-- primary mark: used at >=24px -->
+    <g id="m">
+      <rect x="3" y="9.25" width="18" height="11.5" rx="4" fill="var(--ink)" mask="url(#wm)"/>
+      <rect x="10.2" y="4.2" width="8" height="7" rx="1.3" fill="var(--accent)" transform="rotate(-20 14.2 7.7)"/>
+    </g>
+    <!-- small mark: <=16px. Slot slit dropped, card + gap enlarged. -->
+    <g id="ms">
+      <rect x="2.5" y="9" width="19" height="12" rx="4.5" fill="var(--ink)" mask="url(#wms)"/>
+      <rect x="10" y="3.8" width="8.8" height="7.8" rx="1.6" fill="var(--accent)" transform="rotate(-20 14.4 7.7)"/>
+    </g>
+  </defs>
+  <use href="#m" style="--ink:#17133A; --accent:#6248F5"/>
+</svg>

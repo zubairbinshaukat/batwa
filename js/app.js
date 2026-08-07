@@ -1,0 +1,257 @@
+// Batwa entry point: boot sequence, routing, SW registration, install flow.
+
+import { openDB, ensureSchema, getMeta, setMeta } from "./db.js";
+import { hasPin, showSetup, showLock, initAutoLock } from "./auth.js";
+import { loadLedger, onChange } from "./ledger.js";
+import { scheduleSync, syncNow, getSyncState, onSyncState } from "./sync.js";
+import { $, el, anim } from "./util/dom.js";
+import { renderHome } from "./ui/home.js";
+import { renderReports } from "./ui/reports.js";
+import { renderSettings } from "./ui/settings.js";
+import { addMoneySheet, addExpenseSheet, sheetOpen } from "./ui/modals.js";
+import { toast } from "./ui/toast.js";
+
+/* ============================================================
+   Views + nav
+   ============================================================ */
+
+const VIEWS = {
+  home: { label: "Home", render: renderHome,
+    icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V21h5v-6h4v6h5V9.5"/></svg>' },
+  reports: { label: "Reports", render: renderReports,
+    icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>' },
+  settings: { label: "Settings", render: renderSettings,
+    icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h.01a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v.01a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>' },
+};
+
+let currentView = "home";
+let unlocked = false;
+
+function renderNav() {
+  const nav = $("#nav");
+  nav.innerHTML = "";
+  for (const [key, v] of Object.entries(VIEWS)) {
+    const b = el("button", {
+      class: `nav-item ${key === currentView ? "is-active" : ""}`,
+      "aria-label": v.label,
+      "aria-current": key === currentView ? "page" : false,
+      onclick: () => go(key),
+    });
+    b.innerHTML = `${v.icon}<span>${v.label}</span><span class="nav-ind"></span>`;
+    nav.append(b);
+  }
+}
+
+function go(view) {
+  if (view === currentView && unlocked) return;
+  currentView = view;
+  history.replaceState({ view }, "");
+  renderNav();
+  renderView();
+}
+
+function renderView() {
+  if (!unlocked) return;
+  const viewEl = $("#view");
+  try {
+    VIEWS[currentView].render(viewEl);
+    if (currentView === "home") mountInstallBanner();
+  } catch (err) {
+    console.error(err);
+    viewEl.innerHTML = `
+      <div class="empty"><div class="emoji">🤕</div>
+      <h3>Something went wrong</h3>
+      <p>${String(err.message || err)}</p></div>`;
+  }
+}
+
+// re-render on any data change + queue a sync
+onChange(() => { renderView(); scheduleSync(); updateSyncPill(); });
+
+/* ============================================================
+   Sync status pill (right of the greeting)
+   ============================================================ */
+
+const PILL_ICONS = {
+  off:     "◌",
+  offline: "⚡",
+  syncing: '<span class="spin">↻</span>',
+  pending: "●",
+  synced:  "✓",
+};
+
+async function updateSyncPill() {
+  const pill = $("#sync-pill");
+  if (!pill) return;
+  const s = await getSyncState();
+  pill.className = `sync-pill st-${s.state}`;
+  pill.innerHTML = `${PILL_ICONS[s.state] || ""}<span>${s.text}</span>`;
+  pill.onclick = () => {
+    if (s.state === "off") { go("settings"); return; }
+    syncNow();
+  };
+}
+
+onSyncState(updateSyncPill);
+window.addEventListener("online", updateSyncPill);
+window.addEventListener("offline", updateSyncPill);
+setInterval(updateSyncPill, 60000); // keep "Synced X min ago" fresh
+
+/* ============================================================
+   Install experience
+   ============================================================ */
+
+let deferredPrompt = null;
+
+const isStandalone = () =>
+  matchMedia("(display-mode: standalone)").matches || navigator.standalone === true;
+const isIOS = () => /iphone|ipad|ipod/i.test(navigator.userAgent) && !window.MSStream;
+
+export function getInstallState() {
+  if (isStandalone()) return "standalone";
+  if (deferredPrompt) return "installable";
+  if (isIOS()) return "ios";
+  return "browser";
+}
+
+export async function promptInstall() {
+  if (!deferredPrompt) return;
+  deferredPrompt.prompt();
+  const { outcome } = await deferredPrompt.userChoice;
+  if (outcome === "accepted") { deferredPrompt = null; toast("Batwa installed 🎉"); }
+}
+
+window.addEventListener("beforeinstallprompt", (e) => {
+  e.preventDefault();
+  deferredPrompt = e;
+  if (unlocked && currentView === "home") mountInstallBanner();
+});
+
+async function mountInstallBanner() {
+  const slot = $("#install-slot");
+  if (!slot || isStandalone()) return;
+  if (await getMeta("installDismissed")) return;
+  const state = getInstallState();
+  if (state !== "installable" && state !== "ios") return;
+  slot.innerHTML = "";
+  const banner = el("div", { class: "install-banner" });
+  banner.innerHTML = `
+    <span class="ib-ico">📲</span>
+    <span class="grow"><strong>Put Batwa on your home screen</strong>
+    <p>${state === "ios" ? "Share → Add to Home Screen in Safari" : "Installs like an app, works fully offline"}</p></span>
+  `;
+  if (state === "installable") {
+    banner.append(el("button", { class: "btn btn-sm", style: "background:#fff;color:var(--c-ink);flex:0 0 auto", onclick: promptInstall }, "Install"));
+  }
+  banner.append(el("button", {
+    class: "icon-btn", style: "background:transparent;border:none;box-shadow:none;color:rgba(255,255,255,0.6);width:36px;height:36px;flex:0 0 auto",
+    "aria-label": "Dismiss",
+    onclick: async () => { await setMeta("installDismissed", true); banner.remove(); },
+  }, "✕"));
+  slot.append(banner);
+  anim(banner, { y: -14, opacity: 0 }, { y: 0, opacity: 1, duration: 0.4, ease: "power2.out" });
+}
+
+/* ============================================================
+   Service worker + update toast
+   ============================================================ */
+
+async function registerSW() {
+  if (!("serviceWorker" in navigator)) return;
+  try {
+    const reg = await navigator.serviceWorker.register("sw.js");
+    // A new SW is waiting: offer reload, never silently update mid-session.
+    function watch(worker) {
+      worker.addEventListener("statechange", () => {
+        if (worker.state === "installed" && navigator.serviceWorker.controller) {
+          showUpdateToast(worker);
+        }
+      });
+    }
+    if (reg.waiting && navigator.serviceWorker.controller) showUpdateToast(reg.waiting);
+    reg.addEventListener("updatefound", () => reg.installing && watch(reg.installing));
+    let reloading = false;
+    navigator.serviceWorker.addEventListener("controllerchange", () => {
+      if (reloading) return;
+      reloading = true;
+      location.reload();
+    });
+  } catch (err) {
+    console.warn("SW registration failed", err);
+  }
+}
+
+function showUpdateToast(worker) {
+  const root = $("#toast-root");
+  const t = el("div", { class: "toast" });
+  t.append(
+    el("span", {}, "✨ New version ready"),
+    el("button", { class: "toast-undo", onclick: () => worker.postMessage("SKIP_WAITING") }, "Reload"),
+  );
+  root.append(t);
+}
+
+/* ============================================================
+   Offline indicator
+   ============================================================ */
+
+function initOnlineState() {
+  const set = () => document.body.classList.toggle("is-offline", !navigator.onLine);
+  window.addEventListener("online", set);
+  window.addEventListener("offline", set);
+  set();
+  // catch up whenever the app comes back to the foreground
+  document.addEventListener("visibilitychange", () => {
+    if (!document.hidden) { scheduleSync(); updateSyncPill(); }
+  });
+}
+
+/* ============================================================
+   Boot
+   ============================================================ */
+
+async function unlockFlow() {
+  unlocked = false;
+  if (await hasPin()) await showLock();
+  else await showSetup();
+  await loadLedger();
+  unlocked = true;
+  renderNav();
+  renderView();
+  updateSyncPill();
+  syncNow({ silent: true });
+}
+
+async function boot() {
+  try {
+    await openDB();
+    await ensureSchema();
+    initOnlineState();
+    registerSW();
+    history.replaceState({ view: "home" }, "");
+
+    await unlockFlow();
+
+    initAutoLock(() => unlockFlow());
+
+    // PWA shortcut deep links (long-press icon)
+    const action = new URLSearchParams(location.search).get("action");
+    if (action === "add-expense") addExpenseSheet();
+    if (action === "add-money") addMoneySheet();
+    if (action) history.replaceState({ view: "home" }, "", "./");
+  } catch (err) {
+    console.error(err);
+    $("#view").innerHTML = `
+      <div class="empty"><div class="emoji">🤕</div>
+      <h3>Batwa couldn't start</h3>
+      <p>${String(err.message || err)}. Try reloading — your data is safe.</p></div>`;
+  }
+}
+
+// No unhandled error ever lands on a blank screen.
+window.addEventListener("unhandledrejection", (e) => {
+  console.error(e.reason);
+  toast("Something went wrong — nothing was lost", { icon: "⚠️" });
+});
+
+boot();

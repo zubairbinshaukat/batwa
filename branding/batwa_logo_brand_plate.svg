@@ -1,0 +1,81 @@
+<svg viewBox="0 0 680 452" xmlns="http://www.w3.org/2000/svg" font-family="Segoe UI, -apple-system, sans-serif">
+  <defs>
+    <mask id="wm">
+      <rect width="24" height="24" fill="#fff"/>
+      <rect x="9" y="3" width="10.4" height="9.4" rx="2.2" fill="#000" transform="rotate(-20 14.2 7.7)"/>
+    </mask>
+    <mask id="wms">
+      <rect width="24" height="24" fill="#fff"/>
+      <rect x="8.6" y="2.4" width="11.6" height="10.6" rx="2.6" fill="#000" transform="rotate(-20 14.4 7.7)"/>
+    </mask>
+    <g id="m">
+      <rect x="3" y="9.25" width="18" height="11.5" rx="4" fill="var(--ink)" mask="url(#wm)"/>
+      <rect x="10.2" y="4.2" width="8" height="7" rx="1.3" fill="var(--accent)" transform="rotate(-20 14.2 7.7)"/>
+    </g>
+    <g id="ms">
+      <rect x="2.5" y="9" width="19" height="12" rx="4.5" fill="var(--ink)" mask="url(#wms)"/>
+      <rect x="10" y="3.8" width="8.8" height="7.8" rx="1.6" fill="var(--accent)" transform="rotate(-20 14.4 7.7)"/>
+    </g>
+    <linearGradient id="tile-g" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#4F33E8"/><stop offset="0.5" stop-color="#7C55F7"/><stop offset="1" stop-color="#3FBCF8"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="680" height="452" fill="#EFEDF8"/>
+
+  <!-- 1. primary mark on paper -->
+  <text x="40" y="24" font-size="11" letter-spacing="2.5" fill="#837FA3">PRIMARY MARK</text>
+  <rect x="40" y="30" width="180" height="180" rx="18" fill="#F5F4FC"/>
+  <use href="#m" transform="translate(58 48) scale(6)" style="--ink:#17133A; --accent:#6248F5"/>
+
+  <!-- 2. construction grid -->
+  <text x="250" y="24" font-size="11" letter-spacing="2.5" fill="#837FA3">CONSTRUCTION</text>
+  <rect x="250" y="30" width="180" height="180" rx="18" fill="#F5F4FC"/>
+  <g transform="translate(268 48) scale(6)">
+    <g stroke="#C9C4E6" stroke-width="0.08">
+      <line x1="3" y1="0" x2="3" y2="24"/><line x1="12" y1="0" x2="12" y2="24"/><line x1="21" y1="0" x2="21" y2="24"/>
+      <line x1="0" y1="4.2" x2="24" y2="4.2"/><line x1="0" y1="9.25" x2="24" y2="9.25"/>
+      <line x1="0" y1="14.5" x2="24" y2="14.5"/><line x1="0" y1="20.75" x2="24" y2="20.75"/>
+    </g>
+    <line x1="6" y1="24" x2="20" y2="0" stroke="#8B6EF9" stroke-width="0.12" stroke-dasharray="0.5 0.5"/>
+    <circle cx="14.2" cy="7.7" r="5.2" fill="none" stroke="#C9C4E6" stroke-width="0.1" stroke-dasharray="0.5 0.5"/>
+    <g opacity="0.28">
+      <rect x="3" y="9.25" width="18" height="11.5" rx="4" fill="#17133A" mask="url(#wm)"/>
+      <rect x="10.2" y="4.2" width="8" height="7" rx="1.3" fill="#6248F5" transform="rotate(-20 14.2 7.7)"/>
+    </g>
+  </g>
+
+  <!-- 3. app icon tile -->
+  <text x="460" y="24" font-size="11" letter-spacing="2.5" fill="#837FA3">APP ICON</text>
+  <rect x="460" y="30" width="180" height="180" rx="40" fill="url(#tile-g)"/>
+  <use href="#m" transform="translate(486 56) scale(5.4)" style="--ink:#FFFFFF; --accent:#FFFFFF"/>
+
+  <!-- 4. size ladder -->
+  <text x="40" y="258" font-size="11" letter-spacing="2.5" fill="#837FA3">SCALE</text>
+  <use href="#m"  transform="translate(40 270) scale(2.667)"  style="--ink:#17133A; --accent:#6248F5"/>
+  <use href="#m"  transform="translate(116 294) scale(1.667)" style="--ink:#17133A; --accent:#6248F5"/>
+  <use href="#m"  transform="translate(166 310) scale(1)"     style="--ink:#17133A; --accent:#6248F5"/>
+  <use href="#ms" transform="translate(200 318) scale(0.667)" style="--ink:#17133A; --accent:#6248F5"/>
+  <text x="40" y="356" font-size="10" fill="#837FA3">64 / 40 / 24 / 16 — at 16px the card and its gap thicken; the tuck-in gesture stays.</text>
+
+  <!-- 5. lockup -->
+  <use href="#m" transform="translate(40 384) scale(1.833)" style="--ink:#17133A; --accent:#6248F5"/>
+  <text x="96" y="408" font-size="21" font-weight="600" letter-spacing="5" fill="#17133A">BATWA</text>
+  <text x="96" y="424" font-size="9.5" letter-spacing="1.4" fill="#837FA3">YOUR MONEY, IN YOUR POCKET</text>
+
+  <!-- 6. palette chips -->
+  <g transform="translate(460 376)">
+    <rect width="36" height="36" rx="9" fill="#17133A"/>
+    <text x="44" y="15" font-size="10" font-weight="600" fill="#17133A">Midnight Ink</text>
+    <text x="44" y="28" font-size="9" font-family="Consolas, monospace" fill="#837FA3">#17133A</text>
+    <rect y="44" width="36" height="36" rx="9" fill="#F5F4FC" stroke="#DDD9EE"/>
+    <text x="44" y="59" font-size="10" font-weight="600" fill="#17133A">Lavender Milk</text>
+    <text x="44" y="72" font-size="9" font-family="Consolas, monospace" fill="#837FA3">#F5F4FC</text>
+    <rect x="110" width="36" height="36" rx="9" fill="#6248F5"/>
+    <text x="154" y="15" font-size="10" font-weight="600" fill="#17133A">Aurora Violet</text>
+    <text x="154" y="28" font-size="9" font-family="Consolas, monospace" fill="#837FA3">#6248F5</text>
+    <rect x="110" y="44" width="36" height="36" rx="9" fill="url(#tile-g)"/>
+    <text x="154" y="59" font-size="10" font-weight="600" fill="#17133A">Aurora Sweep</text>
+    <text x="154" y="72" font-size="9" font-family="Consolas, monospace" fill="#837FA3">4F33E8→3FBCF8</text>
+  </g>
+</svg>

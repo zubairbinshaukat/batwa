@@ -1,0 +1,124 @@
+/* ============================================================
+   Batwa — base: reset, typography, layout primitives
+   ============================================================ */
+
+@font-face {
+  font-family: "Outfit";
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url("../fonts/outfit-var.woff2") format("woff2");
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+
+html { -webkit-text-size-adjust: 100%; }
+
+body {
+  margin: 0;
+  font-family: var(--font);
+  font-size: var(--fs-base);
+  line-height: 1.5;
+  color: var(--c-ink);
+  background: var(--c-bg);
+  background-image: var(--grad-page);
+  background-attachment: fixed;
+  background-repeat: no-repeat;
+  min-height: 100dvh;
+  overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
+  overscroll-behavior-y: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+h1, h2, h3, h4, p { margin: 0; }
+h1 { font-size: var(--fs-lg); font-weight: 700; letter-spacing: -0.01em; }
+h2 { font-size: var(--fs-md); font-weight: 700; letter-spacing: -0.01em; }
+h3 { font-size: var(--fs-base); font-weight: 600; }
+
+button {
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+input, select, textarea { font: inherit; color: inherit; }
+
+a { color: var(--c-violet); text-decoration: none; }
+
+img, svg { display: block; max-width: 100%; }
+
+ul { margin: 0; padding: 0; list-style: none; }
+
+/* Money never wraps digits unevenly */
+.num, .money {
+  font-variant-numeric: tabular-nums lining-nums;
+  letter-spacing: -0.015em;
+}
+
+/* ---- Focus ---- */
+:focus-visible {
+  outline: 3px solid rgba(98, 72, 245, 0.55);
+  outline-offset: 2px;
+  border-radius: var(--r-sm);
+}
+:focus:not(:focus-visible) { outline: none; }
+
+/* ---- Layout primitives ---- */
+.app-shell {
+  max-width: var(--max-w);
+  margin: 0 auto;
+  padding: calc(var(--safe-t) + var(--s-4)) var(--s-4)
+           calc(var(--nav-h) + var(--safe-b) + var(--s-8));
+  min-height: 100dvh;
+}
+
+.stack   { display: flex; flex-direction: column; gap: var(--s-4); }
+.row     { display: flex; align-items: center; gap: var(--s-3); }
+.spread  { display: flex; align-items: center; justify-content: space-between; gap: var(--s-3); }
+.grow    { flex: 1 1 auto; min-width: 0; }
+.center  { display: grid; place-items: center; }
+
+.muted   { color: var(--c-muted); }
+.small   { font-size: var(--fs-sm); }
+.xsmall  { font-size: var(--fs-xs); }
+.strong  { font-weight: 600; }
+
+.truncate {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.hidden { display: none !important; }
+
+.sr-only {
+  position: absolute; width: 1px; height: 1px;
+  padding: 0; margin: -1px; overflow: hidden;
+  clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+}
+
+/* ---- Desktop: two columns for home, capped width ---- */
+@media (min-width: 900px) {
+  .app-shell { max-width: var(--max-w-wide); padding-bottom: var(--s-8); }
+  .home-grid {
+    display: grid;
+    grid-template-columns: 420px 1fr;
+    gap: var(--s-6);
+    align-items: start;
+  }
+  .home-grid > .home-left { position: sticky; top: var(--s-6); }
+}
+
+/* ---- Reduced motion ---- */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
