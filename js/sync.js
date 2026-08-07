@@ -8,6 +8,7 @@ import { state, replaceAll, mergeData } from "./ledger.js";
 import { timeAgo } from "./util/format.js";
 import { toast } from "./ui/toast.js";
 import { chooseSheet, confirmSheet, sheetOpen } from "./ui/modals.js";
+import { icon } from "./ui/icons.js";
 
 const API = "https://api.jsonbin.io/v3/b";
 
@@ -105,7 +106,7 @@ async function pullRemote(remote) {
   let key = getKey();
   if (remote.salt && remote.salt !== localSalt) {
     // Blob was encrypted under a different salt (other device) — same PIN, different key.
-    toast("Remote data uses a different device key — import it via a backup file instead", { icon: "⚠️" });
+    toast("Remote data uses a different device key — import it via a backup file instead", { icon: icon("alert", 18) });
     return false;
   }
   try {
@@ -114,7 +115,7 @@ async function pullRemote(remote) {
     await setMeta("updatedAt", remote.updatedAt);
     return true;
   } catch {
-    toast("Couldn't decrypt remote data with this PIN", { icon: "⚠️" });
+    toast("Couldn't decrypt remote data with this PIN", { icon: icon("alert", 18) });
     return false;
   }
 }
@@ -129,7 +130,7 @@ export async function syncNow({ silent = false } = {}) {
   if (syncing) return;
   const { binId, masterKey, lastSyncedAt } = await getSyncConfig();
   if (!binId || !masterKey) { if (!silent) toast("Add your JSONBin details in Settings first"); return; }
-  if (!navigator.onLine) { if (!silent) toast("You're offline — sync will run when you're back", { icon: "📡" }); return; }
+  if (!navigator.onLine) { if (!silent) toast("You're offline — sync will run when you're back", { icon: icon("cloud-off", 18) }); return; }
   if (!getKey()) return;
 
   syncing = true;
@@ -160,10 +161,10 @@ export async function syncNow({ silent = false } = {}) {
         ],
       });
       if (pick === "remote") {
-        if (await pullRemote(remote)) toast("Cloud copy restored", { icon: "☁️" });
+        if (await pullRemote(remote)) toast("Cloud copy restored", { icon: icon("cloud", 18) });
       } else if (pick === "local") {
         await remotePut(binId, masterKey, await buildPayload());
-        toast("Pushed this device's data", { icon: "☁️" });
+        toast("Pushed this device's data", { icon: icon("cloud", 18) });
       } else if (pick === "files") {
         downloadJSON(await buildPayload(), "batwa-local.json");
         downloadJSON(remote, "batwa-remote.json");
@@ -179,13 +180,13 @@ export async function syncNow({ silent = false } = {}) {
         confirmLabel: "Pull latest",
       });
       if (ok) {
-        if (await pullRemote(remote)) toast("Up to date with cloud", { icon: "☁️" });
+        if (await pullRemote(remote)) toast("Up to date with cloud", { icon: icon("cloud", 18) });
       } else return;
     } else if (localChanged || !remoteUpdated) {
       await remotePut(binId, masterKey, await buildPayload());
-      if (!silent) toast("Synced", { icon: "☁️" });
+      if (!silent) toast("Synced", { icon: icon("cloud", 18) });
     } else if (!silent) {
-      toast("Already up to date", { icon: "✅" });
+      toast("Already up to date", { icon: icon("check-circle", 18) });
     }
 
     await setMeta("lastSyncedAt", new Date().toISOString());
@@ -193,7 +194,7 @@ export async function syncNow({ silent = false } = {}) {
   } catch (err) {
     lastError = err.message;
     const msg = ERRORS[err.message] || "Sync failed — will retry later";
-    if (!silent) toast(msg, { icon: "⚠️" });
+    if (!silent) toast(msg, { icon: icon("alert", 18) });
     if (err.message !== "bad-key" && err.message !== "not-found") {
       clearTimeout(debounceTimer);
       debounceTimer = setTimeout(() => syncNow({ silent: true }), 60000); // auto-retry transient failures

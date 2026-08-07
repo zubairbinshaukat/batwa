@@ -7,7 +7,7 @@ const DURATION = 3800;
 export function toast(message, { undo, icon = "" } = {}) {
   const root = $("#toast-root");
   const t = el("div", { class: "toast", role: "status" });
-  if (icon) t.append(el("span", { "aria-hidden": "true" }, icon));
+  if (icon) t.append(el("span", { class: "toast-ico", "aria-hidden": "true", html: icon }));
   t.append(el("span", { class: "grow" }, message));
 
   let undone = false;

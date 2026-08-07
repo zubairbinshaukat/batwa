@@ -72,8 +72,9 @@ ul { margin: 0; padding: 0; list-style: none; }
 .app-shell {
   max-width: var(--max-w);
   margin: 0 auto;
+  /* bottom padding clears the fixed nav + the iOS home bar, with breathing room */
   padding: calc(var(--safe-t) + var(--s-4)) var(--s-4)
-           calc(var(--nav-h) + var(--safe-b) + var(--s-8));
+           calc(var(--nav-total) + var(--s-9));
   min-height: 100dvh;
 }
 
@@ -104,7 +105,8 @@ ul { margin: 0; padding: 0; list-style: none; }
 
 /* ---- Desktop: two columns for home, capped width ---- */
 @media (min-width: 900px) {
-  .app-shell { max-width: var(--max-w-wide); padding-bottom: var(--s-8); }
+  /* Desktop keeps the same bottom nav, so it needs the same clearance. */
+  .app-shell { max-width: var(--max-w-wide); padding-bottom: calc(var(--nav-total) + var(--s-8)); }
   .home-grid {
     display: grid;
     grid-template-columns: 420px 1fr;

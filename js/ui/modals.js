@@ -7,6 +7,7 @@ import { isoDate } from "../util/format.js";
 import { CURRENCY } from "../util/format.js";
 import { toast } from "./toast.js";
 import { logoTile } from "./accounts.js";
+import { icon } from "./icons.js";
 
 let current = null; // { backdrop, sheet, release, resolveClosed }
 
@@ -37,8 +38,10 @@ export function openSheet(title, build, { onDismiss } = {}) {
 
   anim(backdrop, { opacity: 0 }, { opacity: 1, duration: 0.25 });
   if (isDesktop()) {
-    anim(sheet, { opacity: 0, scale: 0.92, yPercent: -46 },
-      { opacity: 1, scale: 1, yPercent: -50, duration: 0.35, ease: "back.out(1.4)" });
+    // CSS already centres via translate(-50%,-50%). Animating y/yPercent here
+    // would stack on top of that and throw the sheet off-screen — scale only.
+    anim(sheet, { opacity: 0, scale: 0.92 },
+      { opacity: 1, scale: 1, duration: 0.35, ease: "back.out(1.4)" });
   } else {
     anim(sheet, { yPercent: 100 }, { yPercent: 0, duration: 0.45, ease: "power4.out" });
   }
@@ -145,6 +148,41 @@ function toggleRow(labelText, checked, onFlip) {
 
 let lastAccountId = null; // remember within the session
 
+/**
+ * Recent titles for this kind, newest first, de-duped case-insensitively.
+ * Tapping one refills title + category + account from that entry, so a
+ * repeated expense ("Groceries", "Hostel fees") is two taps instead of typing.
+ */
+function recentTitles(kind, limit = 6) {
+  const seen = new Map();
+  const sorted = [...state.entries]
+    .filter((e) => e.kind === kind && e.title && !e.isAdjustment)
+    .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
+  for (const e of sorted) {
+    const key = e.title.trim().toLowerCase();
+    if (!key || seen.has(key)) continue;
+    seen.set(key, e);
+    if (seen.size >= limit) break;
+  }
+  return [...seen.values()];
+}
+
+/** Chip row under the title field. `onPick` receives the source entry. */
+function suggestionRow(kind, onPick) {
+  const recents = recentTitles(kind);
+  if (!recents.length) return null;
+  const row = el("div", { class: "suggest-row" });
+  row.append(el("span", { class: "suggest-label xsmall muted" }, "Recent"));
+  for (const e of recents) {
+    row.append(el("button", {
+      type: "button",
+      class: "suggest-chip",
+      onclick: () => { buzz(6); onPick(e); },
+    }, e.title));
+  }
+  return row;
+}
+
 /** Horizontal account chips. Only shows when accounts exist. */
 function accountPicker(selectedId) {
   if (!state.accounts.length) return { root: null, get: () => null };
@@ -184,6 +222,15 @@ export function addMoneySheet(entry = null) {
     const { f: amtF, input: amt } = amountField(entry?.amount);
     const desc = el("input", { class: "input", type: "text", placeholder: "Salary, freelance, gift…", value: entry?.title || "" });
     const descF = field("Description", desc, "What is this money from?");
+    if (!entry) {
+      const sugg = suggestionRow("income", (src) => {
+        desc.value = src.title;
+        if (!amt.value) amt.value = String(src.amount);
+        if (cat.querySelector(`option[value="${CSS.escape(src.category)}"]`)) cat.value = src.category;
+        setError(descF, false);
+      });
+      if (sugg) descF.append(sugg);
+    }
     const date = el("input", { class: "input", type: "date", value: (entry?.paidAt || "").slice(0, 10) || isoDate() });
     const dateF = field("Date", date);
     const acc = accountPicker(entry ? entry.accountId : undefined);
@@ -214,7 +261,7 @@ export function addMoneySheet(entry = null) {
       if (entry) await updateEntry(entry.id, data);
       else await addEntry(data);
       closeSheet();
-      toast(entry ? "Income updated" : `${CURRENCY.symbol} ${amount.toLocaleString()} added`, { icon: "💸" });
+      toast(entry ? "Income updated" : `${CURRENCY.symbol} ${amount.toLocaleString()} added`, { icon: icon("banknote", 18) });
     });
     body.append(form);
   });
@@ -252,6 +299,16 @@ export function addExpenseSheet(entry = null) {
     note.value = entry?.note || "";
     const noteF = field("Note", note);
 
+    if (!entry) {
+      const sugg = suggestionRow("expense", (src) => {
+        title.value = src.title;
+        if (!amt.value) amt.value = String(src.amount);
+        if (cat.querySelector(`option[value="${CSS.escape(src.category)}"]`)) cat.value = src.category;
+        setError(titleF, false);
+      });
+      if (sugg) titleF.append(sugg);
+    }
+
     let alreadyPaid = entry ? entry.status === "paid" : false;
     const paidRow = toggleRow("Mark as already paid", alreadyPaid, (v) => (alreadyPaid = v));
     const paidWrap = el("div", { class: "field" }, paidRow);
@@ -284,7 +341,7 @@ export function addExpenseSheet(entry = null) {
       if (entry) await updateEntry(entry.id, data);
       else await addEntry(data);
       closeSheet();
-      toast(entry ? "Expense updated" : "Expense added", { icon: "🧾" });
+      toast(entry ? "Expense updated" : "Expense added", { icon: icon("receipt", 18) });
     });
     body.append(form);
   });

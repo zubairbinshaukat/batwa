@@ -6,6 +6,7 @@ import { balances, pendingExpenses, markPaid, unmarkPaid, deleteEntry, deleteSer
 import { addMoneySheet, addExpenseSheet, confirmSheet, chooseSheet } from "./modals.js";
 import { toast } from "./toast.js";
 import { renderAccountsRow, accountName } from "./accounts.js";
+import { icon, catIcon } from "./icons.js";
 
 // Session-only: every launch starts blurred. Never persisted.
 let revealed = false;
@@ -52,12 +53,6 @@ const eyeSVG = (open) => open
   ? '<svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg>'
   : '<svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>';
 
-const CAT_EMOJI = {
-  "Fees": "🎓", "Rent/Hostel": "🏠", "Food": "🍜", "Transport": "🛵",
-  "Education": "📚", "Bills": "💡", "Health": "🩺", "Shopping": "🛍️",
-  "Savings": "🏦", "Others": "📦",
-};
-export const catEmoji = (c) => CAT_EMOJI[c] || "📦";
 
 /* ---------- money spans ---------- */
 function moneySpan(value, cls = "") {
@@ -116,8 +111,8 @@ export function renderHome(view) {
         </section>
         <div id="acc-slot"></div>
         <div class="quick-actions" id="quick-actions">
-          <button class="btn btn-mint" id="btn-add-money">＋ &nbsp;Money</button>
-          <button class="btn btn-primary" id="btn-add-expense">＋ &nbsp;Expense</button>
+          <button class="btn btn-mint" id="btn-add-money">${icon("plus", 18)} Money</button>
+          <button class="btn btn-primary" id="btn-add-expense">${icon("plus", 18)} Expense</button>
         </div>
       </div>
 
@@ -183,7 +178,7 @@ function renderEmpty() {
   return el("div", {
     class: "empty",
     html: `
-      <div class="emoji">🌤️</div>
+      <div class="empty-ico">${icon("sun", 28)}</div>
       <h3>Nothing coming up</h3>
       <p>Add your first expense and Batwa will keep an eye on what's due.</p>
     `,
@@ -191,8 +186,8 @@ function renderEmpty() {
 }
 
 function recBadge(rec) {
-  if (rec === "weekly") return '<span class="badge badge-weekly">↻ Weekly</span>';
-  if (rec === "monthly") return '<span class="badge badge-monthly">↻ Monthly</span>';
+  if (rec === "weekly") return `<span class="badge badge-weekly">${icon("repeat", 11)} Weekly</span>`;
+  if (rec === "monthly") return `<span class="badge badge-monthly">${icon("repeat", 11)} Monthly</span>`;
   return '<span class="badge badge-once">One-time</span>';
 }
 
@@ -217,11 +212,11 @@ function expenseCard(e) {
     </div>
     <div class="exp-meta" style="margin-top:8px">
       ${recBadge(e.recurrence)}
-      <span class="badge badge-cat">${catEmoji(e.category)} ${esc(e.category)}</span>
+      <span class="badge badge-cat">${catIcon(e.category, 12)} ${esc(e.category)}</span>
       ${e.accountId && accountName(e.accountId) ? `<span class="badge badge-cat">${esc(accountName(e.accountId))}</span>` : ""}
     </div>
     <div class="exp-actions">
-      <button class="chip-btn chip-paid" data-act="paid">✓ Mark paid</button>
+      <button class="chip-btn chip-paid" data-act="paid">${icon("check", 15)} Mark paid</button>
       <button class="chip-btn chip-edit" data-act="edit">Edit</button>
       <button class="chip-btn chip-delete" data-act="delete" aria-label="Delete">
         <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 6h18M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2m3 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/></svg>
@@ -241,7 +236,7 @@ function expenseCard(e) {
       await celebratePaid(card);
       await markPaid(e.id);
       toast(`${e.title} paid · ${fmtMoney(e.amount)}`, {
-        icon: "✅",
+        icon: icon("check-circle", 18),
         undo: async () => { await unmarkPaid(e.id); toast("Marked unpaid again"); },
       });
       return;
@@ -260,10 +255,10 @@ function expenseCard(e) {
         });
         if (pick === "one") {
           const removed = await deleteEntry(e.id);
-          toast("Deleted", { icon: "🗑️", undo: () => restoreEntries([removed]) });
+          toast("Deleted", { icon: icon("trash", 17), undo: () => restoreEntries([removed]) });
         } else if (pick === "future") {
           const removed = await deleteSeriesFuture(e.id);
-          toast(`Deleted ${removed.length} upcoming`, { icon: "🗑️", undo: () => restoreEntries(removed) });
+          toast(`Deleted ${removed.length} upcoming`, { icon: icon("trash", 17), undo: () => restoreEntries(removed) });
         }
       } else {
         const ok = await confirmSheet({
@@ -274,7 +269,7 @@ function expenseCard(e) {
         });
         if (ok) {
           const removed = await deleteEntry(e.id);
-          toast("Deleted", { icon: "🗑️", undo: () => restoreEntries([removed]) });
+          toast("Deleted", { icon: icon("trash", 17), undo: () => restoreEntries([removed]) });
         }
       }
     }

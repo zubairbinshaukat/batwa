@@ -89,4 +89,7 @@
   --nav-h: 64px;
   --safe-b: env(safe-area-inset-bottom, 0px);
   --safe-t: env(safe-area-inset-top, 0px);
+  /* Full height the fixed bottom nav occupies. Every page reserves at least
+     this much space so content is never trapped behind it — on ANY breakpoint. */
+  --nav-total: calc(var(--nav-h) + var(--safe-b));
 }

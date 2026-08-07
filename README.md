@@ -46,7 +46,18 @@ The 4-digit PIN derives the AES-256 encryption key (PBKDF2, 150k iterations). **
 
 Add your real accounts in Settings → Accounts (or straight from the home screen). Pick a logo (JazzCash, Easypaisa, NayaPay, SadaPay, Meezan, UBL, HBL, Bank Alfalah, MCB, cash…), optionally enter the current balance, and every Add Money / Add Expense sheet lets you pick which account the money moved through. Home shows a swipeable card per account with its live balance.
 
-**Fix balance:** forgot to log some spending? Open an account card → *Fix balance* → type what the account really has. The difference is saved as a visible "Balance fix" entry (marked ⚖ in history), so your records stay honest and undoable.
+**Fix balance:** forgot to log some spending? Open an account card → *Fix balance* → type what the account really has. The difference is saved as a visible "Balance fix" entry (flagged as an adjustment in History), so your records stay honest and undoable.
+
+## The four tabs
+
+| Tab | What's there |
+|---|---|
+| **Home** | The three balances (blur toggle), your account cards, upcoming expenses, quick add |
+| **Reports** | Month summary, spending by category, 6-month trend, fixed vs one-off, insights |
+| **History** | Every transaction for a month, filterable by kind / status / account / category. Tap a row to edit it |
+| **Settings** | Accounts, cloud sync, backup, PIN, categories, install |
+
+Adding an expense or income offers **Recent** chips under the title field — tap one to refill the title, amount, and category from the last time you logged it.
 
 ## Optional cloud sync (JSONBin)
 

@@ -5,6 +5,7 @@ import { fmtMoney, fmtCompact } from "../util/format.js";
 import { state, addAccount, updateAccount, deleteAccount, accountBalance, reconcileAccount, deleteEntry } from "../ledger.js";
 import { openSheet, closeSheet, confirmSheet } from "./modals.js";
 import { toast } from "./toast.js";
+import { icon } from "./icons.js";
 
 /* ============================================================
    Logo pack — simplified brand-colored marks (offline, no assets)
@@ -21,14 +22,15 @@ export const LOGO_KINDS = {
   hbl:       { name: "HBL",          bg: "#00874E", glyph: "H" },
   alfalah:   { name: "Bank Alfalah", bg: "#8A1538", glyph: "A" },
   mcb:       { name: "MCB",          bg: "#046A38", glyph: "M" },
-  bank:      { name: "Other bank",   bg: "#64748B", glyph: "🏛" },
-  cash:      { name: "Cash",         bg: "#12B77F", glyph: "₨" },
+  bank:      { name: "Other bank",   bg: "#64748B", ico: "landmark" },
+  cash:      { name: "Cash",         bg: "#12B77F", ico: "banknote" },
 };
 
 export function logoTile(kind, size = 40) {
   const k = LOGO_KINDS[kind] || LOGO_KINDS.bank;
-  const fs = k.glyph.length > 1 ? size * 0.38 : size * 0.5;
-  return `<span class="acc-logo" style="width:${size}px;height:${size}px;background:${k.bg};font-size:${fs}px" aria-hidden="true">${k.glyph}</span>`;
+  const inner = k.ico ? icon(k.ico, Math.round(size * 0.52)) : k.glyph;
+  const fs = k.ico ? "" : `font-size:${size * 0.5}px;`;
+  return `<span class="acc-logo" style="width:${size}px;height:${size}px;background:${k.bg};${fs}" aria-hidden="true">${inner}</span>`;
 }
 
 export function accountName(id) {
@@ -44,7 +46,7 @@ export function renderAccountsRow(container, { revealed }) {
   if (!state.accounts.length) {
     // opt-in feature: a quiet inline invite instead of an empty row
     const invite = el("button", { class: "acc-invite", onclick: addAccountSheet });
-    invite.innerHTML = `<span class="acc-logo" style="width:34px;height:34px;background:var(--c-violet-soft);color:var(--c-violet);font-size:18px">＋</span>
+    invite.innerHTML = `<span class="acc-logo" style="width:34px;height:34px;background:var(--c-violet-soft);color:var(--c-violet)">${icon("plus", 17)}</span>
       <span class="small strong">Add your accounts</span>
       <span class="xsmall muted">JazzCash, bank, cash — see each balance</span>`;
     container.append(invite);
@@ -62,7 +64,7 @@ export function renderAccountsRow(container, { revealed }) {
     row.append(card);
   }
   const add = el("button", { class: "acc-card acc-add", "aria-label": "Add account", onclick: addAccountSheet });
-  add.innerHTML = `<span class="acc-logo" style="width:38px;height:38px;background:var(--c-bg-deep);color:var(--c-violet);font-size:20px">＋</span><span class="acc-name muted">Add</span>`;
+  add.innerHTML = `<span class="acc-logo" style="width:38px;height:38px;background:var(--c-bg-deep);color:var(--c-violet)">${icon("plus", 18)}</span><span class="acc-name muted">Add</span>`;
   row.append(add);
   container.append(row);
 }
@@ -119,7 +121,7 @@ export function addAccountSheet() {
             const start = parseFloat(String(bal.value).replace(/[, ]/g, "")) || 0;
             await addAccount(n, kind, start > 0 ? start : 0);
             closeSheet();
-            toast(`${n} added`, { icon: "✅" });
+            toast(`${n} added`, { icon: icon("check-circle", 18) });
           },
         }, "Add account"),
       ),
@@ -164,13 +166,14 @@ export function accountSheet(acc) {
           if (!isFinite(v) || v < 0) { fix.focus(); return; }
           const entry = await reconcileAccount(acc.id, v);
           closeSheet();
-          if (!entry) { toast("Balance already matches", { icon: "👌" }); return; }
+          if (!entry) { toast("Balance already matches", { icon: icon("check-circle", 18) }); return; }
           toast(`Balance fixed · ${entry.kind === "expense" ? "−" : "+"}${fmtMoney(entry.amount)}`, {
-            icon: "⚖️",
+            icon: icon("scale", 18),
             undo: async () => { await deleteEntry(entry.id); toast("Fix undone"); },
           });
         },
-      }, "⚖️ Fix balance"),
+        html: `${icon("scale", 17)} Fix balance`,
+      }),
     );
 
     // --- Rename / change logo / delete ---
@@ -185,7 +188,7 @@ export function accountSheet(acc) {
             confirmLabel: "Remove",
             danger: true,
           });
-          if (ok) { await deleteAccount(acc.id); toast("Account removed", { icon: "🗑️" }); }
+          if (ok) { await deleteAccount(acc.id); toast("Account removed", { icon: icon("trash", 17) }); }
         },
       }, "Remove"),
     ));
@@ -207,7 +210,7 @@ function editAccountSheet(acc) {
             if (!name.value.trim()) { name.focus(); return; }
             await updateAccount(acc.id, { name: name.value.trim(), kind });
             closeSheet();
-            toast("Account updated", { icon: "✅" });
+            toast("Account updated", { icon: icon("check-circle", 18) });
           },
         }, "Save"),
       ),

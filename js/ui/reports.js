@@ -1,14 +1,12 @@
-// Reports: month browser, summary tiles, charts, insights, filterable history.
+// Reports: month browser, summary tiles, charts, insights. History has its own tab.
 
 import { $, el, esc, anim } from "../util/dom.js";
-import { fmtMoney, fmtCompact, monthLabel, thisMonth, shiftMonth, shortDate } from "../util/format.js";
-import { state, monthSummary } from "../ledger.js";
+import { fmtMoney, fmtCompact, monthLabel, thisMonth, shiftMonth } from "../util/format.js";
+import { monthSummary } from "../ledger.js";
 import { donut, trendBars, splitBar, animateCharts, CHART_COLORS } from "./charts.js";
-import { catEmoji } from "./home.js";
-import { accountName } from "./accounts.js";
+import { icon, catIcon } from "./icons.js";
 
 let currentMonth = thisMonth();
-let filters = { kind: "all", category: "all", status: "all" };
 
 export function renderReports(view) {
   const ym = currentMonth;
@@ -18,9 +16,9 @@ export function renderReports(view) {
 
   view.innerHTML = `
     <div class="month-nav">
-      <button class="icon-btn" id="m-prev" aria-label="Previous month">‹</button>
+      <button class="icon-btn" id="m-prev" aria-label="Previous month">${icon("chevron-left", 18)}</button>
       <div class="month-label">${monthLabel(ym)}</div>
-      <button class="icon-btn" id="m-next" aria-label="Next month" ${isNow ? "disabled style='opacity:.35'" : ""}>›</button>
+      <button class="icon-btn" id="m-next" aria-label="Next month" ${isNow ? "disabled style='opacity:.35'" : ""}>${icon("chevron-right", 18)}</button>
     </div>
 
     <div class="tiles">
@@ -44,10 +42,6 @@ export function renderReports(view) {
 
     <div class="section-head"><h2>Fixed vs one-off</h2></div>
     <div class="card chart-card" id="split-chart"></div>
-
-    <div class="section-head"><h2>History</h2><span class="count">${sum.list.length}</span></div>
-    <div id="filters"></div>
-    <div class="card" id="history"></div>
   `;
 
   $("#m-prev", view).addEventListener("click", () => { currentMonth = shiftMonth(currentMonth, -1); renderReports(view); });
@@ -59,8 +53,6 @@ export function renderReports(view) {
   renderCatChart($("#cat-chart", view), sum);
   renderTrend($("#trend-chart", view), ym);
   renderSplit($("#split-chart", view), sum);
-  renderFilters($("#filters", view), view);
-  renderHistory($("#history", view), sum);
 
   anim(view.children, { y: 20, opacity: 0 }, { y: 0, opacity: 1, duration: 0.4, stagger: 0.05, ease: "power2.out" });
   animateCharts(view);
@@ -74,8 +66,8 @@ function delta(cur, prevV, label, inverse = false) {
   return `<div class="tile-delta ${good ? "pos" : "neg"}">${pct > 0 ? "▲" : "▼"} ${Math.abs(pct)}% ${label}</div>`;
 }
 
-function emptyCard(text) {
-  return `<div class="empty" style="border:none;background:none;padding:24px"><div class="emoji">🌱</div><p>${text}</p></div>`;
+function emptyCard(text, ico = "sprout") {
+  return `<div class="empty" style="border:none;background:none;padding:24px"><div class="empty-ico">${icon(ico, 26)}</div><p>${text}</p></div>`;
 }
 
 function renderInsights(root, sum, prev) {
@@ -83,22 +75,22 @@ function renderInsights(root, sum, prev) {
   const cats = Object.entries(sum.byCat).sort((a, b) => b[1] - a[1]);
   if (cats.length) {
     const [top, amt] = cats[0];
-    lines.push(`${catEmoji(top)} <b>${esc(top)}</b> was your biggest category this month at <b>${fmtMoney(amt)}</b>.`);
+    lines.push(`${catIcon(top, 13)} <b>${esc(top)}</b> was your biggest category this month at <b>${fmtMoney(amt)}</b>.`);
   }
   if (prev.spent > 0 && sum.spent > 0) {
     const diff = sum.spent - prev.spent;
     if (Math.abs(diff) > prev.spent * 0.1) {
       lines.push(diff < 0
-        ? `📉 You spent <b>${fmtMoney(-diff)}</b> less than last month. Keep it up.`
-        : `📈 Spending is up <b>${fmtMoney(diff)}</b> vs last month.`);
+        ? `${icon("trend-down", 13)} You spent <b>${fmtMoney(-diff)}</b> less than last month. Keep it up.`
+        : `${icon("trend-up", 13)} Spending is up <b>${fmtMoney(diff)}</b> vs last month.`);
     }
   }
   if (sum.recurringOut > 0 && sum.spent > 0) {
     const pct = Math.round((sum.recurringOut / sum.spent) * 100);
-    if (pct >= 40) lines.push(`🔁 <b>${pct}%</b> of this month's spending is recurring — your fixed baseline is <b>${fmtMoney(sum.recurringOut)}</b>.`);
+    if (pct >= 40) lines.push(`${icon("repeat", 13)} <b>${pct}%</b> of this month's spending is recurring — your fixed baseline is <b>${fmtMoney(sum.recurringOut)}</b>.`);
   }
   for (const l of lines.slice(0, 2)) {
-    root.append(el("div", { class: "insight", html: `<span class="spark">✨</span><span>${l}</span>` }));
+    root.append(el("div", { class: "insight", html: `<span class="spark">${icon("sparkles", 16)}</span><span>${l}</span>` }));
   }
 }
 
@@ -129,7 +121,7 @@ function renderTrend(root, ym) {
     const s = monthSummary(m);
     months.push({ label: monthLabel(m).slice(0, 3), income: s.income, spent: s.spent });
   }
-  if (months.every((m) => !m.income && !m.spent)) { root.innerHTML = emptyCard("Nothing recorded in the last 6 months."); return; }
+  if (months.every((m) => !m.income && !m.spent)) { root.innerHTML = emptyCard("Nothing recorded in the last 6 months.", "bar-chart"); return; }
   root.append(trendBars(months));
   root.append(el("div", { class: "legend", html: `
     <span class="lg-item"><span class="lg-dot" style="background:#12B77F"></span> In</span>
@@ -140,54 +132,4 @@ function renderTrend(root, ym) {
 function renderSplit(root, sum) {
   if (!sum.spent) { root.innerHTML = emptyCard("No spending to split yet."); return; }
   root.append(splitBar(sum.recurringOut, sum.onceOut));
-}
-
-function renderFilters(root, view) {
-  const groups = [
-    { key: "kind", opts: [["all", "All"], ["income", "Income"], ["expense", "Expenses"]] },
-    { key: "status", opts: [["all", "Any status"], ["paid", "Paid"], ["pending", "Pending"]] },
-    { key: "category", opts: [["all", "All categories"], ...state.categories.map((c) => [c, c])] },
-  ];
-  for (const g of groups) {
-    const row = el("div", { class: "filter-row" });
-    for (const [val, label] of g.opts) {
-      row.append(el("button", {
-        class: `filter-chip ${filters[g.key] === val ? "is-active" : ""}`,
-        onclick: () => {
-          filters[g.key] = val;
-          renderReports(view.closest("#view") || view);
-        },
-      }, label));
-    }
-    root.append(row);
-  }
-}
-
-function renderHistory(root, sum) {
-  let list = [...sum.list];
-  if (filters.kind !== "all") list = list.filter((e) => e.kind === filters.kind);
-  if (filters.status !== "all") list = list.filter((e) => e.status === filters.status);
-  if (filters.category !== "all") list = list.filter((e) => e.category === filters.category);
-  list.sort((a, b) => {
-    const da = a.kind === "income" ? (a.paidAt || a.createdAt) : (a.dueDate || a.createdAt);
-    const db_ = b.kind === "income" ? (b.paidAt || b.createdAt) : (b.dueDate || b.createdAt);
-    return da < db_ ? 1 : -1; // newest first
-  });
-  if (!list.length) { root.innerHTML = emptyCard("Nothing matches these filters."); return; }
-  for (const e of list) {
-    const inn = e.kind === "income";
-    const dateIso = (inn ? (e.paidAt || e.createdAt) : (e.dueDate || e.createdAt)).slice(0, 10);
-    root.append(el("div", { class: "hist-row", html: `
-      <span class="hist-ico" style="background:${inn ? "var(--c-pos-soft)" : "var(--c-violet-soft)"}">${inn ? "💰" : catEmoji(e.category)}</span>
-      <span class="grow">
-        <span class="strong small truncate" style="display:block">${esc(e.title)}</span>
-        <span class="xsmall muted">${shortDate(dateIso)} · ${esc(e.category)}
-          ${e.accountId && accountName(e.accountId) ? `· ${esc(accountName(e.accountId))}` : ""}
-          ${e.isAdjustment ? '· <b style="color:var(--c-violet)">⚖ adjustment</b>' : ""}
-          ${e.status === "pending" ? '· <b style="color:var(--c-warn)">pending</b>' : ""}
-          ${e.recurrence !== "one-time" ? `· ↻ ${e.recurrence}` : ""}</span>
-      </span>
-      <span class="hist-amt num ${inn ? "in" : ""}">${inn ? "+" : "−"}${fmtCompact(e.amount)}</span>
-    ` }));
-  }
 }

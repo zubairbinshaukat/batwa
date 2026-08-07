@@ -10,24 +10,25 @@ import {
   exportEncrypted, exportPlain, importBackup, onSyncState, STARTER_JSON,
 } from "../sync.js";
 import { manageAccountsSheet } from "./accounts.js";
+import { icon } from "./icons.js";
 import { getInstallState, promptInstall } from "../app.js";
 
 const ICONS = {
-  sync: ["☁️", "var(--c-aqua-soft)"],
-  now: ["🔄", "var(--c-violet-soft)"],
-  exp: ["📤", "var(--c-pos-soft)"],
-  imp: ["📥", "var(--c-warn-soft)"],
-  pin: ["🔐", "var(--c-violet-soft)"],
-  cat: ["🏷️", "var(--c-aqua-soft)"],
-  acc: ["💳", "var(--c-violet-soft)"],
-  install: ["📲", "var(--c-pos-soft)"],
+  sync:    ["cloud",       "var(--c-aqua-soft)",   "#0B87B8"],
+  now:     ["refresh",     "var(--c-violet-soft)", "var(--c-violet)"],
+  exp:     ["upload",      "var(--c-pos-soft)",    "var(--c-pos)"],
+  imp:     ["download",    "var(--c-warn-soft)",   "var(--c-warn)"],
+  pin:     ["lock",        "var(--c-violet-soft)", "var(--c-violet)"],
+  cat:     ["tag",         "var(--c-aqua-soft)",   "#0B87B8"],
+  acc:     ["credit-card", "var(--c-violet-soft)", "var(--c-violet)"],
+  install: ["smartphone",  "var(--c-pos-soft)",    "var(--c-pos)"],
 };
 
-function row(icon, label, value, onClick) {
-  const [emoji, bg] = ICONS[icon];
+function row(key, label, value, onClick) {
+  const [name, bg, fg] = ICONS[key];
   const r = el("button", { class: "set-row", onclick: onClick });
   r.innerHTML = `
-    <span class="set-ico" style="background:${bg}">${emoji}</span>
+    <span class="set-ico" style="background:${bg};color:${fg}">${icon(name, 18)}</span>
     <span>${label}</span>
     ${value ? `<span class="set-val">${value}</span>` : '<span class="chev">›</span>'}
   `;
@@ -74,8 +75,10 @@ export function renderSettings(view) {
   const sec = el("div", { class: "set-group" });
   sec.append(el("h2", {}, "Security"));
   sec.append(el("div", { class: "card set-card" }, row("pin", "Change PIN", "", changePinSheet)));
-  sec.append(el("div", { class: "warn-card", style: "margin-top:12px" },
-    "⚠️ There is no PIN recovery. Your PIN is the encryption key — if you forget it, the data is gone. Keep an export backup somewhere safe."));
+  sec.append(el("div", {
+    class: "warn-card", style: "margin-top:12px",
+    html: `${icon("alert", 15)} There is no PIN recovery. Your PIN is the encryption key — if you forget it, the data is gone. Keep an export backup somewhere safe.`,
+  }));
   view.append(sec);
 
   // ---- Categories ----
@@ -95,7 +98,7 @@ export function renderSettings(view) {
       card.append(row("install", "Install app", "", promptInstall));
     } else if (inst === "ios") {
       card.append(el("div", { style: "padding:14px 16px" },
-        el("div", { class: "strong small" }, "📲 Install on iPhone"),
+        el("div", { class: "strong small", html: `${icon("smartphone", 14)} Install on iPhone` }),
         el("p", { class: "xsmall muted", style: "margin-top:4px" },
           "Open the Share menu in Safari, then tap “Add to Home Screen”. Batwa will open full-screen and work offline."),
       ));
@@ -152,7 +155,7 @@ async function syncSetupSheet() {
           onclick: async () => {
             await setSyncConfig(bin.value, key.value);
             closeSheet();
-            toast("Sync settings saved", { icon: "☁️" });
+            toast("Sync settings saved", { icon: icon("cloud", 18) });
             if (bin.value && key.value) syncNow();
           },
         }, "Save"),
@@ -170,7 +173,7 @@ async function exportSheet() {
       { label: "Plain JSON (unprotected)", value: "plain" },
     ],
   });
-  if (pick === "enc") { await exportEncrypted(); toast("Encrypted backup downloaded", { icon: "📤" }); }
+  if (pick === "enc") { await exportEncrypted(); toast("Encrypted backup downloaded", { icon: icon("upload", 18) }); }
   if (pick === "plain") {
     const ok = await confirmSheet({
       title: "Export without encryption?",
@@ -178,7 +181,7 @@ async function exportSheet() {
       confirmLabel: "Export plain",
       danger: true,
     });
-    if (ok) { await exportPlain(); toast("Plain backup downloaded", { icon: "📤" }); }
+    if (ok) { await exportPlain(); toast("Plain backup downloaded", { icon: icon("upload", 18) }); }
   }
 }
 
@@ -191,7 +194,7 @@ function importSheet() {
     if (!file) return;
     let data;
     try { data = JSON.parse(await file.text()); }
-    catch { toast("That file isn't valid JSON", { icon: "⚠️" }); return; }
+    catch { toast("That file isn't valid JSON", { icon: icon("alert", 18) }); return; }
 
     const mode = await chooseSheet({
       title: "Import backup",
@@ -215,10 +218,10 @@ function importSheet() {
     const run = async (pin) => {
       try {
         const n = await importBackup(data, mode, pin);
-        toast(mode === "merge" ? `Imported ${n} new entr${n === 1 ? "y" : "ies"}` : "Data replaced from backup", { icon: "📥" });
+        toast(mode === "merge" ? `Imported ${n} new entr${n === 1 ? "y" : "ies"}` : "Data replaced from backup", { icon: icon("download", 18) });
       } catch (err) {
         if (err.message === "pin-needed") askBackupPin(run);
-        else toast(err.message, { icon: "⚠️" });
+        else toast(err.message, { icon: icon("alert", 18) });
       }
     };
     run(null);
@@ -262,7 +265,7 @@ function changePinSheet() {
             const res = await changePin(oldP.value, n1.value);
             if (!res.ok) { msg.textContent = res.reason; return; }
             closeSheet();
-            toast("PIN changed — data re-encrypted", { icon: "🔐" });
+            toast("PIN changed — data re-encrypted", { icon: icon("lock", 18) });
           },
         }, "Change PIN"),
       ),
@@ -281,7 +284,8 @@ function categoriesSheet() {
           pill.append(el("button", {
             class: "cat-x", "aria-label": `Remove ${c}`,
             onclick: async () => { await saveCategories(state.categories.filter((x) => x !== c)); paint(); },
-          }, "✕"));
+            html: icon("x", 13),
+          }));
         }
         wrap.append(pill);
       }

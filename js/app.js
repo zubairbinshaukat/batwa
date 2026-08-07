@@ -7,9 +7,11 @@ import { scheduleSync, syncNow, getSyncState, onSyncState } from "./sync.js";
 import { $, el, anim } from "./util/dom.js";
 import { renderHome } from "./ui/home.js";
 import { renderReports } from "./ui/reports.js";
+import { renderHistory } from "./ui/history.js";
 import { renderSettings } from "./ui/settings.js";
 import { addMoneySheet, addExpenseSheet, sheetOpen } from "./ui/modals.js";
 import { toast } from "./ui/toast.js";
+import { icon } from "./ui/icons.js";
 
 /* ============================================================
    Views + nav
@@ -20,6 +22,8 @@ const VIEWS = {
     icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V21h5v-6h4v6h5V9.5"/></svg>' },
   reports: { label: "Reports", render: renderReports,
     icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>' },
+  history: { label: "History", render: renderHistory,
+    icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>' },
   settings: { label: "Settings", render: renderSettings,
     icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h.01a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v.01a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>' },
 };
@@ -48,6 +52,8 @@ function go(view) {
   history.replaceState({ view }, "");
   renderNav();
   renderView();
+  // each tab starts at the top — never inherit the previous tab's scroll
+  window.scrollTo(0, 0);
 }
 
 function renderView() {
@@ -59,7 +65,7 @@ function renderView() {
   } catch (err) {
     console.error(err);
     viewEl.innerHTML = `
-      <div class="empty"><div class="emoji">🤕</div>
+      <div class="empty"><div class="empty-ico">${icon("frown", 26)}</div>
       <h3>Something went wrong</h3>
       <p>${String(err.message || err)}</p></div>`;
   }
@@ -73,11 +79,11 @@ onChange(() => { renderView(); scheduleSync(); updateSyncPill(); });
    ============================================================ */
 
 const PILL_ICONS = {
-  off:     "◌",
-  offline: "⚡",
-  syncing: '<span class="spin">↻</span>',
-  pending: "●",
-  synced:  "✓",
+  off:     icon("circle-dash", 13),
+  offline: icon("zap", 13),
+  syncing: `<span class="spin">${icon("refresh", 13)}</span>`,
+  pending: icon("dot", 13),
+  synced:  icon("check", 13),
 };
 
 async function updateSyncPill() {
@@ -118,7 +124,7 @@ export async function promptInstall() {
   if (!deferredPrompt) return;
   deferredPrompt.prompt();
   const { outcome } = await deferredPrompt.userChoice;
-  if (outcome === "accepted") { deferredPrompt = null; toast("Batwa installed 🎉"); }
+  if (outcome === "accepted") { deferredPrompt = null; toast("Batwa installed", { icon: icon("check-circle", 18) }); }
 }
 
 window.addEventListener("beforeinstallprompt", (e) => {
@@ -136,7 +142,7 @@ async function mountInstallBanner() {
   slot.innerHTML = "";
   const banner = el("div", { class: "install-banner" });
   banner.innerHTML = `
-    <span class="ib-ico">📲</span>
+    <span class="ib-ico" style="color:#fff">${icon("smartphone", 20)}</span>
     <span class="grow"><strong>Put Batwa on your home screen</strong>
     <p>${state === "ios" ? "Share → Add to Home Screen in Safari" : "Installs like an app, works fully offline"}</p></span>
   `;
@@ -146,8 +152,9 @@ async function mountInstallBanner() {
   banner.append(el("button", {
     class: "icon-btn", style: "background:transparent;border:none;box-shadow:none;color:rgba(255,255,255,0.6);width:36px;height:36px;flex:0 0 auto",
     "aria-label": "Dismiss",
+    html: icon("x", 16),
     onclick: async () => { await setMeta("installDismissed", true); banner.remove(); },
-  }, "✕"));
+  }));
   slot.append(banner);
   anim(banner, { y: -14, opacity: 0 }, { y: 0, opacity: 1, duration: 0.4, ease: "power2.out" });
 }
@@ -185,7 +192,8 @@ function showUpdateToast(worker) {
   const root = $("#toast-root");
   const t = el("div", { class: "toast" });
   t.append(
-    el("span", {}, "✨ New version ready"),
+    el("span", { class: "toast-ico", html: icon("sparkles", 16) }),
+    el("span", {}, "New version ready"),
     el("button", { class: "toast-undo", onclick: () => worker.postMessage("SKIP_WAITING") }, "Reload"),
   );
   root.append(t);
@@ -228,6 +236,7 @@ async function boot() {
     await ensureSchema();
     initOnlineState();
     registerSW();
+    if ("scrollRestoration" in history) history.scrollRestoration = "manual";
     history.replaceState({ view: "home" }, "");
 
     await unlockFlow();
@@ -242,7 +251,7 @@ async function boot() {
   } catch (err) {
     console.error(err);
     $("#view").innerHTML = `
-      <div class="empty"><div class="emoji">🤕</div>
+      <div class="empty"><div class="empty-ico">${icon("frown", 26)}</div>
       <h3>Batwa couldn't start</h3>
       <p>${String(err.message || err)}. Try reloading — your data is safe.</p></div>`;
   }
@@ -251,7 +260,7 @@ async function boot() {
 // No unhandled error ever lands on a blank screen.
 window.addEventListener("unhandledrejection", (e) => {
   console.error(e.reason);
-  toast("Something went wrong — nothing was lost", { icon: "⚠️" });
+  toast("Something went wrong — nothing was lost", { icon: icon("alert", 18) });
 });
 
 boot();
