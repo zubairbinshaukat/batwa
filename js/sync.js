@@ -7,7 +7,8 @@ import { decrypt, deriveKey, unb64 } from "./crypto.js";
 import { state, replaceAll, mergeData } from "./ledger.js";
 import { timeAgo } from "./util/format.js";
 import { toast } from "./ui/toast.js";
-import { chooseSheet, confirmSheet, sheetOpen } from "./ui/modals.js";
+import { chooseSheet, confirmSheet, sheetOpen, openSheet, closeSheet } from "./ui/modals.js";
+import { el } from "./util/dom.js";
 import { icon } from "./ui/icons.js";
 
 const API = "https://api.jsonbin.io/v3/b";
@@ -123,10 +124,40 @@ async function buildPayload() {
   };
 }
 
+/** Ask for the OTHER device's PIN to unlock a cloud copy pushed by it. */
+function askRemotePin() {
+  return new Promise((resolve) => {
+    let done = false;
+    const finish = (v) => { if (!done) { done = true; resolve(v); } };
+    openSheet("Cloud copy is PIN-locked", (body) => {
+      body.append(el("p", { class: "muted", style: "margin-bottom:16px" },
+        "This cloud copy was encrypted on another device. Enter that device's PIN to unlock it here — your PIN on this device stays as it is."));
+      const input = el("input", {
+        class: "input", type: "password", inputmode: "numeric",
+        autocomplete: "off", placeholder: "PIN", style: "margin-bottom:16px",
+      });
+      const go = () => {
+        const v = input.value.trim();
+        if (!v) { input.focus(); return; }
+        finish(v);
+        closeSheet();
+      };
+      input.addEventListener("keydown", (e) => { if (e.key === "Enter") go(); });
+      body.append(input,
+        el("div", { class: "form-actions" },
+          el("button", { class: "btn btn-ghost", onclick: () => { finish(null); closeSheet(); } }, "Cancel"),
+          el("button", { class: "btn btn-primary", onclick: go }, "Unlock")
+        )
+      );
+    }, { onDismiss: () => finish(null) });
+  });
+}
+
 async function pullRemote(remote) {
   if (!remote?.cipher) return false;
   let key = getKey();
   let viaDeviceKey = false;
+  let viaRemotePin = false;
 
   if (remote.deviceKey) {
     // No-PIN payload: the key travels with it, so sync credentials alone unlock it —
@@ -141,9 +172,18 @@ async function pullRemote(remote) {
   } else {
     const localSalt = await getMeta("pinSalt");
     if (remote.salt && remote.salt !== localSalt) {
-      // Blob was encrypted under a different salt (other device) — same PIN, different key.
-      toast("Remote data uses a different device key — import it via a backup file instead", { icon: icon("alert", 18) });
-      return false;
+      // Blob encrypted under another device's PIN setup. Same PIN ≠ same key
+      // (every device rolls its own salt), so re-derive with the REMOTE salt
+      // and that device's PIN — mirrors what importBackup does for files.
+      const pin = await askRemotePin();
+      if (!pin) return false;
+      try {
+        key = await deriveKey(pin, remote.salt);
+      } catch {
+        toast("Remote data is damaged", { icon: icon("alert", 18) });
+        return false;
+      }
+      viaRemotePin = true;
     }
   }
 
@@ -153,7 +193,12 @@ async function pullRemote(remote) {
     await setMeta("updatedAt", remote.updatedAt);
     return true;
   } catch {
-    toast(viaDeviceKey ? "Couldn't decrypt remote data" : "Couldn't decrypt remote data with this PIN", { icon: icon("alert", 18) });
+    toast(
+      viaRemotePin ? "Wrong PIN for the cloud copy — try again from Sync now"
+        : viaDeviceKey ? "Couldn't decrypt remote data"
+        : "Couldn't decrypt remote data with this PIN",
+      { icon: icon("alert", 18) }
+    );
     return false;
   }
 }

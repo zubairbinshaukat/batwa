@@ -69,8 +69,8 @@ export function renderSettings(view) {
   );
   syncGroup.append(syncCard, el("p", { class: "xsmall muted", style: "margin-top:8px;padding:0 4px" },
     pinOn
-      ? "Only the encrypted blob is uploaded — unreadable without your PIN. Your JSONBin keys live in this app's storage, so don't share your deployed URL publicly if the bin is private."
-      : "Only the encrypted blob is uploaded — unreadable without this device's key. Without a PIN that key never leaves this device, so the cloud copy can't be restored on another phone: set up a PIN, or keep a file export too. Your JSONBin keys live in this app's storage, so don't share your deployed URL publicly if the bin is private."));
+      ? "Only the encrypted blob is uploaded — another device needs this PIN to restore it. Your JSONBin keys live in this app's storage, so don't share your deployed URL publicly if the bin is private."
+      : "Only the encrypted blob is uploaded, with its key inside — any device with your Bin ID and master key can restore it, so treat those credentials like a password (or set up a PIN for stronger protection)."));
   view.append(syncGroup);
 
   // ---- Backup ----
