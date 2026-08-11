@@ -675,6 +675,7 @@
   max-width: var(--max-w);
   max-height: 92dvh;
   overflow-y: auto;
+  overscroll-behavior-y: contain;
   background: var(--c-surface);
   border-radius: var(--r-xl) var(--r-xl) 0 0;
   box-shadow: var(--shadow-sheet);
@@ -686,8 +687,19 @@
   border-radius: 3px;
   background: var(--c-border-strong);
   margin: 0 auto var(--s-4);
+  position: relative;
+  touch-action: none; /* browser must never claim this touch for scrolling */
 }
-.sheet h2 { font-size: var(--fs-lg); font-weight: 800; letter-spacing: -0.02em; margin-bottom: var(--s-4); }
+.sheet-grab::before {
+  /* invisible enlarged hit area — the 42x5 pill is too small a drag target */
+  content: "";
+  position: absolute;
+  inset: -16px -70px;
+}
+.sheet h2 {
+  font-size: var(--fs-lg); font-weight: 800; letter-spacing: -0.02em; margin-bottom: var(--s-4);
+  touch-action: none;
+}
 @media (min-width: 640px) {
   .sheet {
     top: 50%; left: 50%; right: auto; bottom: auto;

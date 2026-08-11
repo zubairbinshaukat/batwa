@@ -79,7 +79,21 @@ function wireSwipeToDismiss(sheet, backdrop) {
     dragging = false;
     pointerId = null;
     moves = [];
-    sheet.style.touchAction = "";
+  }
+
+  // touch-action can't be changed mid-gesture (it's evaluated at touch
+  // start), and preventDefault on pointermove never stops scrolling — so
+  // without this the browser claims the touch for scroll and fires
+  // pointercancel, killing the drag. Claiming the touchmove keeps the
+  // pointer stream alive; the grab/title are covered by CSS touch-action.
+  function onTouchMove(e) {
+    if (!pending && !dragging) return;
+    const t = e.touches && e.touches[0];
+    if (!t) return;
+    const dy = t.clientY - startY;
+    if (dragging || fromChrome || (sheet.scrollTop <= 0 && dy > 0)) {
+      if (e.cancelable) e.preventDefault();
+    }
   }
 
   function onDown(e) {
@@ -108,11 +122,9 @@ function wireSwipeToDismiss(sheet, backdrop) {
       if (Math.abs(dx) > Math.abs(dyRaw)) { pending = false; return; } // horizontal gesture — not ours
       if (!fromChrome && sheet.scrollTop > 0) { pending = false; return; } // scrolled since down
       dragging = true;
-      sheet.style.touchAction = "none";
       try { sheet.setPointerCapture(pointerId); } catch {}
     }
 
-    e.preventDefault?.();
     const dy = Math.max(0, dyRaw); // ignore upward drag past resting position
     moves.push({ t: performance.now(), y: e.clientY });
     if (moves.length > 6) moves.shift();
@@ -128,8 +140,10 @@ function wireSwipeToDismiss(sheet, backdrop) {
     if (!dragging) { reset(); return; }
     try { sheet.releasePointerCapture(pointerId); } catch {}
 
-    const dy = Math.max(0, e.clientY - startY);
+    // pointercancel may carry zeroed coordinates — trust the last real sample
     const first = moves[0], last = moves[moves.length - 1];
+    const endY = e.type === "pointercancel" ? last.y : e.clientY;
+    const dy = Math.max(0, endY - startY);
     const dt = Math.max(1, last.t - first.t);
     const velocity = (last.y - first.y) / dt; // px/ms
     const shouldDismiss = dy > sheetH * 0.25 || velocity > 0.6;
@@ -161,6 +175,7 @@ function wireSwipeToDismiss(sheet, backdrop) {
   sheet.addEventListener("pointermove", onMove);
   sheet.addEventListener("pointerup", onUp);
   sheet.addEventListener("pointercancel", onUp);
+  sheet.addEventListener("touchmove", onTouchMove, { passive: false });
 }
 
 export function closeSheet(fromPop = false) {
