@@ -1,7 +1,10 @@
 // Batwa entry point: boot sequence, routing, SW registration, install flow.
 
 import { openDB, ensureSchema, getMeta, setMeta } from "./db.js";
-import { hasPin, showSetup, showLock, initAutoLock } from "./auth.js";
+import {
+  hasPin, hasDeviceKey, isFirstRun, unlockWithDeviceKey,
+  showSetup, showLock, showOnboarding, showAccountsStep, initAutoLock,
+} from "./auth.js";
 import { loadLedger, onChange } from "./ledger.js";
 import { scheduleSync, syncNow, getSyncState, onSyncState } from "./sync.js";
 import { $, el, anim } from "./util/dom.js";
@@ -218,15 +221,26 @@ function initOnlineState() {
    Boot
    ============================================================ */
 
+/**
+ * Get a key, then paint the app.
+ *   pin      -> keypad, exactly as before
+ *   device   -> no-PIN mode: straight in, no lock screen ever
+ *   first run-> welcome + security choice, then the accounts step over home
+ * Anything else (a blob with no key meta) falls back to the legacy PIN setup.
+ */
 async function unlockFlow() {
   unlocked = false;
+  let firstRun = false;
   if (await hasPin()) await showLock();
+  else if (await hasDeviceKey()) await unlockWithDeviceKey();
+  else if (await isFirstRun()) { firstRun = true; await showOnboarding(); }
   else await showSetup();
   await loadLedger();
   unlocked = true;
   renderNav();
   renderView();
   updateSyncPill();
+  if (firstRun) await showAccountsStep(); // sits over the freshly rendered home
   syncNow({ silent: true });
 }
 

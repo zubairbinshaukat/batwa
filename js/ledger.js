@@ -190,10 +190,29 @@ export async function updateAccount(id, patch) {
   return a;
 }
 
-/** Delete an account. Its entries stay in history, just unassigned. */
-export async function deleteAccount(id) {
-  state.accounts = state.accounts.filter((a) => a.id !== id);
-  for (const e of state.entries) if (e.accountId === id) e.accountId = null;
+/**
+ * Remove an account AND every entry tied to it (income, paid expenses,
+ * pending expenses, adjustment entries) — one atomic state change + save,
+ * so hero totals and committed figures drop with it instead of an orphaned
+ * entry still counting toward balances(). Returns { account, entries } (both
+ * removed) for undo via restoreAccountWithEntries, or null if not found.
+ */
+export async function removeAccountWithEntries(id) {
+  const idx = state.accounts.findIndex((a) => a.id === id);
+  if (idx < 0) return null;
+  const [account] = state.accounts.splice(idx, 1);
+  const entries = state.entries.filter((e) => e.accountId === id);
+  state.entries = state.entries.filter((e) => e.accountId !== id);
+  await saveLedger();
+  emit();
+  return { account, entries };
+}
+
+/** Undo counterpart to removeAccountWithEntries: puts the account and its
+ * entries straight back. */
+export async function restoreAccountWithEntries({ account, entries }) {
+  state.accounts.push(account);
+  state.entries.push(...entries);
   await saveLedger();
   emit();
 }
@@ -207,6 +226,20 @@ export function accountBalance(id) {
     else if (e.status === "paid") v -= e.amount;
   }
   return v;
+}
+
+/**
+ * Bucket-fill breakdown for one account: real balance, how much of it is
+ * already spoken for by pending (unpaid) expenses on that account, and what's
+ * actually free to spend. Pure/additive — leans on accountBalance() above.
+ */
+export function accountBreakdown(id) {
+  const balance = accountBalance(id);
+  let committed = 0;
+  for (const e of state.entries) {
+    if (e.accountId === id && e.kind === "expense" && e.status === "pending") committed += e.amount;
+  }
+  return { balance, committed, usable: balance - committed };
 }
 
 /**

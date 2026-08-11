@@ -2,7 +2,7 @@
 
 import { $, el, esc, anim } from "../util/dom.js";
 import { state, saveCategories } from "../ledger.js";
-import { changePin } from "../auth.js";
+import { changePin, disablePin, enablePin, getKeyMode } from "../auth.js";
 import { openSheet, closeSheet, confirmSheet, chooseSheet } from "./modals.js";
 import { toast } from "./toast.js";
 import {
@@ -19,6 +19,7 @@ const ICONS = {
   exp:     ["upload",      "var(--c-pos-soft)",    "var(--c-pos)"],
   imp:     ["download",    "var(--c-warn-soft)",   "var(--c-warn)"],
   pin:     ["lock",        "var(--c-violet-soft)", "var(--c-violet)"],
+  pinoff:  ["alert",       "var(--c-neg-soft)",    "var(--c-neg)"],
   cat:     ["tag",         "var(--c-aqua-soft)",   "#0B87B8"],
   acc:     ["credit-card", "var(--c-violet-soft)", "var(--c-violet)"],
   install: ["smartphone",  "var(--c-pos-soft)",    "var(--c-pos)"],
@@ -35,7 +36,15 @@ function row(key, label, value, onClick) {
   return r;
 }
 
+let _view = null;
+/** Re-paint settings in place after the PIN mode changes. */
+function refresh() {
+  if (_view && _view.isConnected) renderSettings(_view);
+}
+
 export function renderSettings(view) {
+  _view = view;
+  const pinOn = getKeyMode() === "pin";
   view.innerHTML = "";
 
   // ---- Accounts ----
@@ -59,7 +68,9 @@ export function renderSettings(view) {
     row("sync", "JSONBin setup", "", syncSetupSheet),
   );
   syncGroup.append(syncCard, el("p", { class: "xsmall muted", style: "margin-top:8px;padding:0 4px" },
-    "Only the encrypted blob is uploaded — unreadable without your PIN. Your JSONBin keys live in this app's storage, so don't share your deployed URL publicly if the bin is private."));
+    pinOn
+      ? "Only the encrypted blob is uploaded — unreadable without your PIN. Your JSONBin keys live in this app's storage, so don't share your deployed URL publicly if the bin is private."
+      : "Only the encrypted blob is uploaded — unreadable without this device's key. Without a PIN that key never leaves this device, so the cloud copy can't be restored on another phone: set up a PIN, or keep a file export too. Your JSONBin keys live in this app's storage, so don't share your deployed URL publicly if the bin is private."));
   view.append(syncGroup);
 
   // ---- Backup ----
@@ -74,10 +85,21 @@ export function renderSettings(view) {
   // ---- Security ----
   const sec = el("div", { class: "set-group" });
   sec.append(el("h2", {}, "Security"));
-  sec.append(el("div", { class: "card set-card" }, row("pin", "Change PIN", "", changePinSheet)));
+  const secCard = el("div", { class: "card set-card" });
+  if (pinOn) {
+    secCard.append(
+      row("pin", "Change PIN", "", changePinSheet),
+      row("pinoff", "Disable PIN", "", disablePinSheet),
+    );
+  } else {
+    secCard.append(row("pin", "Set up a PIN", "Off", setupPinSheet));
+  }
+  sec.append(secCard);
   sec.append(el("div", {
     class: "warn-card", style: "margin-top:12px",
-    html: `${icon("alert", 15)} There is no PIN recovery. Your PIN is the encryption key — if you forget it, the data is gone. Keep an export backup somewhere safe.`,
+    html: pinOn
+      ? `${icon("alert", 15)} There is no PIN recovery. Your PIN is the encryption key — if you forget it, the data is gone. Keep an export backup somewhere safe.`
+      : `${icon("alert", 15)} Batwa opens without asking for anything. Your data is still encrypted on disk with a device key, but anyone who can unlock this phone can read every amount.`,
   }));
   view.append(sec);
 
@@ -167,7 +189,7 @@ async function syncSetupSheet() {
 async function exportSheet() {
   const pick = await chooseSheet({
     title: "Export data",
-    message: "Encrypted keeps your PIN protection. Plain is readable by anyone who opens the file.",
+    message: "Encrypted keeps your data protected the same way the app protects it on this device. Plain is readable by anyone who opens the file.",
     options: [
       { label: "Encrypted backup (recommended)", value: "enc", style: "btn-primary" },
       { label: "Plain JSON (unprotected)", value: "plain" },
@@ -243,9 +265,15 @@ function askBackupPin(cb) {
   });
 }
 
+const pinInput = (ph) => el("input", {
+  class: "input", type: "password", inputmode: "numeric", maxlength: "4",
+  placeholder: ph, autocomplete: "off",
+  style: "text-align:center;letter-spacing:10px;font-size:1.4rem",
+});
+
 function changePinSheet() {
   openSheet("Change PIN", (body) => {
-    const mk = (ph) => el("input", { class: "input", type: "password", inputmode: "numeric", maxlength: "4", placeholder: ph, autocomplete: "off", style: "text-align:center;letter-spacing:10px;font-size:1.4rem" });
+    const mk = pinInput;
     const oldP = mk("Current PIN"), n1 = mk("New PIN"), n2 = mk("Repeat new PIN");
     const msg = el("div", { class: "field-error", style: "display:block;min-height:20px" });
     body.append(
@@ -268,6 +296,82 @@ function changePinSheet() {
             toast("PIN changed — data re-encrypted", { icon: icon("lock", 18) });
           },
         }, "Change PIN"),
+      ),
+    );
+  });
+}
+
+/** PIN -> no PIN. Requires the current PIN, then re-keys the ledger. */
+function disablePinSheet() {
+  openSheet("Disable PIN", (body) => {
+    const oldP = pinInput("Current PIN");
+    const msg = el("div", { class: "field-error", style: "display:block;min-height:20px" });
+    const go = el("button", { class: "btn btn-soft-danger" }, "Remove PIN");
+    let busy = false;
+    go.addEventListener("click", async () => {
+      if (busy) return;
+      msg.textContent = "";
+      if (!/^\d{4}$/.test(oldP.value)) { msg.textContent = "Enter your current 4-digit PIN"; return; }
+      busy = true;
+      go.disabled = true;
+      const res = await disablePin(oldP.value);
+      busy = false;
+      go.disabled = false;
+      if (!res.ok) { msg.textContent = res.reason; return; }
+      closeSheet();
+      refresh();
+      toast("PIN removed — Batwa now opens straight away", { icon: icon("alert", 18) });
+    });
+    body.append(
+      el("p", { class: "small muted", style: "margin-bottom:14px" },
+        "Batwa will re-encrypt everything under a random key kept in this app's storage, so it can open without asking you for anything."),
+      el("div", { class: "field" }, el("label", {}, "Current PIN"), oldP),
+      msg,
+      el("div", {
+        class: "warn-card", style: "margin-bottom:14px",
+        html: `${icon("alert", 15)} Anyone who can unlock this phone will be able to open Batwa and see every amount. You'll also lose encrypted backups and cloud restore on other devices — export a copy first if you rely on those.`,
+      }),
+      el("div", { class: "form-actions" },
+        el("button", { class: "btn btn-ghost", onclick: () => closeSheet() }, "Cancel"),
+        go,
+      ),
+    );
+  });
+}
+
+/** No PIN -> PIN. Re-encrypts from the device key, then removes it. */
+function setupPinSheet() {
+  openSheet("Set up a PIN", (body) => {
+    const n1 = pinInput("New PIN"), n2 = pinInput("Repeat new PIN");
+    const msg = el("div", { class: "field-error", style: "display:block;min-height:20px" });
+    const go = el("button", { class: "btn btn-primary" }, "Turn on PIN");
+    let busy = false;
+    go.addEventListener("click", async () => {
+      if (busy) return;
+      msg.textContent = "";
+      if (!/^\d{4}$/.test(n1.value)) { msg.textContent = "PIN must be 4 digits"; return; }
+      if (n1.value !== n2.value) { msg.textContent = "PINs don't match"; return; }
+      busy = true;
+      go.disabled = true;
+      const res = await enablePin(n1.value);
+      busy = false;
+      go.disabled = false;
+      if (!res.ok) { msg.textContent = res.reason; return; }
+      closeSheet();
+      refresh();
+      toast("PIN is on — data re-encrypted", { icon: icon("lock", 18) });
+    });
+    body.append(
+      el("p", { class: "small muted", style: "margin-bottom:14px" },
+        "Batwa will ask for this PIN every time it opens, and re-encrypt your data with it."),
+      el("div", { class: "field" }, el("label", {}, "New PIN"), n1),
+      el("div", { class: "field" }, el("label", {}, "Repeat new PIN"), n2),
+      msg,
+      el("div", { class: "warn-card", style: "margin-bottom:14px" },
+        "There is no PIN recovery. Your PIN becomes the encryption key — if you forget it, the data is gone."),
+      el("div", { class: "form-actions" },
+        el("button", { class: "btn btn-ghost", onclick: () => closeSheet() }, "Cancel"),
+        go,
       ),
     );
   });

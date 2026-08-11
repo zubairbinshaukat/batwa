@@ -1,36 +1,95 @@
 // Accounts: logo pack, home account cards, add/manage sheets, Fix balance flow.
 
-import { $, el, esc, anim, buzz } from "../util/dom.js";
-import { fmtMoney, fmtCompact } from "../util/format.js";
-import { state, addAccount, updateAccount, deleteAccount, accountBalance, reconcileAccount, deleteEntry } from "../ledger.js";
+import { $, el, esc, anim, motionOK, buzz } from "../util/dom.js";
+import { fmtMoney, fmtCompact, dueHint, shortDate } from "../util/format.js";
+import { state, addAccount, updateAccount, removeAccountWithEntries, restoreAccountWithEntries, accountBalance, accountBreakdown, pendingExpenses, reconcileAccount, deleteEntry } from "../ledger.js";
 import { openSheet, closeSheet, confirmSheet } from "./modals.js";
 import { toast } from "./toast.js";
 import { icon } from "./icons.js";
 
 /* ============================================================
-   Logo pack — simplified brand-colored marks (offline, no assets)
+   Logo pack — real brand marks from branding/banks/ on clean white
+   tiles, with the brand-colored glyph tile as an onerror-only fallback
+   for a missing/broken asset (never painted behind a loaded logo).
    ============================================================ */
 
+const LOGO_DIR = "branding/banks";
+
 export const LOGO_KINDS = {
-  jazzcash:  { name: "JazzCash",     bg: "#E11931", glyph: "J" },
-  easypaisa: { name: "Easypaisa",    bg: "#43A833", glyph: "e" },
-  nayapay:   { name: "NayaPay",      bg: "#00C4B3", glyph: "n" },
-  sadapay:   { name: "SadaPay",      bg: "#FF5F96", glyph: "s" },
-  upaisa:    { name: "UPaisa",       bg: "#F7941E", glyph: "u" },
-  meezan:    { name: "Meezan Bank",  bg: "#084F2E", glyph: "M" },
-  ubl:       { name: "UBL",          bg: "#005EAA", glyph: "U" },
-  hbl:       { name: "HBL",          bg: "#00874E", glyph: "H" },
-  alfalah:   { name: "Bank Alfalah", bg: "#8A1538", glyph: "A" },
-  mcb:       { name: "MCB",          bg: "#046A38", glyph: "M" },
-  bank:      { name: "Other bank",   bg: "#64748B", ico: "landmark" },
-  cash:      { name: "Cash",         bg: "#12B77F", ico: "banknote" },
+  // --- shown up front in the picker ---
+  jazzcash:   { name: "JazzCash",          bg: "#E11931", glyph: "J", logo: "jazzcash" },
+  easypaisa:  { name: "Easypaisa",         bg: "#43A833", glyph: "e", logo: "easypaisa" },
+  nayapay:    { name: "NayaPay",           bg: "#00C4B3", glyph: "n", logo: "nayapay" },
+  zindigi:    { name: "Zindigi",           bg: "#6A2C91", glyph: "Z", logo: "zindigi" },
+  meezan:     { name: "Meezan Bank",       bg: "#084F2E", glyph: "M", logo: "meezan" },
+  ubl:        { name: "UBL",               bg: "#007DC5", glyph: "U", logo: "ubl" },
+  hbl:        { name: "HBL",               bg: "#009591", glyph: "H", logo: "hbl" },
+  alfalah:    { name: "Bank Alfalah",      bg: "#8A1538", glyph: "A", logo: "alfalah" },
+  mcb:        { name: "MCB",               bg: "#046A38", glyph: "M", logo: "mcb" },
+  allied:     { name: "Allied Bank",       bg: "#00447C", glyph: "A", logo: "allied" },
+  cash:       { name: "Cash",              bg: "#12B77F", ico: "banknote" },
+  bank:       { name: "Other bank",        bg: "#64748B", ico: "landmark" },
+
+  // --- behind "Other bank" ---
+  sadapay:    { name: "SadaPay",           bg: "#FF5F96", glyph: "s", logo: "sadapay" },
+  upaisa:     { name: "UPaisa",            bg: "#F7941E", glyph: "u", logo: "upaisa" },
+  alhabib:    { name: "Bank Al Habib",     bg: "#14487F", glyph: "H", logo: "alhabib" },
+  askari:     { name: "Askari Bank",       bg: "#00629B", glyph: "A", logo: "askari" },
+  faysal:     { name: "Faysal Bank",       bg: "#00A19A", glyph: "F", logo: "faysal" },
+  nbp:        { name: "National Bank",     bg: "#00693E", glyph: "N", logo: "nbp" },
+  bop:        { name: "Bank of Punjab",    bg: "#056839", glyph: "B", logo: "bop" },
+  habibmetro: { name: "HabibMetro",        bg: "#003A70", glyph: "H", logo: "habibmetro" },
+  jsbank:     { name: "JS Bank",           bg: "#0090A8", glyph: "J", logo: "jsbank" },
+  soneri:     { name: "Soneri Bank",       bg: "#FFC426", glyph: "S", logo: "soneri" },
+  scb:        { name: "Standard Chartered", bg: "#0473EA", glyph: "S", logo: "scb" },
+  dib:        { name: "Dubai Islamic",     bg: "#0B3B5C", glyph: "D", logo: "dib" },
+  bankislami: { name: "BankIslami",        bg: "#007C7A", glyph: "B", logo: "bankislami" },
+  albaraka:   { name: "Al Baraka",         bg: "#007A33", glyph: "A", logo: "albaraka" },
 };
+
+/** Picker layout: 12 tiles up front, everything else behind "Other bank". */
+const PRIMARY_KINDS = [
+  "jazzcash", "easypaisa", "nayapay", "zindigi",
+  "meezan", "ubl", "hbl", "alfalah",
+  "mcb", "allied", "cash", "bank",
+];
+const MORE_KINDS = [
+  "sadapay", "upaisa", "alhabib", "askari", "faysal", "nbp", "bop",
+  "habibmetro", "jsbank", "soneri", "scb", "dib", "bankislami", "albaraka",
+];
 
 export function logoTile(kind, size = 40) {
   const k = LOGO_KINDS[kind] || LOGO_KINDS.bank;
-  const inner = k.ico ? icon(k.ico, Math.round(size * 0.52)) : k.glyph;
-  const fs = k.ico ? "" : `font-size:${size * 0.5}px;`;
-  return `<span class="acc-logo" style="width:${size}px;height:${size}px;background:${k.bg};${fs}" aria-hidden="true">${inner}</span>`;
+  const radius = Math.max(8, Math.round(size * 0.28));
+  const box = `width:${size}px;height:${size}px;border-radius:${radius}px;--tile-bg:${k.bg};`;
+
+  if (k.ico) {
+    // Intentional icon tiles (cash, generic bank) — no logo file exists, so
+    // they stay a colored tile with a white glyph icon.
+    return `<span class="acc-logo acc-logo-ico" style="${box}" aria-hidden="true">${icon(k.ico, Math.round(size * 0.52))}</span>`;
+  }
+
+  if (k.logo) {
+    // Clean white card: the mark sits centered in a fixed-size inner box so
+    // every logo reads at the same optical size regardless of its own aspect
+    // ratio. If the SVG ever 404s, onerror flips the tile into its fallback
+    // state and the brand-colored glyph (pre-rendered, hidden by CSS) shows
+    // through instead — the glyph never sits *behind* a loaded logo.
+    const inner = Math.round(size * 0.66);
+    const fs = Math.round(size * 0.34);
+    return `<span class="acc-logo has-logo" style="${box}" aria-hidden="true">
+      <span class="acc-logo-imgbox" style="width:${inner}px;height:${inner}px">
+        <img src="${LOGO_DIR}/${k.logo}.svg" alt="" decoding="async" width="${inner}" height="${inner}"
+          onerror="this.closest('.acc-logo').classList.add('is-fallback');this.parentElement.remove()">
+      </span>
+      <span class="acc-logo-glyph" style="font-size:${fs}px">${k.glyph || ""}</span>
+    </span>`;
+  }
+
+  // No logo file and no icon (shouldn't happen for a known kind, but keeps
+  // an unknown/legacy kind from rendering an empty tile).
+  const fs = Math.round(size * 0.5);
+  return `<span class="acc-logo is-fallback" style="${box}font-size:${fs}px" aria-hidden="true">${k.glyph || ""}</span>`;
 }
 
 export function accountName(id) {
@@ -40,6 +99,24 @@ export function accountName(id) {
 /* ============================================================
    Home row: swipeable account cards
    ============================================================ */
+
+/**
+ * Bottom-up "bucket fill" fraction + color tone for the committed share of
+ * a balance. Shared by the home cards and the account sheet so both read
+ * the same at any percentage. Never NaN/Infinity.
+ *   committed = 0               -> no fill, "normal" tone.
+ *   raw = committed / balance   -> the underlying (possibly >1) ratio.
+ *   pct                         -> raw capped to 1, for the fill height.
+ *   tone: <80% "normal" (violet tint) · 80–90% "amber" · 90–100% "orange"
+ *         · >=100% or balance <= 0 with committed > 0 -> "red".
+ */
+function fillFraction({ balance, committed }) {
+  if (!committed) return { pct: 0, tone: "normal" };
+  const raw = balance > 0 ? committed / balance : Infinity;
+  const pct = Math.min(raw, 1);
+  const tone = raw >= 1 ? "red" : raw >= 0.9 ? "orange" : raw >= 0.8 ? "amber" : "normal";
+  return { pct, tone };
+}
 
 export function renderAccountsRow(container, { revealed }) {
   container.innerHTML = "";
@@ -53,44 +130,104 @@ export function renderAccountsRow(container, { revealed }) {
     return;
   }
   const row = el("div", { class: `acc-row ${revealed ? "" : "is-blurred"}` });
+  const fills = []; // { el, pct } — animated after mount
   for (const acc of state.accounts) {
-    const bal = accountBalance(acc.id);
-    const card = el("button", { class: "card acc-card", "data-id": acc.id, onclick: () => accountSheet(acc) });
+    const { balance: bal, committed } = accountBreakdown(acc.id);
+    const { pct, tone } = fillFraction({ balance: bal, committed });
+    const card = el("button", {
+      class: "card acc-card", "data-id": acc.id,
+      onclick: () => accountSheet(acc),
+    });
     card.innerHTML = `
-      ${logoTile(acc.kind, 38)}
-      <span class="acc-name truncate">${esc(acc.name)}</span>
-      <span class="acc-bal money num blurable ${bal < 0 ? "is-neg" : ""}" data-tip="${fmtMoney(bal)}" data-tip-id="acc-${acc.id}" data-value="${bal}">${fmtCompact(bal)}</span>
+      <span class="acc-fill${tone !== "normal" ? ` is-${tone}` : ""}"></span>
+      <span class="acc-card-inner">
+        ${logoTile(acc.kind, 38)}
+        <span class="acc-name truncate">${esc(acc.name)}</span>
+        <span class="acc-bal money num blurable ${bal < 0 ? "is-neg" : ""}" data-tip="${fmtMoney(bal)}" data-tip-id="acc-${acc.id}" data-value="${bal}">${fmtCompact(bal)}</span>
+      </span>
     `;
     row.append(card);
+    if (pct > 0) fills.push({ el: card.querySelector(".acc-fill"), pct });
   }
   const add = el("button", { class: "acc-card acc-add", "aria-label": "Add account", onclick: addAccountSheet });
   add.innerHTML = `<span class="acc-logo" style="width:38px;height:38px;background:var(--c-bg-deep);color:var(--c-violet)">${icon("plus", 18)}</span><span class="acc-name muted">Add</span>`;
   row.append(add);
   container.append(row);
+
+  // Bucket fills rise from empty to their level, staggered card to card.
+  fills.forEach(({ el: fillNode, pct: p }, i) =>
+    anim(fillNode, { height: "0%" }, { height: `${(p * 100).toFixed(2)}%`, duration: 0.7, delay: i * 0.05, ease: "power3.out" }));
 }
 
 /* ============================================================
    Sheets
    ============================================================ */
 
+const reveal = (node) =>
+  anim(node, { opacity: 0, y: 6 }, { opacity: 1, y: 0, duration: 0.22, ease: "power2.out" });
+
 function logoGrid(selected, onPick) {
-  const grid = el("div", { class: "logo-grid" });
-  for (const [kind, k] of Object.entries(LOGO_KINDS)) {
+  const wrap = el("div", { class: "logo-picker" });
+  let sel = selected;
+
+  const opt = (kind, { label, backAfterPick = false } = {}) => {
+    const k = LOGO_KINDS[kind];
     const b = el("button", {
       type: "button",
-      class: `logo-opt ${kind === selected ? "is-active" : ""}`,
+      class: `logo-opt ${kind === sel ? "is-active" : ""}`,
+      "data-kind": kind,
       "aria-label": k.name,
       onclick: () => {
-        [...grid.children].forEach((c) => c.classList.remove("is-active"));
-        b.classList.add("is-active");
+        sel = kind;
         buzz(6);
         onPick(kind);
+        if (backAfterPick) renderPrimary();
+        else [...wrap.querySelectorAll(".logo-opt")]
+          .forEach((c) => c.classList.toggle("is-active", c.dataset.kind === sel));
       },
     });
-    b.innerHTML = `${logoTile(kind, 42)}<span class="xsmall truncate">${k.name}</span>`;
-    grid.append(b);
+    b.innerHTML = `${logoTile(kind, 42)}<span class="xsmall truncate">${esc(label || k.name)}</span>`;
+    return b;
+  };
+
+  function renderPrimary() {
+    wrap.innerHTML = "";
+    const grid = el("div", { class: "logo-grid" });
+    for (const kind of PRIMARY_KINDS) {
+      if (kind !== "bank") { grid.append(opt(kind)); continue; }
+      // "Other bank" opens the long list — and mirrors whatever was picked there
+      const picked = MORE_KINDS.includes(sel) ? sel : null;
+      const b = el("button", {
+        type: "button",
+        class: `logo-opt ${picked || sel === "bank" ? "is-active" : ""}`,
+        "data-kind": "bank",
+        "aria-label": "Other bank — see all banks",
+        onclick: () => { buzz(6); renderMore(); },
+      });
+      b.innerHTML = `${logoTile(picked || "bank", 42)}
+        <span class="xsmall truncate">${esc(picked ? LOGO_KINDS[picked].name : "Other bank")} ›</span>`;
+      grid.append(b);
+    }
+    wrap.append(grid);
+    reveal(grid);
   }
-  return grid;
+
+  function renderMore() {
+    wrap.innerHTML = "";
+    const back = el("button", {
+      type: "button", class: "logo-back",
+      onclick: () => { buzz(6); renderPrimary(); },
+    });
+    back.innerHTML = `<span class="logo-back-chev">‹</span><span>All banks &amp; wallets</span>`;
+    const grid = el("div", { class: "logo-grid" });
+    for (const kind of MORE_KINDS) grid.append(opt(kind, { backAfterPick: true }));
+    grid.append(opt("bank", { label: "Not listed", backAfterPick: true }));
+    wrap.append(back, grid);
+    reveal(grid);
+  }
+
+  renderPrimary();
+  return wrap;
 }
 
 export function addAccountSheet() {
@@ -131,14 +268,93 @@ export function addAccountSheet() {
 
 export function accountSheet(acc) {
   openSheet(acc.name, (body) => {
-    const bal = accountBalance(acc.id);
-    body.append(el("div", { class: "acc-hero", html: `
-      ${logoTile(acc.kind, 52)}
-      <div>
-        <div class="xsmall muted" style="text-transform:uppercase;letter-spacing:0.06em;font-weight:700">Balance</div>
+    const { balance: bal, committed, usable } = accountBreakdown(acc.id);
+    const { pct, tone } = fillFraction({ balance: bal, committed });
+
+    // --- The sheet itself IS the bucket: the tint fill is painted as the
+    // .sheet element's own background (rises bottom-up, sits behind every
+    // child, and — since .sheet is the overflow-y:auto scroll container —
+    // stays put as content scrolls instead of scrolling away with it).
+    // `body` is already appended into the sheet by openSheet() before this
+    // builder runs, so its parent IS the live .sheet node.
+    const sheetEl = body.closest(".sheet");
+    sheetEl.classList.add("acc-sheet");
+    if (tone !== "normal") sheetEl.classList.add(`is-${tone}`);
+    sheetEl.style.setProperty("--fill-pct", "0%");
+
+    const head = el("div", { class: "acc-sheet-head" });
+    head.innerHTML = `
+      ${logoTile(acc.kind, 44)}
+      <div class="acc-sheet-head-text">
+        <span class="acc-wash-name truncate">${esc(acc.name)}</span>
+        <span class="acc-fill-cap xsmall muted">${committed > 0
+          ? `${Math.round(pct * 100)}% of balance committed${tone === "red" ? " — over-committed" : ""}`
+          : "Nothing committed yet"}</span>
+      </div>
+    `;
+    body.append(head);
+
+    // Rise-from-bottom: tween a plain proxy number and write it to the
+    // --fill-pct custom prop each frame (cheap — one style write, no
+    // layout), same pattern as the home hero's count-up. Runs fresh every
+    // time the sheet opens (accountSheet() always builds a new sheetEl), so
+    // the level is always seen rising from empty. Skips straight to the end
+    // state under prefers-reduced-motion.
+    if (pct > 0) {
+      if (motionOK()) {
+        const p = { v: 0 };
+        gsap.to(p, {
+          v: pct * 100, duration: 0.5, ease: "power2.out",
+          onUpdate: () => sheetEl.style.setProperty("--fill-pct", `${p.v.toFixed(2)}%`),
+        });
+      } else {
+        sheetEl.style.setProperty("--fill-pct", `${(pct * 100).toFixed(2)}%`);
+      }
+    }
+
+    // --- Three figures: total / committed / usable ---
+    const figures = el("div", { class: "acc-figures" });
+    figures.innerHTML = `
+      <div class="acc-figure-main">
+        <div class="xsmall muted" style="text-transform:uppercase;letter-spacing:0.06em;font-weight:700">Total balance</div>
         <div class="num" style="font-size:1.9rem;font-weight:800;letter-spacing:-0.02em;${bal < 0 ? "color:var(--c-neg)" : ""}">${fmtMoney(bal)}</div>
       </div>
-    ` }));
+      <div class="acc-figure-row">
+        <div class="acc-figure">
+          <div class="xsmall muted">Committed</div>
+          <div class="num strong" style="color:var(--c-warn)">${fmtMoney(committed)}</div>
+        </div>
+        <div class="acc-figure">
+          <div class="xsmall muted">Usable</div>
+          <div class="num strong" style="${usable < 0 ? "color:var(--c-neg)" : "color:var(--c-pos)"}">${fmtMoney(usable)}</div>
+        </div>
+      </div>
+    `;
+    body.append(figures);
+
+    // --- What's committed: this account's pending expenses ---
+    const pend = pendingExpenses().filter((e) => e.accountId === acc.id);
+    const pendField = el("div", { class: "field" });
+    pendField.append(el("label", {}, "Committed to"));
+    if (!pend.length) {
+      pendField.append(el("p", { class: "muted small", style: "margin:0" }, "No pending expenses on this account."));
+    } else {
+      const list = el("div", { class: "acc-pend-list" });
+      for (const e of pend) {
+        const hint = e.dueDate ? dueHint(e.dueDate) : { text: "No due date", tone: "ok" };
+        const row = el("div", { class: "acc-pend-row" });
+        row.innerHTML = `
+          <div class="grow">
+            <div class="exp-title truncate">${esc(e.title)}</div>
+            <div class="due-hint xsmall ${hint.tone === "overdue" ? "is-overdue" : hint.tone === "soon" ? "is-soon" : ""}">${esc(hint.text)}${e.dueDate ? ` · ${shortDate(e.dueDate)}` : ""}</div>
+          </div>
+          <div class="exp-amount num">${fmtMoney(e.amount)}</div>
+        `;
+        list.append(row);
+      }
+      pendField.append(list);
+    }
+    body.append(pendField);
 
     // --- Fix balance ---
     const fix = el("input", { class: "input input-amount", type: "text", inputmode: "decimal", placeholder: fmtCompact(Math.max(bal, 0)) });
@@ -182,17 +398,38 @@ export function accountSheet(acc) {
       el("button", {
         class: "btn btn-soft-danger",
         onclick: async () => {
-          const ok = await confirmSheet({
-            title: "Remove account?",
-            message: `"${acc.name}" will be removed. Its entries stay in your history, just no longer tied to an account.`,
-            confirmLabel: "Remove",
-            danger: true,
+          const entries = state.entries.filter((e) => e.accountId === acc.id);
+          const pendingCount = entries.filter((e) => e.kind === "expense" && e.status === "pending").length;
+          const { title, message } = removeAccountCopy(acc.name, bal, entries.length, pendingCount);
+          const ok = await confirmSheet({ title, message, confirmLabel: "Remove", danger: true });
+          if (!ok) return;
+          const removed = await removeAccountWithEntries(acc.id);
+          toast("Account removed", {
+            icon: icon("trash", 17),
+            undo: async () => { await restoreAccountWithEntries(removed); toast(`${acc.name} restored`); },
           });
-          if (ok) { await deleteAccount(acc.id); toast("Account removed", { icon: icon("trash", 17) }); }
         },
       }, "Remove"),
     ));
   });
+}
+
+/**
+ * Impact copy for the remove-account confirm sheet — states the exact
+ * rupee/transaction effect BEFORE the user confirms, since removal now takes
+ * every entry tied to the account with it (see removeAccountWithEntries).
+ */
+function removeAccountCopy(name, bal, totalCount, pendingCount) {
+  const title = `Remove ${name}?`;
+  if (!totalCount) return { title, message: "It has no transactions." };
+
+  const txWord = totalCount === 1 ? "transaction" : "transactions";
+  const pendingClause = pendingCount > 0 ? ` (including ${pendingCount} upcoming)` : "";
+  const txClause = `its ${totalCount} ${txWord}${pendingClause} will be deleted`;
+
+  if (bal > 0) return { title, message: `Its ${fmtMoney(bal)} will be subtracted from your total balance, and ${txClause}.` };
+  if (bal < 0) return { title, message: `Your total balance will increase by ${fmtMoney(-bal)} — this account was negative — and ${txClause}.` };
+  return { title, message: `Its balance is already zero, but ${txClause}.` };
 }
 
 function editAccountSheet(acc) {

@@ -2,11 +2,11 @@
 // add money, add/edit expense, confirm, and multi-choice sheets.
 
 import { $, el, esc, anim, animTo, trapFocus, motionOK, buzz } from "../util/dom.js";
-import { state, addEntry, updateEntry } from "../ledger.js";
-import { isoDate } from "../util/format.js";
+import { state, addEntry, updateEntry, deleteEntry, deleteSeriesFuture, restoreEntries } from "../ledger.js";
+import { isoDate, fmtMoney } from "../util/format.js";
 import { CURRENCY } from "../util/format.js";
 import { toast } from "./toast.js";
-import { logoTile } from "./accounts.js";
+import { logoTile, accountName } from "./accounts.js";
 import { icon } from "./icons.js";
 
 let current = null; // { backdrop, sheet, release, resolveClosed }
@@ -44,11 +44,123 @@ export function openSheet(title, build, { onDismiss } = {}) {
       { opacity: 1, scale: 1, duration: 0.35, ease: "back.out(1.4)" });
   } else {
     anim(sheet, { yPercent: 100 }, { yPercent: 0, duration: 0.45, ease: "power4.out" });
+    wireSwipeToDismiss(sheet, backdrop);
   }
 
   const first = sheet.querySelector("input, select, textarea, button");
   if (first && !("ontouchstart" in window)) setTimeout(() => first.focus(), 80);
   return closeSheet;
+}
+
+/**
+ * Native-feel swipe-down-to-dismiss for the mobile sheet.
+ * Dragging from the grab handle / title always works; dragging from the
+ * body only engages once the sheet's own scroll (it IS the scroll
+ * container — see .sheet{overflow-y:auto}) is at the top, so inner
+ * scrolling isn't hijacked. Release past ~25% of the sheet height or a
+ * fast flick dismisses through the SAME closeSheet() path (history/
+ * onDismiss handling included); otherwise it springs back.
+ */
+function wireSwipeToDismiss(sheet, backdrop) {
+  const grab = sheet.querySelector(".sheet-grab");
+  const header = sheet.querySelector("h2");
+  const isTextEntry = (n) => n && (n.tagName === "INPUT" || n.tagName === "TEXTAREA" || n.tagName === "SELECT" || n.isContentEditable);
+
+  let pending = false;   // pointer is down, gesture not yet classified
+  let dragging = false;  // classified as a vertical drag
+  let fromChrome = false; // started on the handle/header (always draggable)
+  let pointerId = null;
+  let startX = 0, startY = 0;
+  let sheetH = 0;
+  let moves = [];
+
+  function reset() {
+    pending = false;
+    dragging = false;
+    pointerId = null;
+    moves = [];
+    sheet.style.touchAction = "";
+  }
+
+  function onDown(e) {
+    if (e.pointerType === "mouse" && e.button !== 0) return;
+    const onChrome = (grab && grab.contains(e.target)) || (header && header.contains(e.target));
+    if (!onChrome) {
+      if (isTextEntry(e.target) && document.activeElement === e.target) return; // let text editing alone
+      if (sheet.scrollTop > 0) return; // inner content is scrolled — let it scroll
+    }
+    fromChrome = !!onChrome;
+    pending = true;
+    pointerId = e.pointerId;
+    startX = e.clientX;
+    startY = e.clientY;
+    sheetH = sheet.getBoundingClientRect().height || sheet.offsetHeight || 1;
+    moves = [{ t: performance.now(), y: startY }];
+  }
+
+  function onMove(e) {
+    if (!pending || e.pointerId !== pointerId) return;
+    const dx = e.clientX - startX;
+    const dyRaw = e.clientY - startY;
+
+    if (!dragging) {
+      if (Math.abs(dyRaw) < 8) return; // below intent threshold
+      if (Math.abs(dx) > Math.abs(dyRaw)) { pending = false; return; } // horizontal gesture — not ours
+      if (!fromChrome && sheet.scrollTop > 0) { pending = false; return; } // scrolled since down
+      dragging = true;
+      sheet.style.touchAction = "none";
+      try { sheet.setPointerCapture(pointerId); } catch {}
+    }
+
+    e.preventDefault?.();
+    const dy = Math.max(0, dyRaw); // ignore upward drag past resting position
+    moves.push({ t: performance.now(), y: e.clientY });
+    if (moves.length > 6) moves.shift();
+
+    if (typeof gsap !== "undefined") gsap.set(sheet, { y: dy });
+    const progress = Math.min(1, dy / sheetH);
+    if (typeof gsap !== "undefined") gsap.set(backdrop, { opacity: 1 - progress * 0.9 });
+    else backdrop.style.opacity = String(1 - progress * 0.9);
+  }
+
+  function onUp(e) {
+    if (!pending || e.pointerId !== pointerId) return;
+    if (!dragging) { reset(); return; }
+    try { sheet.releasePointerCapture(pointerId); } catch {}
+
+    const dy = Math.max(0, e.clientY - startY);
+    const first = moves[0], last = moves[moves.length - 1];
+    const dt = Math.max(1, last.t - first.t);
+    const velocity = (last.y - first.y) / dt; // px/ms
+    const shouldDismiss = dy > sheetH * 0.25 || velocity > 0.6;
+
+    if (shouldDismiss) {
+      // Fold the drag offset into yPercent so closeSheet's own 0->100%
+      // exit tween continues smoothly from here — one close path, no
+      // divergent animation logic.
+      if (typeof gsap !== "undefined") {
+        const curY = gsap.getProperty(sheet, "y") || 0;
+        const curPct = gsap.getProperty(sheet, "yPercent") || 0;
+        const pct = Math.max(0, Math.min(100, curPct + (curY / sheetH) * 100));
+        gsap.set(sheet, { y: 0, yPercent: pct });
+      }
+      reset();
+      closeSheet();
+    } else if (motionOK()) {
+      gsap.to(sheet, { y: 0, duration: 0.35, ease: "power3.out" });
+      gsap.to(backdrop, { opacity: 1, duration: 0.25 });
+      reset();
+    } else {
+      if (typeof gsap !== "undefined") gsap.set(sheet, { y: 0 });
+      backdrop.style.opacity = "";
+      reset();
+    }
+  }
+
+  sheet.addEventListener("pointerdown", onDown);
+  sheet.addEventListener("pointermove", onMove);
+  sheet.addEventListener("pointerup", onUp);
+  sheet.addEventListener("pointercancel", onUp);
 }
 
 export function closeSheet(fromPop = false) {
@@ -213,6 +325,87 @@ function setError(fieldEl, on) {
   if (on && motionOK()) gsap.fromTo(fieldEl, { x: 0 }, { x: 8, duration: 0.05, repeat: 5, yoyo: true, clearProps: "x" });
 }
 
+/**
+ * Delete control appended to the end of an edit sheet (income or expense).
+ * Everything happens in-place in this same sheet — no nested sheet is
+ * opened, so closeSheet()'s single history.back() stays the only history
+ * transition (chaining closeSheet() -> openSheet() here would double-push
+ * history state, since the codebase's own nested-reopen guard in openSheet
+ * only avoids that by skipping history.back() entirely).
+ *
+ * Non-recurring: tap-to-arm, tap-again-to-confirm (3s revert), mirroring
+ * home.js's delete affordance without a second sheet.
+ * Recurring (has seriesId): reveals the same "just this one / this and
+ * future / cancel" choice home.js's card delete offers, inline.
+ */
+function deleteRow(entry, { kindLabel, isExpense }) {
+  const wrap = el("div", { style: "margin-top:var(--s-2)" }, el("div", { class: "divider" }));
+  const isRecurring = isExpense && entry.recurrence !== "one-time" && !!entry.seriesId;
+  const accName = entry.accountId ? accountName(entry.accountId) : null;
+  const returning = isExpense && entry.status === "paid" && accName
+    ? `${fmtMoney(entry.amount)} will return to ${accName}.`
+    : `This ${kindLabel} will be permanently deleted.`;
+
+  async function finish(kind) {
+    if (kind === "future") {
+      const removed = await deleteSeriesFuture(entry.id);
+      closeSheet();
+      toast(`Deleted ${removed.length} upcoming`, { icon: icon("trash", 17), undo: () => restoreEntries(removed) });
+    } else {
+      const removed = await deleteEntry(entry.id);
+      closeSheet();
+      toast("Deleted", { icon: icon("trash", 17), undo: () => restoreEntries([removed]) });
+    }
+  }
+
+  if (isRecurring) {
+    const delBtn = el("button", { type: "button", class: "btn btn-danger btn-block" }, `Delete ${kindLabel}`);
+    const hint = el("p", { class: "muted xsmall", style: "margin:8px 0 0;text-align:center" }, returning);
+    const choices = el("div", { class: "stack", style: "display:none;margin-top:var(--s-2)" });
+    choices.append(
+      el("button", { type: "button", class: "btn btn-soft-danger btn-block", onclick: () => { buzz(12); finish("one"); } }, "Just this one"),
+      el("button", { type: "button", class: "btn btn-danger btn-block", onclick: () => { buzz(12); finish("future"); } }, "This and all future"),
+      el("button", {
+        type: "button", class: "btn btn-ghost btn-block",
+        onclick: () => { buzz(6); choices.style.display = "none"; delBtn.style.display = ""; hint.style.display = "none"; },
+      }, "Cancel")
+    );
+    hint.style.display = "none";
+    delBtn.addEventListener("click", () => {
+      buzz(10);
+      delBtn.style.display = "none";
+      hint.style.display = "";
+      choices.style.display = "";
+    });
+    wrap.append(delBtn, hint, choices);
+    return wrap;
+  }
+
+  const delBtn = el("button", { type: "button", class: "btn btn-danger btn-block" }, `Delete ${kindLabel}`);
+  const hint = el("p", { class: "muted xsmall", style: "margin:8px 0 0;text-align:center;display:none" }, returning);
+  let confirming = false, timer = null;
+  delBtn.addEventListener("click", () => {
+    if (!confirming) {
+      buzz(10);
+      confirming = true;
+      delBtn.textContent = "Tap again to confirm";
+      hint.style.display = "";
+      if (motionOK()) gsap.fromTo(delBtn, { scale: 1 }, { scale: 1.04, duration: 0.15, yoyo: true, repeat: 1 });
+      timer = setTimeout(() => {
+        confirming = false;
+        delBtn.textContent = `Delete ${kindLabel}`;
+        hint.style.display = "none";
+      }, 3000);
+    } else {
+      buzz(16);
+      clearTimeout(timer);
+      finish("one");
+    }
+  });
+  wrap.append(delBtn, hint);
+  return wrap;
+}
+
 /* ============================================================
    Add Money
    ============================================================ */
@@ -240,7 +433,8 @@ export function addMoneySheet(entry = null) {
     const save = el("button", { class: "btn btn-mint btn-block", type: "submit" },
       entry ? "Save changes" : "Add money");
 
-    const form = el("form", {}, amtF, descF, dateF, acc.root, catF, el("div", { class: "form-actions" }, save));
+    const form = el("form", {}, amtF, descF, dateF, acc.root, catF, el("div", { class: "form-actions" }, save),
+      entry ? deleteRow(entry, { kindLabel: "income", isExpense: false }) : null);
     form.addEventListener("submit", async (e) => {
       e.preventDefault();
       const amount = parseAmount(amt.value);
@@ -317,7 +511,8 @@ export function addExpenseSheet(entry = null) {
       entry ? "Save changes" : "Add expense");
 
     const form = el("form", {}, amtF, titleF, segF, dueF, acc.root, catF, noteF, paidWrap,
-      el("div", { class: "form-actions" }, save));
+      el("div", { class: "form-actions" }, save),
+      entry ? deleteRow(entry, { kindLabel: "expense", isExpense: true }) : null);
 
     form.addEventListener("submit", async (e) => {
       e.preventDefault();

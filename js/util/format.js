@@ -15,7 +15,7 @@ export function fmtMoney(n) {
   return v < 0 ? `-${CURRENCY.symbol} ${nf.format(-v)}` : `${CURRENCY.symbol} ${nf.format(v)}`;
 }
 
-/** Compact: 54302 -> "54.3k", 1240000 -> "1.24M", 812 -> "812". Sign preserved. */
+/** Compact (Pakistani numbering): 54302 -> "54.3k", 234100 -> "2.34 lacs", 12400000 -> "1.24 cr", 812 -> "812". Sign preserved. */
 export function fmtCompact(n) {
   const v = Number(n) || 0;
   const sign = v < 0 ? "-" : "";
@@ -25,9 +25,14 @@ export function fmtCompact(n) {
     const s = x.toFixed(1);
     return s.endsWith(".0") ? s.slice(0, -2) : s;
   };
-  if (a < 1e6) return `${sign}${one(a / 1e3)}k`;
-  const s = (a / 1e6).toFixed(2).replace(/\.?0+$/, "");
-  return `${sign}${s}M`;
+  const trim2 = (x) => x.toFixed(2).replace(/\.?0+$/, "");
+  if (a < 1e5) return `${sign}${one(a / 1e3)}k`;
+  if (a < 1e7) {
+    const s = trim2(a / 1e5);
+    return `${sign}${s} ${Number(s) === 1 ? "lac" : "lacs"}`;
+  }
+  const s = trim2(a / 1e7);
+  return `${sign}${s} cr`;
 }
 
 const DAY = 86400000;

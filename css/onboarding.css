@@ -1,0 +1,230 @@
+/* ============================================================
+   Batwa — first-run onboarding
+   Rides on .lock-screen (same aurora canvas, same white-on-gradient
+   ink) and only adds what the welcome / choice / accounts steps need.
+   ============================================================ */
+
+/* Sheets are z 100 and toasts 200 — the accounts step must sit UNDER both
+   so "Add account" can open over it. The lock screen's 300 would swallow them. */
+.onb-screen {
+  z-index: 95;
+  justify-content: flex-start;
+  overflow: hidden auto;
+  padding: calc(var(--s-7) + var(--safe-t)) var(--s-5);
+  padding-bottom: calc(var(--s-7) + var(--safe-b));
+  gap: 0;
+}
+
+/* the accounts step sits over a live home screen — freeze it */
+body.is-onboarding { overflow: hidden; }
+
+.onb-card {
+  margin: auto 0;               /* centred when it fits, scrolls when it doesn't */
+  width: 100%;
+  max-width: 360px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--s-4);
+  text-align: center;
+  position: relative;
+  z-index: 1;
+}
+
+/* ---- brand block ---- */
+.onb-logo {
+  width: 84px; height: 84px;
+  border-radius: 26px;
+  background: #fff;
+  display: grid; place-items: center;
+  box-shadow: 0 18px 40px -14px rgba(9, 5, 40, 0.55), inset 0 1px 0 rgba(255,255,255,0.6);
+}
+.onb-logo img { display: block; }
+.onb-logo-sm {
+  width: 60px; height: 60px;
+  border-radius: 20px;
+  background: rgba(255,255,255,0.16);
+  backdrop-filter: blur(8px);
+  color: #fff;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.3);
+}
+
+.onb-brand {
+  font-size: var(--fs-hero);
+  font-weight: 800;
+  letter-spacing: -0.035em;
+  line-height: 1;
+  margin-top: calc(var(--s-1) * -1);
+}
+.onb-title {
+  font-size: var(--fs-xl);
+  font-weight: 800;
+  letter-spacing: -0.025em;
+  line-height: 1.15;
+}
+.onb-lead {
+  font-size: var(--fs-md);
+  font-weight: 500;
+  line-height: 1.45;
+  color: rgba(255,255,255,0.82);
+  max-width: 300px;
+}
+.onb-lead-sm { font-size: var(--fs-base); max-width: 320px; }
+
+/* ---- value props ---- */
+.onb-points {
+  list-style: none;
+  display: flex; flex-direction: column;
+  gap: 10px;
+  text-align: left;
+  width: 100%;
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  color: rgba(255,255,255,0.88);
+}
+.onb-points li { display: flex; align-items: center; gap: 10px; }
+.onb-tick {
+  flex: 0 0 auto;
+  width: 22px; height: 22px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.2);
+  display: grid; place-items: center;
+  color: #fff;
+}
+
+/* ---- buttons ---- */
+.onb-actions {
+  width: 100%;
+  display: flex; flex-direction: column;
+  gap: var(--s-2);
+  margin-top: var(--s-2);
+}
+.onb-btn {
+  width: 100%;
+  min-height: 54px;
+  border-radius: var(--r-pill);
+  background: #fff;
+  color: var(--c-violet-deep);
+  font-size: var(--fs-md);
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  display: grid; place-items: center;
+  box-shadow: 0 14px 30px -12px rgba(9, 5, 40, 0.6);
+  transition: transform var(--t-fast) var(--ease-out), background var(--t-fast);
+}
+.onb-btn:active { transform: scale(0.97); }
+.onb-btn[disabled] { opacity: 0.6; }
+.onb-btn-ghost {
+  background: transparent;
+  color: rgba(255,255,255,0.9);
+  border: 1.5px solid rgba(255,255,255,0.32);
+  box-shadow: none;
+  font-weight: 700;
+}
+.onb-btn-ghost:active { background: rgba(255,255,255,0.14); }
+
+/* ---- security choice ---- */
+.onb-opts {
+  width: 100%;
+  display: flex; flex-direction: column;
+  gap: var(--s-3);
+  margin-top: var(--s-1);
+}
+.onb-opt {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: var(--s-3);
+  width: 100%;
+  padding: var(--s-4);
+  text-align: left;
+  color: #fff;
+  border-radius: var(--r-lg);
+  background: rgba(255,255,255,0.13);
+  border: 1px solid rgba(255,255,255,0.18);
+  backdrop-filter: blur(8px);
+  transition: transform var(--t-fast) var(--ease-out), background var(--t-fast);
+}
+.onb-opt:active { transform: scale(0.98); background: rgba(255,255,255,0.22); }
+.onb-opt-ico {
+  width: 42px; height: 42px;
+  border-radius: 14px;
+  background: rgba(255,255,255,0.2);
+  display: grid; place-items: center;
+  flex: 0 0 auto;
+}
+.onb-opt-txt { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.onb-opt-title {
+  font-size: var(--fs-base);
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  display: flex; align-items: center; flex-wrap: wrap; gap: 6px;
+}
+.onb-opt-sub {
+  font-size: var(--fs-xs);
+  font-weight: 500;
+  line-height: 1.4;
+  color: rgba(255,255,255,0.76);
+}
+.onb-opt-sub strong { font-weight: 800; color: rgba(255,255,255,0.92); }
+.onb-badge {
+  font-style: normal;
+  font-size: 0.625rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 3px 8px;
+  border-radius: var(--r-pill);
+  background: rgba(255,255,255,0.24);
+}
+.onb-opt-chev { color: rgba(255,255,255,0.55); display: grid; place-items: center; }
+.onb-foot {
+  font-size: var(--fs-xs);
+  font-weight: 500;
+  color: rgba(255,255,255,0.6);
+  max-width: 300px;
+}
+
+/* ---- accounts step ---- */
+.onb-list {
+  width: 100%;
+  display: flex; flex-direction: column;
+  gap: var(--s-2);
+}
+.onb-list:empty { display: none; }
+.onb-acc {
+  display: flex; align-items: center; gap: var(--s-3);
+  padding: 10px var(--s-3);
+  border-radius: var(--r-md);
+  background: rgba(255,255,255,0.14);
+  border: 1px solid rgba(255,255,255,0.16);
+  font-size: var(--fs-base);
+  font-weight: 700;
+  text-align: left;
+}
+.onb-acc > .truncate { flex: 1 1 auto; min-width: 0; }
+.onb-acc-tick { color: #9CF7D2; display: grid; place-items: center; flex: 0 0 auto; }
+
+/* ---- back chevron (also used by the embedded PIN setup) ---- */
+.lock-back {
+  position: absolute;
+  top: calc(var(--safe-t) + 10px);
+  left: 8px;
+  width: 44px; height: 44px;
+  border-radius: 50%;
+  color: #fff;
+  background: transparent;
+  display: grid; place-items: center;
+  z-index: 2;
+  transition: background var(--t-fast);
+}
+.lock-back:active { background: rgba(255,255,255,0.18); }
+
+/* ---- tight phones ---- */
+@media (max-height: 700px) {
+  .onb-logo { width: 68px; height: 68px; border-radius: 22px; }
+  .onb-logo-sm { width: 54px; height: 54px; }
+  .onb-brand { font-size: var(--fs-xl); }
+  .onb-card { gap: var(--s-3); }
+  .onb-btn { min-height: 50px; }
+}

@@ -65,6 +65,8 @@
 .acc-card {
   flex: 0 0 auto;
   scroll-snap-align: start;
+  position: relative;
+  overflow: hidden;
   display: flex;
   flex-direction: column;
   align-items: flex-start;
@@ -76,12 +78,51 @@
   transition: transform var(--t-fast) var(--ease-out);
 }
 .acc-card:active { transform: scale(0.95); }
+/* Content sits in its own positioned layer so the bucket fill (below) can't
+   paint over it — positioned descendants stack above static ones. */
+.acc-card-inner { position: relative; z-index: 1; display: flex; flex-direction: column; align-items: flex-start; gap: 7px; }
 .acc-card .acc-name { font-size: var(--fs-xs); font-weight: 600; color: var(--c-muted); max-width: 110px; }
 .acc-card .acc-bal { font-size: var(--fs-md); font-weight: 800; letter-spacing: -0.02em; }
 .acc-card .acc-bal.is-neg { color: var(--c-neg); }
 .acc-add { border: 1.5px dashed var(--c-border-strong); background: transparent; box-shadow: none; align-items: center; justify-content: center; min-width: 84px; }
 
+/* Fill tone thresholds — shared by the card fills and the account-sheet
+   bucket fill. P = committed/balance. <80% is violet (the app's aurora
+   accent, not the account's brand color); 80–90% turns amber; 90–100%
+   orange; >=100% (or balance spent out) red. Amber and red reuse the
+   existing warn/neg semantic tokens; orange is new and sits between them,
+   all kept soft/translucent like the violet tint. */
+:root {
+  --c-fill-orange: #F0650C;
+}
+
+/* "Bucket fill" — soft violet wash rising bottom-up to show committed share
+   of the balance. Height is set inline/animated per card. The waterline
+   reads as a liquid surface, not a border: a thin, brighter crest of the
+   same hue right at the top edge, with a very short glow fading down into
+   the body of the fill — tight (a few px), not a wide blurred band. */
+.acc-fill {
+  position: absolute;
+  left: 0; right: 0; bottom: 0;
+  height: 0;
+  --fill-c: var(--c-violet);
+  --fill-a: 20%;
+  background: linear-gradient(to bottom,
+    transparent 0,
+    color-mix(in srgb, var(--fill-c) calc(var(--fill-a) + 40%), transparent) 2px,
+    color-mix(in srgb, var(--fill-c) var(--fill-a), transparent) 6px);
+  pointer-events: none;
+}
+.acc-fill.is-amber  { --fill-c: var(--c-warn);        --fill-a: 26%; }
+.acc-fill.is-orange { --fill-c: var(--c-fill-orange); --fill-a: 28%; }
+.acc-fill.is-red    { --fill-c: var(--c-neg);         --fill-a: 24%; }
+
+/* Logo tiles — clean white cards so every brand mark (transparent-bg SVG)
+   reads consistently. --tile-bg (inline, per-kind) is only actually used by
+   the icon and fallback-glyph variants below; a loaded logo tile stays a
+   plain white card. */
 .acc-logo {
+  position: relative;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -90,8 +131,41 @@
   font-weight: 800;
   line-height: 1;
   flex: 0 0 auto;
-  box-shadow: inset 0 -2px 6px rgba(0,0,0,0.18), 0 2px 6px rgba(23,19,58,0.14);
   user-select: none;
+  background: #fff;
+  border: 1px solid var(--c-border);
+  box-shadow: var(--shadow-xs);
+}
+
+/* Logo box: fixed-size inner frame, the <img> fills it via object-fit:
+   contain so every logo sits at the same optical size regardless of its own
+   aspect ratio — no per-kind zoom hacks needed. */
+.acc-logo-imgbox { display: flex; align-items: center; justify-content: center; }
+.acc-logo-imgbox img { width: 100%; height: 100%; object-fit: contain; display: block; }
+
+/* Fallback glyph: pre-rendered but hidden — only shown (by onerror adding
+   .is-fallback) when the logo file fails to load, so the letter never sits
+   behind a logo that did load. */
+.acc-logo-glyph {
+  display: none;
+  position: absolute; inset: 0;
+  align-items: center; justify-content: center;
+  border-radius: inherit;
+}
+.acc-logo.is-fallback {
+  background: var(--tile-bg, var(--c-violet));
+  border-color: transparent;
+  box-shadow: inset 0 -2px 6px rgba(0,0,0,0.18), 0 2px 6px rgba(23,19,58,0.14);
+}
+.acc-logo.is-fallback .acc-logo-glyph { display: flex; }
+
+/* Intentional icon tiles (cash, generic "other bank") — no logo file exists
+   for these, they keep the colored-tile-with-icon look, matched in size /
+   radius / border to sit consistently next to the white logo cards. */
+.acc-logo-ico {
+  background: var(--tile-bg, var(--c-muted));
+  border-color: transparent;
+  box-shadow: inset 0 -2px 6px rgba(0,0,0,0.18), 0 2px 6px rgba(23,19,58,0.14);
 }
 
 .acc-invite {
@@ -109,16 +183,63 @@
 }
 .acc-invite:active { transform: scale(0.97); }
 
-.acc-hero {
-  display: flex;
-  align-items: center;
-  gap: var(--s-4);
-  padding: var(--s-4);
-  border-radius: var(--r-lg);
+/* Account sheet = the bucket. The violet fill is painted as the .sheet
+   element's own background — rising to --fill-pct, no separate vessel card,
+   so it costs zero extra vertical space. Since .sheet is the scroll
+   container, background-attachment's default ("scroll", i.e. fixed to the
+   element's own box) keeps the fill still as content scrolls past it
+   instead of dragging it along. --fill-pct is animated 0 -> P on open;
+   --fill-c/--fill-a swap by committed-share tone (see accounts.js
+   fillFraction / the .acc-fill rules above for the same thresholds).
+   The waterline itself is a tight liquid-surface crest (a brighter line of
+   the same hue, glowing a few px down into the fill) rather than a wide
+   fade band or a hard border — same treatment as the card fills. */
+.sheet.acc-sheet {
+  --fill-pct: 0%;
+  --fill-c: var(--c-violet);
+  --fill-a: 20%;
+  background:
+    linear-gradient(to top,
+      color-mix(in srgb, var(--fill-c) var(--fill-a), transparent) 0%,
+      color-mix(in srgb, var(--fill-c) var(--fill-a), transparent) calc(var(--fill-pct) - 6px),
+      color-mix(in srgb, var(--fill-c) calc(var(--fill-a) + 40%), transparent) calc(var(--fill-pct) - 2px),
+      transparent calc(var(--fill-pct) + 1px)
+    ),
+    var(--c-surface);
+}
+.sheet.acc-sheet.is-amber  { --fill-c: var(--c-warn);        --fill-a: 26%; }
+.sheet.acc-sheet.is-orange { --fill-c: var(--c-fill-orange); --fill-a: 28%; }
+.sheet.acc-sheet.is-red    { --fill-c: var(--c-neg);         --fill-a: 24%; }
+
+.acc-sheet-head { display: flex; align-items: center; gap: var(--s-3); margin-bottom: var(--s-4); }
+.acc-sheet-head-text { min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.acc-wash-name { font-size: var(--fs-md); font-weight: 800; letter-spacing: -0.02em; }
+.acc-fill-cap { font-weight: 600; }
+
+/* Three figures: total balance, then committed / usable side by side */
+.acc-figures { margin-bottom: var(--s-5); }
+.acc-figure-main { margin-bottom: var(--s-4); }
+.acc-figure-row { display: flex; gap: var(--s-3); }
+.acc-figure-row .acc-figure {
+  flex: 1;
+  padding: var(--s-3);
+  border-radius: var(--r-md);
   background: var(--c-surface-2);
   border: 1px solid var(--c-border);
-  margin-bottom: var(--s-4);
 }
+
+/* Pending expenses explaining what's committed */
+.acc-pend-list { border-top: 1px solid var(--c-border); }
+.acc-pend-row {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  padding: 10px 0;
+  border-bottom: 1px solid var(--c-border);
+}
+.acc-pend-row:last-child { border-bottom: none; }
+.acc-pend-row .exp-title { font-size: var(--fs-sm); font-weight: 600; }
+.acc-pend-row .exp-amount { font-size: var(--fs-sm); font-weight: 700; white-space: nowrap; }
 
 .logo-grid {
   display: grid;
@@ -135,10 +256,28 @@
   border: 1.5px solid transparent;
   font-weight: 600;
   color: var(--c-muted);
-  transition: background var(--t-fast), border-color var(--t-fast);
+  transition: background var(--t-fast), border-color var(--t-fast), transform var(--t-fast) var(--ease-out);
 }
 .logo-opt span:last-child { max-width: 100%; }
 .logo-opt.is-active { border-color: var(--c-violet); background: var(--c-violet-soft); color: var(--c-violet-deep); }
+.logo-opt:active { transform: scale(0.94); }
+
+.logo-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-bottom: var(--s-2);
+  padding: 6px 13px 6px 9px;
+  border-radius: var(--r-pill);
+  background: var(--c-surface-2);
+  border: 1.5px solid var(--c-border);
+  font-size: var(--fs-xs);
+  font-weight: 700;
+  color: var(--c-ink-soft);
+  transition: background var(--t-fast), border-color var(--t-fast);
+}
+.logo-back:active { transform: scale(0.96); }
+.logo-back-chev { font-size: 1.25em; line-height: 0.8; }
 
 .acc-chip {
   flex: 0 0 auto;

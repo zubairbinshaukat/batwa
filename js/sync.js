@@ -3,7 +3,7 @@
 
 import { dbGet, dbPut, getMeta, setMeta } from "./db.js";
 import { getKey } from "./auth.js";
-import { decrypt, deriveKey } from "./crypto.js";
+import { decrypt, deriveKey, unb64 } from "./crypto.js";
 import { state, replaceAll, mergeData } from "./ledger.js";
 import { timeAgo } from "./util/format.js";
 import { toast } from "./ui/toast.js";
@@ -89,33 +89,71 @@ async function remotePut(binId, masterKey, payload) {
   if (!res.ok) throw new Error("http-" + res.status);
 }
 
+/**
+ * Portability key material, independent of the local key MODE:
+ *  - PIN mode: the real PBKDF2 salt (`pinSalt`) — a payload built under it can
+ *    only be opened by re-deriving from the same PIN, which is the point.
+ *  - Device mode: there's no PIN to re-derive from, so the raw device key
+ *    itself travels with the payload. That's not a new weakness — device mode
+ *    already unlocks with no prompt at all on this phone (see auth.js), so a
+ *    payload readable by anyone holding the sync credentials (or the backup
+ *    file) matches the security level Settings already documents for it.
+ * Both fields are additive; old clients that only know `salt`/`cipher` keep
+ * working against PIN-mode payloads exactly as before.
+ */
+async function keyMaterial() {
+  const pinSalt = await getMeta("pinSalt");
+  const deviceKey = await getMeta("deviceKey");
+  if (pinSalt) return { keyMode: "pin", salt: pinSalt, deviceKey: null };
+  if (deviceKey) return { keyMode: "device", salt: null, deviceKey };
+  return { keyMode: "none", salt: null, deviceKey: null };
+}
+
+const importRawKey = (rawB64) =>
+  crypto.subtle.importKey("raw", unb64(rawB64), { name: "AES-GCM" }, false, ["decrypt"]);
+
 async function buildPayload() {
   const blob = await dbGet("entries", "blob");
   return {
     app: "batwa",
     version: 1,
     updatedAt: (await getMeta("updatedAt")) || new Date().toISOString(),
-    salt: await getMeta("pinSalt"), // same PIN restores on a new device
+    ...(await keyMaterial()), // keyMode + salt (pin) + deviceKey (no-pin) — see keyMaterial()
     cipher: blob || null,
   };
 }
 
 async function pullRemote(remote) {
   if (!remote?.cipher) return false;
-  const localSalt = await getMeta("pinSalt");
   let key = getKey();
-  if (remote.salt && remote.salt !== localSalt) {
-    // Blob was encrypted under a different salt (other device) — same PIN, different key.
-    toast("Remote data uses a different device key — import it via a backup file instead", { icon: icon("alert", 18) });
-    return false;
+  let viaDeviceKey = false;
+
+  if (remote.deviceKey) {
+    // No-PIN payload: the key travels with it, so sync credentials alone unlock it —
+    // no need for this device's current key (whatever mode it's in) to match.
+    try {
+      key = await importRawKey(remote.deviceKey);
+      viaDeviceKey = true;
+    } catch {
+      toast("Remote data is damaged", { icon: icon("alert", 18) });
+      return false;
+    }
+  } else {
+    const localSalt = await getMeta("pinSalt");
+    if (remote.salt && remote.salt !== localSalt) {
+      // Blob was encrypted under a different salt (other device) — same PIN, different key.
+      toast("Remote data uses a different device key — import it via a backup file instead", { icon: icon("alert", 18) });
+      return false;
+    }
   }
+
   try {
     const data = await decrypt(key, remote.cipher);
     await replaceAll(data);
     await setMeta("updatedAt", remote.updatedAt);
     return true;
   } catch {
-    toast("Couldn't decrypt remote data with this PIN", { icon: icon("alert", 18) });
+    toast(viaDeviceKey ? "Couldn't decrypt remote data" : "Couldn't decrypt remote data with this PIN", { icon: icon("alert", 18) });
     return false;
   }
 }
@@ -225,7 +263,7 @@ export async function exportEncrypted() {
     type: "batwa-backup",
     encrypted: true,
     exportedAt: new Date().toISOString(),
-    salt: await getMeta("pinSalt"),
+    ...(await keyMaterial()), // keyMode + salt (pin) + deviceKey (no-pin) — see keyMaterial()
     cipher: blob,
     categories: state.categories,
   }, `batwa-backup-${new Date().toISOString().slice(0, 10)}.json`);
@@ -244,19 +282,30 @@ export async function exportPlain() {
 
 /**
  * Import from a parsed backup file. mode: "merge" | "replace".
- * For encrypted backups, `pin` unlocks them (defaults to trying the current key's PIN salt).
+ * For PIN-mode encrypted backups, `pin` unlocks them by re-deriving the key from
+ * `data.salt` (legacy format — still the only way to open older exports). No-PIN
+ * backups carry their own device key (`data.deviceKey`) and need no PIN at all.
  */
 export async function importBackup(data, mode, pin = null) {
   let payload = null;
   if (!data || data.type !== "batwa-backup") throw new Error("Not a Batwa backup file");
   if (data.encrypted) {
-    if (!data.cipher || !data.salt) throw new Error("Backup file is damaged");
-    if (!pin) throw new Error("pin-needed");
-    const key = await deriveKey(pin, data.salt);
+    if (!data.cipher || !(data.salt || data.deviceKey)) throw new Error("Backup file is damaged");
+    let key;
+    if (data.deviceKey) {
+      try {
+        key = await importRawKey(data.deviceKey);
+      } catch {
+        throw new Error("Backup file is damaged");
+      }
+    } else {
+      if (!pin) throw new Error("pin-needed");
+      key = await deriveKey(pin, data.salt);
+    }
     try {
       payload = await decrypt(key, data.cipher);
     } catch {
-      throw new Error("Wrong PIN for this backup");
+      throw new Error(data.deviceKey ? "Couldn't decrypt this backup" : "Wrong PIN for this backup");
     }
   } else {
     payload = { entries: data.entries || [], accounts: data.accounts || [] };
