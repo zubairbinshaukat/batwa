@@ -120,7 +120,10 @@ function wireSwipeToDismiss(sheet, backdrop) {
     if (!dragging) {
       if (Math.abs(dyRaw) < 8) return; // below intent threshold
       if (Math.abs(dx) > Math.abs(dyRaw)) { pending = false; return; } // horizontal gesture — not ours
-      if (!fromChrome && sheet.scrollTop > 0) { pending = false; return; } // scrolled since down
+      if (!fromChrome) {
+        if (dyRaw <= 0) { pending = false; return; } // upward — that's content scrolling, not ours
+        if (sheet.scrollTop > 0) { pending = false; return; } // scrolled since down
+      }
       dragging = true;
       try { sheet.setPointerCapture(pointerId); } catch {}
     }
