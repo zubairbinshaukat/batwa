@@ -80,13 +80,35 @@ function blank() {
 
 export async function addEntry(data) {
   const e = { ...blank(), ...data };
-  if (e.kind === "income") { e.status = "paid"; e.paidAt = e.paidAt || e.createdAt; }
+  if (e.kind === "income") {
+    if (!e.status) e.status = "paid";
+    e.paidAt = e.status === "paid" ? (e.paidAt || e.createdAt) : null;
+  }
   if (e.kind === "expense" && e.recurrence !== "one-time" && !e.seriesId) e.seriesId = e.id;
-  if (!state.categories.includes(e.category)) e.category = "Others";
+  if (e.kind !== "transfer" && !state.categories.includes(e.category)) e.category = "Others";
   state.entries.push(e);
   await saveLedger();
   emit();
   return e;
+}
+
+/** Move money between two of the user's own accounts — one entry, both balances update live. */
+export async function transferMoney({ fromAccountId, toAccountId, amount, note = "", paidAt = null }) {
+  if (!fromAccountId || !toAccountId || fromAccountId === toAccountId) return null;
+  if (!(amount > 0)) return null;
+  return addEntry({
+    kind: "transfer",
+    title: "Transfer",
+    amount,
+    note: note.trim(),
+    fromAccountId,
+    toAccountId,
+    status: "paid",
+    paidAt: paidAt || new Date().toISOString(),
+    recurrence: "one-time",
+    dueDate: null,
+    category: null,
+  });
 }
 
 export async function updateEntry(id, patch) {
@@ -190,6 +212,16 @@ export async function updateAccount(id, patch) {
   return a;
 }
 
+/** Reorder accounts to match `orderedIds` — this array order IS the display order everywhere. */
+export async function reorderAccounts(orderedIds) {
+  const byId = new Map(state.accounts.map((a) => [a.id, a]));
+  const next = orderedIds.map((id) => byId.get(id)).filter(Boolean);
+  for (const a of state.accounts) if (!orderedIds.includes(a.id)) next.push(a); // safety: never drop one
+  state.accounts = next;
+  await saveLedger();
+  emit();
+}
+
 /**
  * Remove an account AND every entry tied to it (income, paid expenses,
  * pending expenses, adjustment entries) — one atomic state change + save,
@@ -201,8 +233,9 @@ export async function removeAccountWithEntries(id) {
   const idx = state.accounts.findIndex((a) => a.id === id);
   if (idx < 0) return null;
   const [account] = state.accounts.splice(idx, 1);
-  const entries = state.entries.filter((e) => e.accountId === id);
-  state.entries = state.entries.filter((e) => e.accountId !== id);
+  const touches = (e) => e.accountId === id || e.fromAccountId === id || e.toAccountId === id;
+  const entries = state.entries.filter(touches);
+  state.entries = state.entries.filter((e) => !touches(e));
   await saveLedger();
   emit();
   return { account, entries };
@@ -221,8 +254,13 @@ export async function restoreAccountWithEntries({ account, entries }) {
 export function accountBalance(id) {
   let v = 0;
   for (const e of state.entries) {
+    if (e.kind === "transfer") {
+      if (e.fromAccountId === id) v -= e.amount;
+      if (e.toAccountId === id) v += e.amount;
+      continue;
+    }
     if (e.accountId !== id) continue;
-    if (e.kind === "income") v += e.amount;
+    if (e.kind === "income") { if (e.status === "paid") v += e.amount; }
     else if (e.status === "paid") v -= e.amount;
   }
   return v;
@@ -271,9 +309,9 @@ export async function reconcileAccount(id, actualAmount) {
 export function balances() {
   let income = 0, paidOut = 0, committed = 0;
   for (const e of state.entries) {
-    if (e.kind === "income") income += e.amount;
-    else if (e.status === "paid") paidOut += e.amount;
-    else committed += e.amount;
+    if (e.kind === "transfer") continue; // nets to zero across the whole ledger
+    if (e.kind === "income") { if (e.status === "paid") income += e.amount; continue; }
+    if (e.status === "paid") paidOut += e.amount; else committed += e.amount;
   }
   const total = income - paidOut;
   return { total, committed, free: total - committed };
@@ -290,11 +328,12 @@ export function pendingExpenses() {
     });
 }
 
-/** Entries belonging to "YYYY-MM": expenses by dueDate (fallback createdAt), income by date received. */
+/** Entries belonging to "YYYY-MM": expenses by dueDate (fallback createdAt), income by date received
+ * (fallback expected date for pending income), transfers by their (always-set) paidAt. */
 export function entriesForMonth(ym) {
   return state.entries.filter((e) => {
-    const d = e.kind === "income"
-      ? (e.paidAt || e.createdAt)
+    const d = e.kind === "transfer" ? (e.paidAt || e.createdAt)
+      : e.kind === "income" ? (e.paidAt || e.dueDate || e.createdAt)
       : (e.dueDate || e.paidAt || e.createdAt);
     return String(d).slice(0, 7) === ym;
   });
@@ -305,7 +344,8 @@ export function monthSummary(ym) {
   let inc = 0, out = 0, recurringOut = 0, onceOut = 0;
   const byCat = {};
   for (const e of list) {
-    if (e.kind === "income") { inc += e.amount; continue; }
+    if (e.kind === "transfer") continue; // not real income/spending — just moved between own accounts
+    if (e.kind === "income") { if (e.status === "paid") inc += e.amount; continue; }
     if (e.status !== "paid") continue; // spend = actually paid
     out += e.amount;
     byCat[e.category] = (byCat[e.category] || 0) + e.amount;

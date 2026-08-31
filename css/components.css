@@ -528,6 +528,9 @@
 }
 .exp-card.is-overdue::before { background: var(--c-neg); }
 
+.exp-card.is-income::before { background: var(--c-pos); }
+.exp-card.is-income .exp-amount { color: var(--c-pos); }
+
 /* inline one-tap action row */
 .exp-actions {
   display: flex;
@@ -608,10 +611,6 @@
 @media (min-width: 900px) {
   .quick-actions { position: static; width: auto; transform: none; margin-top: var(--s-4); }
 }
-/* Home's action bar floats above the nav, so home needs extra clearance */
-@media (max-width: 899px) {
-  .home-grid { padding-bottom: 80px; }
-}
 
 .list-loader {
   display: grid;
@@ -658,6 +657,23 @@
   background: var(--grad-action);
 }
 .nav-ind { width: 18px; height: 3px; border-radius: 2px; background: transparent; }
+
+/* Center FAB — its own grid cell in .nav-inner, button rises above the bar */
+.nav-fab-slot { position: relative; display: flex; align-items: center; justify-content: center; }
+.nav-fab {
+  position: absolute;
+  top: -22px;
+  width: 56px; height: 56px;
+  border-radius: var(--r-pill);
+  background: var(--grad-action);
+  color: #fff;
+  display: grid; place-items: center;
+  box-shadow: var(--shadow-btn);
+  border: 4px solid var(--c-surface);
+  transition: transform var(--t-fast) var(--ease-out);
+}
+.nav-fab:active { transform: scale(0.92); }
+.nav-fab svg.ico { width: 24px; height: 24px; }
 
 /* =================== Sheets / modals =================== */
 .sheet-backdrop {
@@ -830,6 +846,29 @@ select.input {
   background: var(--c-surface);
   color: var(--c-violet-deep);
   box-shadow: var(--shadow-xs);
+}
+
+/* Quick-add sheet: tab strip + native horizontal-scroll-snap pager (real swipe,
+   no gesture code — and it can't fight the sheet's own vertical dismiss-drag). */
+.qa-tabs { margin-bottom: var(--s-4); }
+.qa-pager {
+  display: flex;
+  align-items: flex-start;   /* each page keeps its own natural height — JS sets the container's */
+  overflow-x: auto;
+  overflow-y: hidden;
+  scroll-snap-type: x mandatory;
+  touch-action: pan-x;
+  overscroll-behavior-x: contain;
+  margin: 0 calc(var(--s-5) * -1);
+  scrollbar-width: none;
+}
+.qa-pager::-webkit-scrollbar { display: none; }
+.qa-page {
+  flex: 0 0 100%;
+  scroll-snap-align: start;
+  scroll-snap-stop: always;  /* a fast flick must land on the next page, never skip it */
+  padding: 0 var(--s-5);
+  min-width: 0;
 }
 
 /* Toggle switch */
@@ -1099,6 +1138,38 @@ select.input {
 }
 .set-row .chev { margin-left: auto; color: var(--c-faint); flex: 0 0 auto; }
 .set-row .set-val { margin-left: auto; color: var(--c-muted); font-size: var(--fs-sm); }
+
+/* Manage-accounts drag-to-reorder list */
+.acc-reorder-list { gap: var(--s-2); }
+.acc-reorder-row {
+  border-radius: 16px;
+  padding: 0;
+  gap: 0;
+  touch-action: pan-y;
+  position: relative;
+}
+.acc-reorder-row.is-dragging {
+  z-index: 5;
+  box-shadow: var(--shadow-lift);
+  background: var(--c-surface);
+}
+.acc-reorder-tap {
+  flex: 1;
+  display: flex; align-items: center; gap: var(--s-3);
+  min-height: 56px;
+  padding: var(--s-3) var(--s-4) var(--s-3) 4px;
+  text-align: left;
+}
+.acc-reorder-tap:active { background: var(--c-surface-2); }
+.drag-handle {
+  flex: 0 0 auto;
+  width: 40px; height: 56px;
+  display: grid; place-items: center;
+  color: var(--c-faint);
+  touch-action: none;
+  cursor: grab;
+}
+.drag-handle:active { cursor: grabbing; color: var(--c-muted); }
 
 .warn-card {
   background: var(--c-warn-soft);

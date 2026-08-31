@@ -2,7 +2,7 @@
 
 import { $, el, esc, anim, motionOK, buzz } from "../util/dom.js";
 import { fmtMoney, fmtCompact, dueHint, shortDate } from "../util/format.js";
-import { state, addAccount, updateAccount, removeAccountWithEntries, restoreAccountWithEntries, accountBalance, accountBreakdown, pendingExpenses, reconcileAccount, deleteEntry } from "../ledger.js";
+import { state, addAccount, updateAccount, removeAccountWithEntries, restoreAccountWithEntries, accountBalance, accountBreakdown, pendingExpenses, reconcileAccount, deleteEntry, reorderAccounts } from "../ledger.js";
 import { openSheet, closeSheet, confirmSheet } from "./modals.js";
 import { toast } from "./toast.js";
 import { icon } from "./icons.js";
@@ -398,7 +398,7 @@ export function accountSheet(acc) {
       el("button", {
         class: "btn btn-soft-danger",
         onclick: async () => {
-          const entries = state.entries.filter((e) => e.accountId === acc.id);
+          const entries = state.entries.filter((e) => e.accountId === acc.id || e.fromAccountId === acc.id || e.toAccountId === acc.id);
           const pendingCount = entries.filter((e) => e.kind === "expense" && e.status === "pending").length;
           const { title, message } = removeAccountCopy(acc.name, bal, entries.length, pendingCount);
           const ok = await confirmSheet({ title, message, confirmLabel: "Remove", danger: true });
@@ -455,25 +455,109 @@ function editAccountSheet(acc) {
   });
 }
 
-/** Settings entry point: manage the whole list. */
+/** Settings entry point: manage the whole list — drag the handle to reorder; the order here IS Home's order. */
 export function manageAccountsSheet() {
   openSheet("Accounts", (body) => {
     if (!state.accounts.length) {
       body.append(el("p", { class: "muted small", style: "margin-bottom:14px" },
         "No accounts yet. Add JazzCash, banks, or cash to see where your money actually sits."));
     } else {
-      const list = el("div", { class: "stack", style: "margin-bottom:16px" });
+      const draggable = state.accounts.length > 1;
+      if (draggable) body.append(el("p", { class: "xsmall muted", style: "margin:0 0 8px" }, "Drag to reorder — the top account shows first on Home."));
+      const list = el("div", { class: "stack acc-reorder-list", style: "margin-bottom:16px" });
       for (const acc of state.accounts) {
-        const r = el("button", {
-          class: "set-row card", style: "border-radius:16px",
-          onclick: () => accountSheet(acc),
-        });
-        r.innerHTML = `${logoTile(acc.kind, 36)}<span class="grow truncate" style="text-align:left">${esc(acc.name)}</span>
+        const tap = el("button", { class: "acc-reorder-tap", onclick: () => accountSheet(acc) });
+        tap.innerHTML = `${logoTile(acc.kind, 36)}<span class="grow truncate" style="text-align:left">${esc(acc.name)}</span>
           <span class="num strong">${fmtCompact(accountBalance(acc.id))}</span><span class="chev">›</span>`;
+        const r = el("div", { class: "set-row card acc-reorder-row", "data-id": acc.id }, tap);
+        if (draggable) {
+          const handle = el("button", { type: "button", class: "drag-handle", "aria-label": `Reorder ${esc(acc.name)}`, html: icon("grip", 18) });
+          r.prepend(handle);
+          wireAccountDrag(handle, r, list);
+        }
         list.append(r);
       }
       body.append(list);
     }
     body.append(el("button", { class: "btn btn-primary btn-block", onclick: addAccountSheet }, "＋ Add account"));
   });
+}
+
+/**
+ * Vertical drag-to-reorder on the handle only. Every pointer event calls
+ * stopPropagation — the sheet itself also listens for vertical pointer drags
+ * (its own swipe-to-dismiss, wired in modals.js) and would otherwise treat
+ * this same gesture as a dismiss attempt.
+ * Uses translateY relative to the ORIGINAL pointerdown position, with a
+ * running `layoutShift` correction applied every time the dragged row's DOM
+ * position swaps with a neighbor — this keeps the row visually glued to the
+ * pointer across swaps instead of jumping.
+ */
+function wireAccountDrag(handle, row, list) {
+  let dragging = false, pointerId = null, startY = 0, layoutShift = 0;
+
+  const setY = (y) => {
+    if (typeof gsap !== "undefined") gsap.set(row, { y });
+    else row.style.transform = y ? `translateY(${y}px)` : "";
+  };
+
+  function onDown(e) {
+    if (e.pointerType === "mouse" && e.button !== 0) return;
+    e.stopPropagation();
+    dragging = true;
+    pointerId = e.pointerId;
+    startY = e.clientY;
+    layoutShift = 0;
+    try { handle.setPointerCapture(pointerId); } catch {}
+    row.classList.add("is-dragging");
+    buzz(10);
+  }
+
+  function onMove(e) {
+    if (!dragging || e.pointerId !== pointerId) return;
+    e.stopPropagation();
+    if (e.cancelable) e.preventDefault();
+
+    const rowH = row.offsetHeight;
+    let guard = 0;
+    while (guard++ < 12) {
+      const dyNow = (e.clientY - startY) - layoutShift;
+      const rows = [...list.children];
+      const idx = rows.indexOf(row);
+      const prev = rows[idx - 1];
+      const next = rows[idx + 1];
+      if (prev && row.offsetTop + dyNow < prev.offsetTop + prev.offsetHeight / 2 - rowH / 2) {
+        const beforeTop = row.offsetTop;
+        list.insertBefore(row, prev);
+        layoutShift += row.offsetTop - beforeTop;
+        buzz(6);
+        continue;
+      }
+      if (next && row.offsetTop + dyNow > next.offsetTop + next.offsetHeight / 2 - rowH / 2) {
+        const beforeTop = row.offsetTop;
+        list.insertBefore(row, next.nextSibling);
+        layoutShift += row.offsetTop - beforeTop;
+        buzz(6);
+        continue;
+      }
+      break;
+    }
+    setY((e.clientY - startY) - layoutShift);
+  }
+
+  function onUp(e) {
+    if (!dragging || e.pointerId !== pointerId) return;
+    e.stopPropagation();
+    dragging = false;
+    try { handle.releasePointerCapture(pointerId); } catch {}
+    row.classList.remove("is-dragging");
+    if (motionOK()) gsap.to(row, { y: 0, duration: 0.25, ease: "power2.out" });
+    else setY(0);
+    reorderAccounts([...list.children].map((r) => r.dataset.id));
+  }
+
+  handle.addEventListener("pointerdown", onDown);
+  handle.addEventListener("pointermove", onMove);
+  handle.addEventListener("pointerup", onUp);
+  handle.addEventListener("pointercancel", onUp);
 }

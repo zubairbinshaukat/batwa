@@ -2,7 +2,7 @@
 
 import { $, el, esc, anim, animTo, motionOK, buzz } from "../util/dom.js";
 import { fmtMoney, fmtCompact, fmtNum, dueHint, shortDate, greeting, CURRENCY } from "../util/format.js";
-import { balances, pendingExpenses, markPaid, unmarkPaid, deleteEntry, deleteSeriesFuture, restoreEntries } from "../ledger.js";
+import { state, balances, pendingExpenses, markPaid, unmarkPaid, deleteEntry, deleteSeriesFuture, restoreEntries } from "../ledger.js";
 import { addMoneySheet, addExpenseSheet, confirmSheet, chooseSheet } from "./modals.js";
 import { toast } from "./toast.js";
 import { renderAccountsRow, accountName } from "./accounts.js";
@@ -110,13 +110,10 @@ export function renderHome(view) {
           </div>
         </section>
         <div id="acc-slot"></div>
-        <div class="quick-actions" id="quick-actions">
-          <button class="btn btn-mint" id="btn-add-money">${icon("plus", 18)} Money</button>
-          <button class="btn btn-primary" id="btn-add-expense">${icon("plus", 18)} Expense</button>
-        </div>
       </div>
 
       <div class="home-right">
+        <div id="expected-income-wrap"></div>
         <div class="section-head">
           <h2>Upcoming</h2>
           ${pending.length ? `<span class="count">${pending.length}</span>` : ""}
@@ -155,9 +152,24 @@ export function renderHome(view) {
 
   wireTips(view);
 
-  // quick actions
-  $("#btn-add-money", view).addEventListener("click", () => addMoneySheet());
-  $("#btn-add-expense", view).addEventListener("click", () => addExpenseSheet());
+  // expected income — pending income, actionable ("Mark received"), separate from the Upcoming
+  // expense list so that component's recurrence/series logic stays untouched.
+  const pendingIncome = state.entries
+    .filter((e) => e.kind === "income" && e.status === "pending")
+    .sort((a, b) => (a.dueDate || "9999") < (b.dueDate || "9999") ? -1 : 1);
+  const eiWrap = $("#expected-income-wrap", view);
+  if (pendingIncome.length) {
+    eiWrap.innerHTML = `
+      <div class="section-head">
+        <h2>Expected income</h2>
+        <span class="count">${pendingIncome.length}</span>
+      </div>
+      <div class="stack" id="expected-income"></div>
+    `;
+    const eiList = $("#expected-income", view);
+    for (const e of pendingIncome) eiList.append(incomeCard(e));
+    anim([...eiList.children], { y: 26, opacity: 0 }, { y: 0, opacity: 1, duration: 0.45, stagger: 0.07, delay: 0.1, ease: "power2.out" });
+  }
 
   // upcoming cards
   const list = $("#upcoming", view);
@@ -171,7 +183,65 @@ export function renderHome(view) {
   anim($("#hero", view), { y: 24, opacity: 0, scale: 0.97 }, { y: 0, opacity: 1, scale: 1, duration: 0.55, ease: "power3.out" });
   anim([...($(".acc-row", view)?.children || $("#acc-slot", view).children)], { y: 18, opacity: 0 }, { y: 0, opacity: 1, duration: 0.4, stagger: 0.05, delay: 0.1, ease: "power2.out" });
   anim([...list.children], { y: 26, opacity: 0 }, { y: 0, opacity: 1, duration: 0.45, stagger: 0.07, delay: 0.12, ease: "power2.out" });
-  anim($("#quick-actions", view), { y: 30, opacity: 0 }, { y: 0, opacity: 1, duration: 0.4, delay: 0.2, ease: "back.out(1.5)" });
+}
+
+function incomeCard(e) {
+  const hint = e.dueDate ? dueHint(e.dueDate) : { text: "Expected", tone: "ok" };
+  const overdue = hint.tone === "overdue";
+  const card = el("div", { class: `card exp-card is-income ${overdue ? "is-overdue" : ""}`, "data-id": e.id });
+  card.innerHTML = `
+    <div class="spread">
+      <div class="grow">
+        <div class="exp-title truncate">${esc(e.title)}</div>
+        <div class="exp-meta">
+          <span class="due-hint ${hint.tone === "overdue" ? "is-overdue" : hint.tone === "soon" ? "is-soon" : ""}">${hint.text}</span>
+          ${e.dueDate ? `<span>· ${shortDate(e.dueDate)}</span>` : ""}
+        </div>
+      </div>
+      <div class="exp-amount num" style="color:var(--c-pos)">+${fmtMoney(e.amount)}</div>
+    </div>
+    <div class="exp-actions">
+      <button class="chip-btn chip-paid" data-act="received">${icon("check", 15)} Mark received</button>
+      <button class="chip-btn chip-edit" data-act="edit">Edit</button>
+      <button class="chip-btn chip-delete" data-act="delete" aria-label="Delete">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 6h18M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2m3 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/></svg>
+      </button>
+    </div>
+  `;
+
+  card.addEventListener("click", async (ev) => {
+    const btn = ev.target.closest("[data-act]");
+    if (!btn) return;
+    const act = btn.dataset.act;
+    buzz(10);
+
+    if (act === "edit") { addMoneySheet(e); return; }
+
+    if (act === "received") {
+      await celebratePaid(card);
+      await markPaid(e.id);
+      toast(`${e.title} received · ${fmtMoney(e.amount)}`, {
+        icon: icon("check-circle", 18),
+        undo: async () => { await unmarkPaid(e.id); toast("Marked pending again"); },
+      });
+      return;
+    }
+
+    if (act === "delete") {
+      const ok = await confirmSheet({
+        title: "Delete pending income?",
+        message: `"${e.title}" (${fmtMoney(e.amount)}) will be removed.`,
+        confirmLabel: "Delete",
+        danger: true,
+      });
+      if (ok) {
+        const removed = await deleteEntry(e.id);
+        toast("Deleted", { icon: icon("trash", 17), undo: () => restoreEntries([removed]) });
+      }
+    }
+  });
+
+  return card;
 }
 
 function renderEmpty() {

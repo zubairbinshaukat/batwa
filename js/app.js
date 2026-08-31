@@ -12,7 +12,7 @@ import { renderHome } from "./ui/home.js";
 import { renderReports } from "./ui/reports.js";
 import { renderHistory } from "./ui/history.js";
 import { renderSettings } from "./ui/settings.js";
-import { addMoneySheet, addExpenseSheet, sheetOpen } from "./ui/modals.js";
+import { addMoneySheet, addExpenseSheet, quickAddSheet, sheetOpen } from "./ui/modals.js";
 import { toast } from "./ui/toast.js";
 import { icon } from "./ui/icons.js";
 
@@ -34,10 +34,13 @@ const VIEWS = {
 let currentView = "home";
 let unlocked = false;
 
+// FAB sits between the 2nd and 3rd nav item — "home, reports, [+], history, settings".
+const FAB_AFTER_INDEX = 1;
+
 function renderNav() {
   const nav = $("#nav");
   nav.innerHTML = "";
-  for (const [key, v] of Object.entries(VIEWS)) {
+  Object.entries(VIEWS).forEach(([key, v], i) => {
     const b = el("button", {
       class: `nav-item ${key === currentView ? "is-active" : ""}`,
       "aria-label": v.label,
@@ -46,7 +49,19 @@ function renderNav() {
     });
     b.innerHTML = `${v.icon}<span>${v.label}</span><span class="nav-ind"></span>`;
     nav.append(b);
-  }
+    if (i === FAB_AFTER_INDEX) nav.append(fabSlot());
+  });
+}
+
+function fabSlot() {
+  const slot = el("div", { class: "nav-fab-slot" });
+  const fab = el("button", {
+    class: "nav-fab", "aria-label": "Quick add",
+    onclick: () => { if (!sheetOpen()) quickAddSheet("expense"); },
+    html: icon("plus", 24),
+  });
+  slot.append(fab);
+  return slot;
 }
 
 function go(view) {

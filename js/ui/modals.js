@@ -2,11 +2,11 @@
 // add money, add/edit expense, confirm, and multi-choice sheets.
 
 import { $, el, esc, anim, animTo, trapFocus, motionOK, buzz } from "../util/dom.js";
-import { state, addEntry, updateEntry, deleteEntry, deleteSeriesFuture, restoreEntries } from "../ledger.js";
-import { isoDate, fmtMoney } from "../util/format.js";
+import { state, addEntry, updateEntry, deleteEntry, deleteSeriesFuture, restoreEntries, transferMoney } from "../ledger.js";
+import { isoDate, fmtMoney, shortDate } from "../util/format.js";
 import { CURRENCY } from "../util/format.js";
 import { toast } from "./toast.js";
-import { logoTile, accountName } from "./accounts.js";
+import { logoTile, accountName, addAccountSheet } from "./accounts.js";
 import { icon } from "./icons.js";
 
 let current = null; // { backdrop, sheet, release, resolveClosed }
@@ -69,6 +69,7 @@ function wireSwipeToDismiss(sheet, backdrop) {
   let pending = false;   // pointer is down, gesture not yet classified
   let dragging = false;  // classified as a vertical drag
   let fromChrome = false; // started on the handle/header (always draggable)
+  let fromPager = false; // started on the quick-add tab pager — ambiguous until classified
   let pointerId = null;
   let startX = 0, startY = 0;
   let sheetH = 0;
@@ -77,6 +78,7 @@ function wireSwipeToDismiss(sheet, backdrop) {
   function reset() {
     pending = false;
     dragging = false;
+    fromPager = false;
     pointerId = null;
     moves = [];
   }
@@ -86,12 +88,16 @@ function wireSwipeToDismiss(sheet, backdrop) {
   // without this the browser claims the touch for scroll and fires
   // pointercancel, killing the drag. Claiming the touchmove keeps the
   // pointer stream alive; the grab/title are covered by CSS touch-action.
+  // A touch starting on the quick-add pager is ambiguous (could be its own
+  // horizontal tab-swipe) until onMove classifies it, so — unlike the rest of
+  // the sheet — it does NOT get the early speculative preventDefault; only
+  // once `dragging` is confirmed true (a real vertical drag) does this claim it.
   function onTouchMove(e) {
     if (!pending && !dragging) return;
     const t = e.touches && e.touches[0];
     if (!t) return;
     const dy = t.clientY - startY;
-    if (dragging || fromChrome || (sheet.scrollTop <= 0 && dy > 0)) {
+    if (dragging || fromChrome || (!fromPager && sheet.scrollTop <= 0 && dy > 0)) {
       if (e.cancelable) e.preventDefault();
     }
   }
@@ -104,6 +110,7 @@ function wireSwipeToDismiss(sheet, backdrop) {
       if (sheet.scrollTop > 0) return; // inner content is scrolled — let it scroll
     }
     fromChrome = !!onChrome;
+    fromPager = !onChrome && !!e.target.closest(".qa-pager");
     pending = true;
     pointerId = e.pointerId;
     startX = e.clientX;
@@ -428,135 +435,357 @@ function deleteRow(entry, { kindLabel, isExpense }) {
    Add Money
    ============================================================ */
 
-export function addMoneySheet(entry = null) {
-  openSheet(entry ? "Edit income" : "Add money", (body) => {
-    const { f: amtF, input: amt } = amountField(entry?.amount);
-    const desc = el("input", { class: "input", type: "text", placeholder: "Salary, freelance, gift…", value: entry?.title || "" });
-    const descF = field("Description", desc, "What is this money from?");
-    if (!entry) {
-      const sugg = suggestionRow("income", (src) => {
-        desc.value = src.title;
-        if (!amt.value) amt.value = String(src.amount);
-        if (cat.querySelector(`option[value="${CSS.escape(src.category)}"]`)) cat.value = src.category;
-        setError(descF, false);
-      });
-      if (sugg) descF.append(sugg);
-    }
-    const date = el("input", { class: "input", type: "date", value: (entry?.paidAt || "").slice(0, 10) || isoDate() });
-    const dateF = field("Date", date);
-    const acc = accountPicker(entry ? entry.accountId : undefined);
-    const cat = categorySelect(entry?.category || "Others");
-    const catF = field("Category (optional)", cat);
-
-    const save = el("button", { class: "btn btn-mint btn-block", type: "submit" },
-      entry ? "Save changes" : "Add money");
-
-    const form = el("form", {}, amtF, descF, dateF, acc.root, catF, el("div", { class: "form-actions" }, save),
-      entry ? deleteRow(entry, { kindLabel: "income", isExpense: false }) : null);
-    form.addEventListener("submit", async (e) => {
-      e.preventDefault();
-      const amount = parseAmount(amt.value);
-      setError(amtF, !amount);
-      setError(descF, !desc.value.trim());
-      if (!amount || !desc.value.trim()) return;
-      const data = {
-        kind: "income",
-        amount,
-        title: desc.value.trim(),
-        category: cat.value,
-        paidAt: new Date(date.value + "T12:00:00").toISOString(),
-        status: "paid",
-        recurrence: "one-time",
-        dueDate: null,
-        accountId: acc.get(),
-      };
-      if (entry) await updateEntry(entry.id, data);
-      else await addEntry(data);
-      closeSheet();
-      toast(entry ? "Income updated" : `${CURRENCY.symbol} ${amount.toLocaleString()} added`, { icon: icon("banknote", 18) });
+function buildMoneyForm(entry) {
+  const { f: amtF, input: amt } = amountField(entry?.amount);
+  const desc = el("input", { class: "input", type: "text", placeholder: "Salary, freelance, gift…", value: entry?.title || "" });
+  const descF = field("Description", desc, "What is this money from?");
+  if (!entry) {
+    const sugg = suggestionRow("income", (src) => {
+      desc.value = src.title;
+      if (!amt.value) amt.value = String(src.amount);
+      if (cat.querySelector(`option[value="${CSS.escape(src.category)}"]`)) cat.value = src.category;
+      setError(descF, false);
     });
-    body.append(form);
+    if (sugg) descF.append(sugg);
+  }
+
+  let pending = entry ? entry.status === "pending" : false;
+  const date = el("input", { class: "input", type: "date", value: (entry?.paidAt || entry?.dueDate || "").slice(0, 10) || isoDate() });
+  const dateLabel = el("label", {}, pending ? "Expected date" : "Date");
+  const dateF = el("div", { class: "field" }, dateLabel, date);
+  const pendingWrap = el("div", { class: "field" },
+    toggleRow("Mark as pending", pending, (v) => {
+      pending = v;
+      dateLabel.textContent = pending ? "Expected date" : "Date";
+    }));
+
+  const acc = accountPicker(entry ? entry.accountId : undefined);
+  const cat = categorySelect(entry?.category || "Others");
+  const catF = field("Category (optional)", cat);
+
+  const save = el("button", { class: "btn btn-mint btn-block", type: "submit" },
+    entry ? "Save changes" : "Add money");
+
+  const form = el("form", {}, amtF, descF, dateF, pendingWrap, acc.root, catF, el("div", { class: "form-actions" }, save),
+    entry ? deleteRow(entry, { kindLabel: "income", isExpense: false }) : null);
+  form.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const amount = parseAmount(amt.value);
+    setError(amtF, !amount);
+    setError(descF, !desc.value.trim());
+    if (!amount || !desc.value.trim()) return;
+    const data = {
+      kind: "income",
+      amount,
+      title: desc.value.trim(),
+      category: cat.value,
+      status: pending ? "pending" : "paid",
+      paidAt: pending ? null : new Date(date.value + "T12:00:00").toISOString(),
+      dueDate: pending ? date.value : null,
+      recurrence: "one-time",
+      accountId: acc.get(),
+    };
+    if (entry) await updateEntry(entry.id, data);
+    else await addEntry(data);
+    closeSheet();
+    toast(
+      entry ? "Income updated" : pending ? `${desc.value.trim()} added as pending` : `${CURRENCY.symbol} ${amount.toLocaleString()} added`,
+      { icon: icon(pending ? "clock" : "banknote", 18) }
+    );
   });
+  return form;
+}
+
+export function addMoneySheet(entry = null) {
+  openSheet(entry ? "Edit income" : "Add money", (body) => body.append(buildMoneyForm(entry)));
 }
 
 /* ============================================================
    Add / Edit Expense
    ============================================================ */
 
-export function addExpenseSheet(entry = null) {
-  openSheet(entry ? "Edit expense" : "Add expense", (body) => {
-    const { f: amtF, input: amt } = amountField(entry?.amount);
-    const title = el("input", { class: "input", type: "text", placeholder: "Hostel fees, groceries…", value: entry?.title || "" });
-    const titleF = field("Title", title, "Give it a title");
+function buildExpenseForm(entry) {
+  const { f: amtF, input: amt } = amountField(entry?.amount);
+  const title = el("input", { class: "input", type: "text", placeholder: "Hostel fees, groceries…", value: entry?.title || "" });
+  const titleF = field("Title", title, "Give it a title");
 
-    let recurrence = entry?.recurrence || "one-time";
-    const seg = segmented(
-      [
-        { label: "One-time", value: "one-time" },
-        { label: "Weekly", value: "weekly" },
-        { label: "Monthly", value: "monthly" },
-      ],
+  let recurrence = entry?.recurrence || "one-time";
+  const seg = segmented(
+    [
+      { label: "One-time", value: "one-time" },
+      { label: "Weekly", value: "weekly" },
+      { label: "Monthly", value: "monthly" },
+    ],
+    recurrence,
+    (v) => (recurrence = v)
+  );
+  const segF = el("div", { class: "field" });
+  segF.append(el("label", {}, "Type"), seg);
+
+  const due = el("input", { class: "input", type: "date", value: entry?.dueDate || isoDate() });
+  const dueF = field("Due date", due, "Pick a due date");
+  const acc = accountPicker(entry ? entry.accountId : undefined);
+  const cat = categorySelect(entry?.category || "Others");
+  const catF = field("Category", cat);
+  const note = el("textarea", { class: "input", placeholder: "Anything to remember (optional)" });
+  note.value = entry?.note || "";
+  const noteF = field("Note", note);
+
+  if (!entry) {
+    const sugg = suggestionRow("expense", (src) => {
+      title.value = src.title;
+      if (!amt.value) amt.value = String(src.amount);
+      if (cat.querySelector(`option[value="${CSS.escape(src.category)}"]`)) cat.value = src.category;
+      setError(titleF, false);
+    });
+    if (sugg) titleF.append(sugg);
+  }
+
+  let alreadyPaid = entry ? entry.status === "paid" : false;
+  const paidRow = toggleRow("Mark as already paid", alreadyPaid, (v) => (alreadyPaid = v));
+  const paidWrap = el("div", { class: "field" }, paidRow);
+
+  const save = el("button", { class: "btn btn-primary btn-block", type: "submit" },
+    entry ? "Save changes" : "Add expense");
+
+  const form = el("form", {}, amtF, titleF, segF, dueF, acc.root, catF, noteF, paidWrap,
+    el("div", { class: "form-actions" }, save),
+    entry ? deleteRow(entry, { kindLabel: "expense", isExpense: true }) : null);
+
+  form.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const amount = parseAmount(amt.value);
+    setError(amtF, !amount);
+    setError(titleF, !title.value.trim());
+    setError(dueF, !due.value);
+    if (!amount || !title.value.trim() || !due.value) return;
+    const data = {
+      kind: "expense",
+      amount,
+      title: title.value.trim(),
       recurrence,
-      (v) => (recurrence = v)
+      dueDate: due.value,
+      category: cat.value,
+      note: note.value.trim(),
+      status: alreadyPaid ? "paid" : "pending",
+      paidAt: alreadyPaid ? (entry?.paidAt || new Date().toISOString()) : null,
+      accountId: acc.get(),
+    };
+    if (entry) await updateEntry(entry.id, data);
+    else await addEntry(data);
+    closeSheet();
+    toast(entry ? "Expense updated" : "Expense added", { icon: icon("receipt", 18) });
+  });
+  return form;
+}
+
+export function addExpenseSheet(entry = null) {
+  openSheet(entry ? "Edit expense" : "Add expense", (body) => body.append(buildExpenseForm(entry)));
+}
+
+/* ============================================================
+   Transfer
+   ============================================================ */
+
+function buildTransferForm() {
+  if (state.accounts.length < 2) {
+    return el("div", {},
+      el("div", {
+        class: "empty", style: "border:none;background:none;padding:8px 0 20px",
+        html: `<div class="empty-ico">${icon("swap", 26)}</div><h3>Add another account</h3><p>You need at least two accounts to transfer between them.</p>`,
+      }),
+      el("button", { class: "btn btn-primary btn-block", type: "button", onclick: () => addAccountSheet() }, "Add account"),
     );
-    const segF = el("div", { class: "field" });
-    segF.append(el("label", {}, "Type"), seg);
+  }
 
-    const due = el("input", { class: "input", type: "date", value: entry?.dueDate || isoDate() });
-    const dueF = field("Due date", due, "Pick a due date");
-    const acc = accountPicker(entry ? entry.accountId : undefined);
-    const cat = categorySelect(entry?.category || "Others");
-    const catF = field("Category", cat);
-    const note = el("textarea", { class: "input", placeholder: "Anything to remember (optional)" });
-    note.value = entry?.note || "";
-    const noteF = field("Note", note);
+  const { f: amtF, input: amt } = amountField();
+  const note = el("textarea", { class: "input", placeholder: "Anything to remember (optional)" });
+  const noteF = field("Note", note);
 
-    if (!entry) {
-      const sugg = suggestionRow("expense", (src) => {
-        title.value = src.title;
-        if (!amt.value) amt.value = String(src.amount);
-        if (cat.querySelector(`option[value="${CSS.escape(src.category)}"]`)) cat.value = src.category;
-        setError(titleF, false);
-      });
-      if (sugg) titleF.append(sugg);
+  let fromId = state.accounts.some((a) => a.id === lastAccountId) ? lastAccountId : state.accounts[0].id;
+  let toId = state.accounts.find((a) => a.id !== fromId)?.id;
+
+  const fromF = el("div", { class: "field" });
+  const toF = el("div", { class: "field" });
+
+  function chip(a, active, onPick) {
+    const b = el("button", { type: "button", class: `acc-chip ${active ? "is-active" : ""}` });
+    b.innerHTML = `${logoTile(a.kind, 22)}<span>${esc(a.name)}</span>`;
+    b.addEventListener("click", () => { buzz(6); onPick(); });
+    return b;
+  }
+  // "From" always lists every account. "To" hides whichever is picked in "From"
+  // (you can't transfer an account into itself) but is otherwise unfiltered too.
+  function paintFrom() {
+    fromF.innerHTML = "";
+    const row = el("div", { class: "filter-row", style: "margin:0" });
+    for (const a of state.accounts) {
+      row.append(chip(a, a.id === fromId, () => {
+        fromId = a.id;
+        if (toId === fromId) toId = state.accounts.find((x) => x.id !== fromId)?.id;
+        paintFrom(); paintTo();
+      }));
+    }
+    fromF.append(el("label", {}, "From"), row);
+  }
+  function paintTo() {
+    toF.innerHTML = "";
+    const row = el("div", { class: "filter-row", style: "margin:0" });
+    for (const a of state.accounts) {
+      if (a.id === fromId) continue;
+      row.append(chip(a, a.id === toId, () => { toId = a.id; paintTo(); }));
+    }
+    toF.append(el("label", {}, "To"), row);
+  }
+  paintFrom(); paintTo();
+
+  const save = el("button", { class: "btn btn-primary btn-block", type: "submit" }, "Transfer");
+  const form = el("form", {}, amtF, fromF, toF, noteF, el("div", { class: "form-actions" }, save));
+
+  form.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const amount = parseAmount(amt.value);
+    setError(amtF, !amount);
+    if (!amount || !fromId || !toId || fromId === toId) return;
+    lastAccountId = fromId;
+    await transferMoney({ fromAccountId: fromId, toAccountId: toId, amount, note: note.value });
+    closeSheet();
+    toast(`${fmtMoney(amount)} moved · ${accountName(fromId)} → ${accountName(toId)}`, { icon: icon("swap", 18) });
+  });
+  return form;
+}
+
+export function transferSheet() {
+  openSheet("Transfer money", (body) => body.append(buildTransferForm()));
+}
+
+/** Read-only detail for a past transfer, opened from History — delete only, no edit. */
+export function transferDetailSheet(entry) {
+  openSheet("Transfer", (body) => {
+    const fromAcc = state.accounts.find((a) => a.id === entry.fromAccountId);
+    const toAcc = state.accounts.find((a) => a.id === entry.toAccountId);
+    const dateIso = (entry.paidAt || entry.createdAt).slice(0, 10);
+
+    const head = el("div", { class: "acc-sheet-head" });
+    head.innerHTML = `
+      ${logoTile(fromAcc?.kind || "bank", 40)}
+      <div class="acc-sheet-head-text">
+        <span class="acc-wash-name truncate">${esc(fromAcc?.name || "Removed account")} → ${esc(toAcc?.name || "Removed account")}</span>
+        <span class="acc-fill-cap xsmall muted">${shortDate(dateIso)}</span>
+      </div>
+    `;
+    body.append(head);
+    body.append(el("div", { class: "field" },
+      el("div", { class: "num", style: "font-size:1.7rem;font-weight:800;letter-spacing:-0.02em" }, fmtMoney(entry.amount))));
+    if (entry.note) body.append(el("div", { class: "field" }, el("label", {}, "Note"), el("p", { class: "small" }, entry.note)));
+    body.append(deleteTransferRow(entry, fromAcc?.name, toAcc?.name));
+  });
+}
+
+function deleteTransferRow(entry, fromName, toName) {
+  const wrap = el("div", { style: "margin-top:var(--s-2)" }, el("div", { class: "divider" }));
+  const delBtn = el("button", { type: "button", class: "btn btn-danger btn-block" }, "Delete transfer");
+  const hint = el("p", { class: "muted xsmall", style: "margin:8px 0 0;text-align:center;display:none" },
+    `${fmtMoney(entry.amount)} will return to ${fromName || "the source account"} and be removed from ${toName || "the destination account"}.`);
+  let confirming = false, timer = null;
+  delBtn.addEventListener("click", () => {
+    if (!confirming) {
+      buzz(10);
+      confirming = true;
+      delBtn.textContent = "Tap again to confirm";
+      hint.style.display = "";
+      if (motionOK()) gsap.fromTo(delBtn, { scale: 1 }, { scale: 1.04, duration: 0.15, yoyo: true, repeat: 1 });
+      timer = setTimeout(() => {
+        confirming = false;
+        delBtn.textContent = "Delete transfer";
+        hint.style.display = "none";
+      }, 3000);
+    } else {
+      buzz(16);
+      clearTimeout(timer);
+      (async () => {
+        const removed = await deleteEntry(entry.id);
+        closeSheet();
+        toast("Transfer deleted", { icon: icon("trash", 17), undo: () => restoreEntries([removed]) });
+      })();
+    }
+  });
+  wrap.append(delBtn, hint);
+  return wrap;
+}
+
+/* ============================================================
+   Quick add — Expense / Income / Transfer, swipeable tabs
+   ============================================================ */
+
+const QA_TABS = [
+  { key: "expense", label: "Expense" },
+  { key: "income", label: "Income" },
+  { key: "transfer", label: "Transfer" },
+];
+
+/** Center-FAB entry point: one sheet, three swipeable tabs, each a fresh add form. */
+export function quickAddSheet(initialKind = "expense") {
+  openSheet(null, (body) => {
+    const startIndex = Math.max(0, QA_TABS.findIndex((t) => t.key === initialKind));
+
+    const tabs = el("div", { class: "segmented qa-tabs", role: "tablist" });
+    const tabBtns = QA_TABS.map((t, i) => {
+      const b = el("button", {
+        type: "button", role: "tab",
+        class: i === startIndex ? "is-active" : "",
+        "aria-selected": String(i === startIndex),
+        onclick: () => goTo(i),
+      }, t.label);
+      tabs.append(b);
+      return b;
+    });
+
+    const pager = el("div", { class: "qa-pager" });
+    for (const t of QA_TABS) {
+      const page = el("div", { class: "qa-page" });
+      page.append(t.key === "expense" ? buildExpenseForm(null) : t.key === "income" ? buildMoneyForm(null) : buildTransferForm());
+      pager.append(page);
     }
 
-    let alreadyPaid = entry ? entry.status === "paid" : false;
-    const paidRow = toggleRow("Mark as already paid", alreadyPaid, (v) => (alreadyPaid = v));
-    const paidWrap = el("div", { class: "field" }, paidRow);
-
-    const save = el("button", { class: "btn btn-primary btn-block", type: "submit" },
-      entry ? "Save changes" : "Add expense");
-
-    const form = el("form", {}, amtF, titleF, segF, dueF, acc.root, catF, noteF, paidWrap,
-      el("div", { class: "form-actions" }, save),
-      entry ? deleteRow(entry, { kindLabel: "expense", isExpense: true }) : null);
-
-    form.addEventListener("submit", async (e) => {
-      e.preventDefault();
-      const amount = parseAmount(amt.value);
-      setError(amtF, !amount);
-      setError(titleF, !title.value.trim());
-      setError(dueF, !due.value);
-      if (!amount || !title.value.trim() || !due.value) return;
-      const data = {
-        kind: "expense",
-        amount,
-        title: title.value.trim(),
-        recurrence,
-        dueDate: due.value,
-        category: cat.value,
-        note: note.value.trim(),
-        status: alreadyPaid ? "paid" : "pending",
-        paidAt: alreadyPaid ? (entry?.paidAt || new Date().toISOString()) : null,
-        accountId: acc.get(),
-      };
-      if (entry) await updateEntry(entry.id, data);
-      else await addEntry(data);
-      closeSheet();
-      toast(entry ? "Expense updated" : "Expense added", { icon: icon("receipt", 18) });
+    let active = startIndex;
+    let syncing = false;
+    function setActive(i) {
+      active = i;
+      tabBtns.forEach((b, idx) => {
+        b.classList.toggle("is-active", idx === i);
+        b.setAttribute("aria-selected", String(idx === i));
+      });
+      syncHeight();
+    }
+    // Each page's own content height — the pager only shows the active one, so its
+    // container height must track that page, not the tallest of the three (which
+    // left a block of blank space under the shorter Income/Transfer tabs).
+    function syncHeight() {
+      const page = pager.children[active];
+      if (!page) return;
+      const h = page.scrollHeight;
+      if (motionOK()) gsap.to(pager, { height: h, duration: 0.3, ease: "power2.out" });
+      else pager.style.height = `${h}px`;
+    }
+    function goTo(i) {
+      buzz(6);
+      syncing = true;
+      setActive(i);
+      pager.scrollTo({ left: i * pager.clientWidth, behavior: "smooth" });
+      setTimeout(() => (syncing = false), 350);
+    }
+    pager.addEventListener("scroll", () => {
+      if (syncing) return;
+      const i = Math.round(pager.scrollLeft / Math.max(1, pager.clientWidth));
+      if (i !== active) setActive(i);
     });
-    body.append(form);
+
+    body.append(tabs, pager);
+    requestAnimationFrame(() => {
+      if (startIndex > 0) pager.scrollLeft = startIndex * pager.clientWidth;
+      syncHeight();
+    });
   });
 }
 

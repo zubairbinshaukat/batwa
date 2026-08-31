@@ -49,6 +49,8 @@ const PATHS = {
   "chevron-right": '<path d="m9 18 6-6-6-6"/>',
   clock:        '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
   list:         '<path d="M8 6h13M8 12h13M8 18h13M3.5 6h.01M3.5 12h.01M3.5 18h.01"/>',
+  swap:         '<path d="m17 3 4 4-4 4"/><path d="M3 7h18"/><path d="m7 21-4-4 4-4"/><path d="M21 17H3"/>',
+  grip:         '<circle cx="9" cy="5" r="1.4" fill="currentColor" stroke="none"/><circle cx="9" cy="12" r="1.4" fill="currentColor" stroke="none"/><circle cx="9" cy="19" r="1.4" fill="currentColor" stroke="none"/><circle cx="15" cy="5" r="1.4" fill="currentColor" stroke="none"/><circle cx="15" cy="12" r="1.4" fill="currentColor" stroke="none"/><circle cx="15" cy="19" r="1.4" fill="currentColor" stroke="none"/>',
 };
 
 /** Returns an inline SVG string. Icons inherit currentColor. */

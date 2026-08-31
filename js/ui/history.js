@@ -6,7 +6,7 @@ import { fmtCompact, monthLabel, thisMonth, shiftMonth, shortDate } from "../uti
 import { state, entriesForMonth } from "../ledger.js";
 import { accountName } from "./accounts.js";
 import { icon, catIcon } from "./icons.js";
-import { addExpenseSheet, addMoneySheet } from "./modals.js";
+import { addExpenseSheet, addMoneySheet, transferDetailSheet } from "./modals.js";
 
 let currentMonth = thisMonth();
 let filters = { kind: "all", category: "all", status: "all", account: "all" };
@@ -47,7 +47,7 @@ export function renderHistory(view) {
 
 function renderFilters(root, view) {
   const groups = [
-    { key: "kind", opts: [["all", "All"], ["expense", "Expenses"], ["income", "Income"]] },
+    { key: "kind", opts: [["all", "All"], ["expense", "Expenses"], ["income", "Income"], ["transfer", "Transfers"]] },
     { key: "status", opts: [["all", "Any status"], ["paid", "Paid"], ["pending", "Pending"]] },
   ];
   if (state.accounts.length) {
@@ -80,12 +80,13 @@ function applyFilters() {
   if (filters.kind !== "all") list = list.filter((e) => e.kind === filters.kind);
   if (filters.status !== "all") list = list.filter((e) => e.status === filters.status);
   if (filters.category !== "all") list = list.filter((e) => e.category === filters.category);
-  if (filters.account !== "all") list = list.filter((e) => e.accountId === filters.account);
-  return list.sort((a, b) => {
-    const da = a.kind === "income" ? (a.paidAt || a.createdAt) : (a.dueDate || a.createdAt);
-    const db_ = b.kind === "income" ? (b.paidAt || b.createdAt) : (b.dueDate || b.createdAt);
-    return da < db_ ? 1 : -1; // newest first
-  });
+  if (filters.account !== "all") {
+    list = list.filter((e) => e.accountId === filters.account || e.fromAccountId === filters.account || e.toAccountId === filters.account);
+  }
+  const dateKey = (e) => e.kind === "transfer" ? (e.paidAt || e.createdAt)
+    : e.kind === "income" ? (e.paidAt || e.dueDate || e.createdAt)
+    : (e.dueDate || e.createdAt);
+  return list.sort((a, b) => (dateKey(a) < dateKey(b) ? 1 : -1)); // newest first
 }
 
 function paintList(view, { loading = false } = {}) {
@@ -115,8 +116,10 @@ function paintList(view, { loading = false } = {}) {
 }
 
 function historyRow(e) {
+  if (e.kind === "transfer") return transferHistoryRow(e);
+
   const inn = e.kind === "income";
-  const dateIso = (inn ? (e.paidAt || e.createdAt) : (e.dueDate || e.createdAt)).slice(0, 10);
+  const dateIso = (inn ? (e.paidAt || e.dueDate || e.createdAt) : (e.dueDate || e.createdAt)).slice(0, 10);
   const row = el("div", { class: "hist-row" });
   row.innerHTML = `
     <span class="hist-ico" style="background:${inn ? "var(--c-pos-soft)" : "var(--c-violet-soft)"};color:${inn ? "var(--c-pos)" : "var(--c-violet)"}">
@@ -136,6 +139,24 @@ function historyRow(e) {
     buzz(8);
     inn ? addMoneySheet(e) : addExpenseSheet(e);
   });
+  row.style.cursor = "pointer";
+  return row;
+}
+
+function transferHistoryRow(e) {
+  const dateIso = (e.paidAt || e.createdAt).slice(0, 10);
+  const from = accountName(e.fromAccountId) || "Removed";
+  const to = accountName(e.toAccountId) || "Removed";
+  const row = el("div", { class: "hist-row" });
+  row.innerHTML = `
+    <span class="hist-ico" style="background:var(--c-aqua-soft);color:var(--c-aqua)">${icon("swap", 18)}</span>
+    <span class="grow">
+      <span class="strong small truncate" style="display:block">Transfer</span>
+      <span class="xsmall muted">${shortDate(dateIso)} · ${esc(from)} → ${esc(to)}</span>
+    </span>
+    <span class="hist-amt num">${fmtCompact(e.amount)}</span>
+  `;
+  row.addEventListener("click", () => { buzz(8); transferDetailSheet(e); });
   row.style.cursor = "pointer";
   return row;
 }
