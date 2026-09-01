@@ -2,7 +2,7 @@
 // add money, add/edit expense, confirm, and multi-choice sheets.
 
 import { $, el, esc, anim, animTo, trapFocus, motionOK, buzz } from "../util/dom.js";
-import { state, addEntry, updateEntry, deleteEntry, deleteSeriesFuture, restoreEntries, transferMoney } from "../ledger.js";
+import { state, addEntry, updateEntry, deleteEntry, deleteSeriesFuture, restoreEntries, transferMoney, accountBalance, balances } from "../ledger.js";
 import { isoDate, fmtMoney, shortDate } from "../util/format.js";
 import { CURRENCY } from "../util/format.js";
 import { toast } from "./toast.js";
@@ -10,10 +10,16 @@ import { logoTile, accountName, addAccountSheet } from "./accounts.js";
 import { icon } from "./icons.js";
 
 let current = null; // { backdrop, sheet, release, resolveClosed }
+let pendingHooks = null; // collects onSheetMounted/onSheetClosed while build() runs
 
 const isDesktop = () => matchMedia("(min-width: 640px)").matches;
 
 export function sheetOpen() { return !!current; }
+
+/** From inside build(): run fn once the sheet is in the DOM, so layout reads are valid. */
+export function onSheetMounted(fn) { pendingHooks && pendingHooks.mounted.push(fn); }
+/** From inside build(): run fn when the sheet closes — tear down observers here. */
+export function onSheetClosed(fn) { pendingHooks && pendingHooks.closed.push(fn); }
 
 /** Open a sheet. `build(body)` fills the content. Returns close(). */
 export function openSheet(title, build, { onDismiss } = {}) {
@@ -25,13 +31,18 @@ export function openSheet(title, build, { onDismiss } = {}) {
   if (title) sheet.append(el("h2", {}, title));
   const body = el("div", {});
   sheet.append(body);
-  build(body);
+
+  const hooks = { mounted: [], closed: [] };
+  pendingHooks = hooks;
+  try { build(body); } finally { pendingHooks = null; }
 
   const root = $("#sheet-root");
   root.append(backdrop, sheet);
+  // In the DOM but not yet painted: anything measured here lands in the first frame.
+  for (const fn of hooks.mounted) fn();
 
   const release = trapFocus(sheet);
-  current = { backdrop, sheet, release, onDismiss };
+  current = { backdrop, sheet, release, onDismiss, closed: hooks.closed };
 
   // hardware back closes the sheet, not the app
   history.pushState({ batwaSheet: true }, "");
@@ -47,152 +58,148 @@ export function openSheet(title, build, { onDismiss } = {}) {
     wireSwipeToDismiss(sheet, backdrop);
   }
 
-  const first = sheet.querySelector("input, select, textarea, button");
+  // Skips inert panes — the quick-add sheet parks its off-screen tabs there,
+  // so this lands on the tab you actually opened, not always the first one.
+  const first = [...sheet.querySelectorAll("input, select, textarea, button")]
+    .find((n) => !n.closest("[inert]"));
   if (first && !("ontouchstart" in window)) setTimeout(() => first.focus(), 80);
   return closeSheet;
 }
 
 /**
  * Native-feel swipe-down-to-dismiss for the mobile sheet.
- * Dragging from the grab handle / title always works; dragging from the
- * body only engages once the sheet's own scroll (it IS the scroll
- * container — see .sheet{overflow-y:auto}) is at the top, so inner
- * scrolling isn't hijacked. Release past ~25% of the sheet height or a
- * fast flick dismisses through the SAME closeSheet() path (history/
- * onDismiss handling included); otherwise it springs back.
+ *
+ * Who owns a touch is decided once, from its first 8px of travel, and never
+ * revisited:
+ *   • The browser owns vertical panning everywhere — the sheet is the scroll
+ *     container — so content scrolls on the FIRST swipe, from anywhere.
+ *   • This handler claims a gesture only when it is unambiguously a downward
+ *     drag the sheet cannot absorb as scrolling (already at the top), or one
+ *     that started on the grab handle / title. It claims by preventing the
+ *     touchmove, which the browser only honours before it starts scrolling —
+ *     hence the small classification window and the never-claim-upward rule.
+ *   • Anything else is marked dead for the rest of that touch. The old code
+ *     prevented the first moves speculatively and then bailed out; the browser
+ *     had already written the gesture off as non-scrolling by then, which is
+ *     why scrolling back up took three or four tries.
+ * Release past 25% of the sheet height or a fast flick dismisses through the
+ * SAME closeSheet() path (history/onDismiss included); otherwise it springs back.
  */
 function wireSwipeToDismiss(sheet, backdrop) {
   const grab = sheet.querySelector(".sheet-grab");
   const header = sheet.querySelector("h2");
+  const CLAIM = 8; // px of travel before a gesture is classified
   const isTextEntry = (n) => n && (n.tagName === "INPUT" || n.tagName === "TEXTAREA" || n.tagName === "SELECT" || n.isContentEditable);
 
-  let pending = false;   // pointer is down, gesture not yet classified
-  let dragging = false;  // classified as a vertical drag
-  let fromChrome = false; // started on the handle/header (always draggable)
-  let fromPager = false; // started on the quick-add tab pager — ambiguous until classified
-  let pointerId = null;
-  let startX = 0, startY = 0;
-  let sheetH = 0;
+  let id = null;         // the touch we're following
+  let dead = true;       // classified as someone else's gesture (the default)
+  let dragging = false;  // classified as ours
+  let fromChrome = false; // started on the handle/title, which never scrolls
+  let startX = 0, startY = 0, sheetH = 1;
   let moves = [];
 
-  function reset() {
-    pending = false;
+  const find = (e) => [...e.changedTouches, ...e.touches].find((t) => t.identifier === id);
+
+  function springBack() {
+    if (typeof gsap === "undefined") { backdrop.style.opacity = ""; return; }
+    if (motionOK()) {
+      gsap.to(sheet, { y: 0, duration: 0.35, ease: "power3.out" });
+      gsap.to(backdrop, { opacity: 1, duration: 0.25 });
+    } else {
+      gsap.set(sheet, { y: 0 });
+      gsap.set(backdrop, { opacity: 1 });
+    }
+  }
+
+  function onStart(e) {
+    if (e.touches.length > 1) { // second finger: pinch/zoom, not a dismiss
+      if (dragging) { dragging = false; springBack(); }
+      dead = true;
+      return;
+    }
+    const t = e.touches[0];
+    const onChrome = (grab && grab.contains(t.target)) || (header && header.contains(t.target));
+    dead = !onChrome && isTextEntry(t.target) && document.activeElement === t.target; // leave text editing alone
     dragging = false;
-    fromPager = false;
-    pointerId = null;
-    moves = [];
-  }
-
-  // touch-action can't be changed mid-gesture (it's evaluated at touch
-  // start), and preventDefault on pointermove never stops scrolling — so
-  // without this the browser claims the touch for scroll and fires
-  // pointercancel, killing the drag. Claiming the touchmove keeps the
-  // pointer stream alive; the grab/title are covered by CSS touch-action.
-  // A touch starting on the quick-add pager is ambiguous (could be its own
-  // horizontal tab-swipe) until onMove classifies it, so — unlike the rest of
-  // the sheet — it does NOT get the early speculative preventDefault; only
-  // once `dragging` is confirmed true (a real vertical drag) does this claim it.
-  function onTouchMove(e) {
-    if (!pending && !dragging) return;
-    const t = e.touches && e.touches[0];
-    if (!t) return;
-    const dy = t.clientY - startY;
-    if (dragging || fromChrome || (!fromPager && sheet.scrollTop <= 0 && dy > 0)) {
-      if (e.cancelable) e.preventDefault();
-    }
-  }
-
-  function onDown(e) {
-    if (e.pointerType === "mouse" && e.button !== 0) return;
-    const onChrome = (grab && grab.contains(e.target)) || (header && header.contains(e.target));
-    if (!onChrome) {
-      if (isTextEntry(e.target) && document.activeElement === e.target) return; // let text editing alone
-      if (sheet.scrollTop > 0) return; // inner content is scrolled — let it scroll
-    }
     fromChrome = !!onChrome;
-    fromPager = !onChrome && !!e.target.closest(".qa-pager");
-    pending = true;
-    pointerId = e.pointerId;
-    startX = e.clientX;
-    startY = e.clientY;
+    id = t.identifier;
+    startX = t.clientX;
+    startY = t.clientY;
     sheetH = sheet.getBoundingClientRect().height || sheet.offsetHeight || 1;
     moves = [{ t: performance.now(), y: startY }];
   }
 
   function onMove(e) {
-    if (!pending || e.pointerId !== pointerId) return;
-    const dx = e.clientX - startX;
-    const dyRaw = e.clientY - startY;
+    if (dead) return;
+    const t = find(e);
+    if (!t) return;
+    const dx = t.clientX - startX;
+    const dy = t.clientY - startY;
 
     if (!dragging) {
-      if (Math.abs(dyRaw) < 8) return; // below intent threshold
-      if (Math.abs(dx) > Math.abs(dyRaw)) { pending = false; return; } // horizontal gesture — not ours
-      if (!fromChrome) {
-        if (dyRaw <= 0) { pending = false; return; } // upward — that's content scrolling, not ours
-        if (sheet.scrollTop > 0) { pending = false; return; } // scrolled since down
-      }
+      if (Math.max(Math.abs(dx), Math.abs(dy)) < CLAIM) return; // below intent threshold
+      // Horizontal is the pager's, upward is content scrolling, and a sheet
+      // with room left to scroll up keeps its own gesture. None of them ours.
+      if (Math.abs(dx) > Math.abs(dy)) { dead = true; return; }
+      if (!fromChrome && (dy <= 0 || sheet.scrollTop > 0)) { dead = true; return; }
       dragging = true;
-      try { sheet.setPointerCapture(pointerId); } catch {}
     }
 
-    const dy = Math.max(0, dyRaw); // ignore upward drag past resting position
-    moves.push({ t: performance.now(), y: e.clientY });
+    if (e.cancelable) e.preventDefault(); // nothing may scroll under the drag
+    moves.push({ t: performance.now(), y: t.clientY });
     if (moves.length > 6) moves.shift();
 
-    if (typeof gsap !== "undefined") gsap.set(sheet, { y: dy });
-    const progress = Math.min(1, dy / sheetH);
-    if (typeof gsap !== "undefined") gsap.set(backdrop, { opacity: 1 - progress * 0.9 });
-    else backdrop.style.opacity = String(1 - progress * 0.9);
+    const y = Math.max(0, dy); // ignore upward drag past the resting position
+    const progress = Math.min(1, y / sheetH);
+    if (typeof gsap !== "undefined") {
+      gsap.set(sheet, { y });
+      gsap.set(backdrop, { opacity: 1 - progress * 0.9 });
+    } else {
+      backdrop.style.opacity = String(1 - progress * 0.9);
+    }
   }
 
-  function onUp(e) {
-    if (!pending || e.pointerId !== pointerId) return;
-    if (!dragging) { reset(); return; }
-    try { sheet.releasePointerCapture(pointerId); } catch {}
+  function onEnd(e) {
+    if (!dragging) { dead = true; return; }
+    dragging = false;
+    dead = true;
 
-    // pointercancel may carry zeroed coordinates — trust the last real sample
+    // touchcancel can carry stale coordinates — trust the last real sample.
+    const t = find(e);
     const first = moves[0], last = moves[moves.length - 1];
-    const endY = e.type === "pointercancel" ? last.y : e.clientY;
+    const endY = e.type === "touchcancel" || !t ? last.y : t.clientY;
     const dy = Math.max(0, endY - startY);
     const dt = Math.max(1, last.t - first.t);
-    const velocity = (last.y - first.y) / dt; // px/ms
-    const shouldDismiss = dy > sheetH * 0.25 || velocity > 0.6;
+    const velocity = (last.y - first.y) / dt; // px/ms, downward positive
 
-    if (shouldDismiss) {
-      // Fold the drag offset into yPercent so closeSheet's own 0->100%
-      // exit tween continues smoothly from here — one close path, no
-      // divergent animation logic.
+    if (dy > sheetH * 0.25 || velocity > 0.6) {
+      // Fold the drag offset into yPercent so closeSheet's own 0->100% exit
+      // tween continues smoothly from here — one close path, no divergent
+      // animation logic.
       if (typeof gsap !== "undefined") {
         const curY = gsap.getProperty(sheet, "y") || 0;
         const curPct = gsap.getProperty(sheet, "yPercent") || 0;
         const pct = Math.max(0, Math.min(100, curPct + (curY / sheetH) * 100));
         gsap.set(sheet, { y: 0, yPercent: pct });
       }
-      reset();
       closeSheet();
-    } else if (motionOK()) {
-      gsap.to(sheet, { y: 0, duration: 0.35, ease: "power3.out" });
-      gsap.to(backdrop, { opacity: 1, duration: 0.25 });
-      reset();
     } else {
-      if (typeof gsap !== "undefined") gsap.set(sheet, { y: 0 });
-      backdrop.style.opacity = "";
-      reset();
+      springBack();
     }
   }
 
-  sheet.addEventListener("pointerdown", onDown);
-  sheet.addEventListener("pointermove", onMove);
-  sheet.addEventListener("pointerup", onUp);
-  sheet.addEventListener("pointercancel", onUp);
-  sheet.addEventListener("touchmove", onTouchMove, { passive: false });
+  sheet.addEventListener("touchstart", onStart, { passive: true });
+  sheet.addEventListener("touchmove", onMove, { passive: false });
+  sheet.addEventListener("touchend", onEnd);
+  sheet.addEventListener("touchcancel", onEnd);
 }
 
 export function closeSheet(fromPop = false) {
   if (!current) return;
-  const { backdrop, sheet, release, onDismiss } = current;
+  const { backdrop, sheet, release, onDismiss, closed } = current;
   current = null;
   release();
+  for (const fn of closed || []) { try { fn(); } catch (err) { console.warn(err); } }
   onDismiss && onDismiss();
   if (!fromPop && history.state && history.state.batwaSheet) history.back();
 
@@ -304,24 +311,41 @@ function recentTitles(kind, limit = 6) {
   return [...seen.values()];
 }
 
-/** Chip row under the title field. `onPick` receives the source entry. */
-function suggestionRow(kind, onPick) {
-  const recents = recentTitles(kind);
-  if (!recents.length) return null;
+/**
+ * Chip row under the title field, filtered as you type: an empty field offers
+ * the latest few, typing narrows to the titles that contain what you've typed,
+ * and nothing matching means no row at all — a suggestion you didn't mean is
+ * worse than none. `onPick` receives the source entry.
+ */
+function suggestionRow(kind, input, onPick) {
+  const all = recentTitles(kind, 24);
+  if (!all.length) return null;
   const row = el("div", { class: "suggest-row" });
-  row.append(el("span", { class: "suggest-label xsmall muted" }, "Recent"));
-  for (const e of recents) {
-    row.append(el("button", {
-      type: "button",
-      class: "suggest-chip",
-      onclick: () => { buzz(6); onPick(e); },
-    }, e.title));
+  const label = el("span", { class: "suggest-label xsmall muted" }, "Recent");
+
+  function paint() {
+    const q = input.value.trim().toLowerCase();
+    const matches = (q ? all.filter((e) => e.title.toLowerCase().includes(q)) : all).slice(0, 6);
+    row.replaceChildren();
+    row.hidden = !matches.length;
+    if (!matches.length) return;
+    row.append(label);
+    for (const e of matches) {
+      row.append(el("button", {
+        type: "button",
+        class: "suggest-chip",
+        onclick: () => { buzz(6); onPick(e); paint(); },
+      }, e.title));
+    }
   }
+
+  input.addEventListener("input", paint);
+  paint();
   return row;
 }
 
 /** Horizontal account chips. Only shows when accounts exist. */
-function accountPicker(selectedId) {
+function accountPicker(selectedId, onChange) {
   if (!state.accounts.length) return { root: null, get: () => null };
   let picked = selectedId !== undefined ? selectedId : lastAccountId;
   if (picked && !state.accounts.some((a) => a.id === picked)) picked = null;
@@ -335,6 +359,7 @@ function accountPicker(selectedId) {
       [...row.children].forEach((c) => c.classList.remove("is-active"));
       b.classList.add("is-active");
       buzz(6);
+      onChange && onChange(picked);
     });
     return b;
   };
@@ -343,6 +368,28 @@ function accountPicker(selectedId) {
   const f = el("div", { class: "field" });
   f.append(el("label", {}, "Account"), row);
   return { root: f, get: () => picked };
+}
+
+/**
+ * The "is there actually money for this" line under a form.
+ *   info  — how much the chosen account holds, stated plainly
+ *   warn  — over the balance, but nothing moves yet (a pending expense is a
+ *           plan; the ledger is built to carry it as Committed)
+ *   block — over the balance and the money would leave now, so the button
+ *           below it is disabled and this says why
+ */
+function fundsNote() {
+  const node = el("p", { class: "form-note", hidden: true });
+  return {
+    node,
+    set(level, text = "") {
+      node.hidden = !level;
+      if (!level) return;
+      node.className = `form-note is-${level}`;
+      node.innerHTML = level === "info" ? "" : icon("alert", 15);
+      node.append(el("span", {}, text));
+    },
+  };
 }
 
 function setError(fieldEl, on) {
@@ -440,7 +487,7 @@ function buildMoneyForm(entry) {
   const desc = el("input", { class: "input", type: "text", placeholder: "Salary, freelance, gift…", value: entry?.title || "" });
   const descF = field("Description", desc, "What is this money from?");
   if (!entry) {
-    const sugg = suggestionRow("income", (src) => {
+    const sugg = suggestionRow("income", desc, (src) => {
       desc.value = src.title;
       if (!amt.value) amt.value = String(src.amount);
       if (cat.querySelector(`option[value="${CSS.escape(src.category)}"]`)) cat.value = src.category;
@@ -524,7 +571,7 @@ function buildExpenseForm(entry) {
 
   const due = el("input", { class: "input", type: "date", value: entry?.dueDate || isoDate() });
   const dueF = field("Due date", due, "Pick a due date");
-  const acc = accountPicker(entry ? entry.accountId : undefined);
+  const acc = accountPicker(entry ? entry.accountId : undefined, () => checkFunds());
   const cat = categorySelect(entry?.category || "Others");
   const catF = field("Category", cat);
   const note = el("textarea", { class: "input", placeholder: "Anything to remember (optional)" });
@@ -532,7 +579,7 @@ function buildExpenseForm(entry) {
   const noteF = field("Note", note);
 
   if (!entry) {
-    const sugg = suggestionRow("expense", (src) => {
+    const sugg = suggestionRow("expense", title, (src) => {
       title.value = src.title;
       if (!amt.value) amt.value = String(src.amount);
       if (cat.querySelector(`option[value="${CSS.escape(src.category)}"]`)) cat.value = src.category;
@@ -542,18 +589,41 @@ function buildExpenseForm(entry) {
   }
 
   let alreadyPaid = entry ? entry.status === "paid" : false;
-  const paidRow = toggleRow("Mark as already paid", alreadyPaid, (v) => (alreadyPaid = v));
+  const paidRow = toggleRow("Mark as already paid", alreadyPaid, (v) => { alreadyPaid = v; checkFunds(); });
   const paidWrap = el("div", { class: "field" }, paidRow);
 
   const save = el("button", { class: "btn btn-primary btn-block", type: "submit" },
     entry ? "Save changes" : "Add expense");
 
-  const form = el("form", {}, amtF, titleF, segF, dueF, acc.root, catF, noteF, paidWrap,
+  // Only new expenses are checked: an entry being edited has already moved its
+  // money, so it is part of the balance it would be measured against.
+  const funds = fundsNote();
+  function checkFunds() {
+    if (entry) return;
+    const amount = parseAmount(amt.value);
+    const id = acc.get();
+    const bal = id ? accountBalance(id) : balances().total;
+    if (amount == null || amount <= bal) { funds.set(null); save.disabled = false; return; }
+    const held = id ? `${accountName(id)} only has ${fmtMoney(bal)}` : `You only have ${fmtMoney(bal)}`;
+    const short = fmtMoney(amount - bal);
+    if (alreadyPaid) {
+      funds.set("block", `${held} — that's ${short} short. Untick "already paid" to plan it instead.`);
+      save.disabled = true;
+    } else {
+      funds.set("warn", `${short} more than ${id ? accountName(id) : "you"} ${id ? "holds" : "have"} — it'll sit in Committed until it's paid.`);
+      save.disabled = false;
+    }
+  }
+  amt.addEventListener("input", checkFunds);
+  checkFunds();
+
+  const form = el("form", {}, amtF, titleF, segF, dueF, acc.root, catF, noteF, paidWrap, funds.node,
     el("div", { class: "form-actions" }, save),
     entry ? deleteRow(entry, { kindLabel: "expense", isExpense: true }) : null);
 
   form.addEventListener("submit", async (e) => {
     e.preventDefault();
+    if (save.disabled) return;
     const amount = parseAmount(amt.value);
     setError(amtF, !amount);
     setError(titleF, !title.value.trim());
@@ -608,44 +678,75 @@ function buildTransferForm() {
   const fromF = el("div", { class: "field" });
   const toF = el("div", { class: "field" });
 
-  function chip(a, active, onPick) {
-    const b = el("button", { type: "button", class: `acc-chip ${active ? "is-active" : ""}` });
+  function chip(a, onPick) {
+    const b = el("button", { type: "button", class: "acc-chip" });
     b.innerHTML = `${logoTile(a.kind, 22)}<span>${esc(a.name)}</span>`;
     b.addEventListener("click", () => { buzz(6); onPick(); });
     return b;
   }
-  // "From" always lists every account. "To" hides whichever is picked in "From"
-  // (you can't transfer an account into itself) but is otherwise unfiltered too.
-  function paintFrom() {
-    fromF.innerHTML = "";
+  /** The picked account, alone, with a cross that hands the full list back. */
+  function pickedChip(a, label, onClear) {
+    const b = el("button", {
+      type: "button",
+      class: "acc-chip is-active is-picked",
+      "aria-label": `${a.name} — change ${label} account`,
+    });
+    b.innerHTML = `${logoTile(a.kind, 22)}<span>${esc(a.name)}</span><span class="chip-x" aria-hidden="true">${icon("x", 14)}</span>`;
+    b.addEventListener("click", () => { buzz(6); onClear(); });
+    return b;
+  }
+  // Each side collapses to its selection so the form stays short, and clearing
+  // one offers every account back. Picking the account the other side holds
+  // swaps the two rather than dead-ending — with two accounts, "reselect" would
+  // otherwise offer you only the account you just cleared.
+  function paintSide(wrap, labelText, selectedId, onPick, onClear) {
+    wrap.innerHTML = "";
     const row = el("div", { class: "filter-row", style: "margin:0" });
-    for (const a of state.accounts) {
-      row.append(chip(a, a.id === fromId, () => {
-        fromId = a.id;
-        if (toId === fromId) toId = state.accounts.find((x) => x.id !== fromId)?.id;
-        paintFrom(); paintTo();
-      }));
-    }
-    fromF.append(el("label", {}, "From"), row);
+    const picked = state.accounts.find((a) => a.id === selectedId);
+    if (picked) row.append(pickedChip(picked, labelText, onClear));
+    else for (const a of state.accounts) row.append(chip(a, () => onPick(a.id)));
+    wrap.append(el("label", {}, labelText), row, el("div", { class: "field-error" }, "Pick an account"));
+  }
+  function paintBoth() { paintFrom(); paintTo(); checkFunds(); }
+  function paintFrom() {
+    paintSide(fromF, "From", fromId,
+      (id) => { if (id === toId) toId = fromId; fromId = id; setError(fromF, false); paintBoth(); },
+      () => { fromId = null; paintBoth(); });
   }
   function paintTo() {
-    toF.innerHTML = "";
-    const row = el("div", { class: "filter-row", style: "margin:0" });
-    for (const a of state.accounts) {
-      if (a.id === fromId) continue;
-      row.append(chip(a, a.id === toId, () => { toId = a.id; paintTo(); }));
-    }
-    toF.append(el("label", {}, "To"), row);
+    paintSide(toF, "To", toId,
+      (id) => { if (id === fromId) fromId = toId; toId = id; setError(toF, false); paintBoth(); },
+      () => { toId = null; paintBoth(); });
   }
-  paintFrom(); paintTo();
-
   const save = el("button", { class: "btn btn-primary btn-block", type: "submit" }, "Transfer");
-  const form = el("form", {}, amtF, fromF, toF, noteF, el("div", { class: "form-actions" }, save));
+
+  // A transfer moves money now, so there is no "plan it anyway" case here:
+  // over the source balance and the button is off.
+  const funds = fundsNote();
+  function checkFunds() {
+    const bal = fromId ? accountBalance(fromId) : null;
+    const amount = parseAmount(amt.value);
+    if (bal == null) { funds.set(null); save.disabled = false; return; }
+    if (amount == null || amount <= bal) {
+      funds.set("info", `${accountName(fromId)} has ${fmtMoney(bal)} to move.`);
+      save.disabled = false;
+      return;
+    }
+    funds.set("block", `${accountName(fromId)} only has ${fmtMoney(bal)} — that's ${fmtMoney(amount - bal)} short.`);
+    save.disabled = true;
+  }
+  amt.addEventListener("input", checkFunds);
+  paintBoth();
+
+  const form = el("form", {}, amtF, fromF, toF, funds.node, noteF, el("div", { class: "form-actions" }, save));
 
   form.addEventListener("submit", async (e) => {
     e.preventDefault();
+    if (save.disabled) return;
     const amount = parseAmount(amt.value);
     setError(amtF, !amount);
+    setError(fromF, !fromId);
+    setError(toF, !toId);
     if (!amount || !fromId || !toId || fromId === toId) return;
     lastAccountId = fromId;
     await transferMoney({ fromAccountId: fromId, toAccountId: toId, amount, note: note.value });
@@ -724,72 +825,281 @@ const QA_TABS = [
   { key: "transfer", label: "Transfer" },
 ];
 
-/** Center-FAB entry point: one sheet, three swipeable tabs, each a fresh add form. */
+/**
+ * Center-FAB entry point: one sheet, three swipeable tabs, each a fresh add form.
+ *
+ * The pager is a transformed track driven from here rather than a native
+ * scroll-snap container, because the two are not equivalent inside a sheet:
+ *   • touch-action can then be `pan-y`, so the browser keeps vertical panning
+ *     and the sheet scrolls on the first swipe — even with the finger on a form.
+ *     A pager owning `pan-x` swallowed those swipes entirely.
+ *   • A flick moves exactly one tab, decided here from distance and velocity.
+ *     Momentum used to sail past Income and land on Transfer, because
+ *     `scroll-snap-stop: always` is not honoured for flings in every engine.
+ *   • `pos` — the fractional page position — is the single source of truth, so
+ *     the height interpolates between two cached measurements as the finger
+ *     moves instead of a tween chasing the gesture from behind, and nothing
+ *     reads layout mid-drag. That chase is what felt laggy.
+ */
 export function quickAddSheet(initialKind = "expense") {
   openSheet(null, (body) => {
+    const N = QA_TABS.length;
     const startIndex = Math.max(0, QA_TABS.findIndex((t) => t.key === initialKind));
+    const uid = Math.random().toString(36).slice(2, 7);
 
-    const tabs = el("div", { class: "segmented qa-tabs", role: "tablist" });
+    const tabs = el("div", { class: "segmented qa-tabs", role: "tablist", "aria-label": "What to add" });
+    const pager = el("div", { class: "qa-pager" });
+    const track = el("div", { class: "qa-track" });
+    pager.append(track);
+
+    const pages = QA_TABS.map((t, i) => {
+      const page = el("div", {
+        class: "qa-page",
+        role: "tabpanel",
+        id: `qa-panel-${uid}-${i}`,
+        "aria-labelledby": `qa-tab-${uid}-${i}`,
+      });
+      page.append(
+        t.key === "expense" ? buildExpenseForm(null)
+          : t.key === "income" ? buildMoneyForm(null)
+            : buildTransferForm()
+      );
+      track.append(page);
+      return page;
+    });
+
     const tabBtns = QA_TABS.map((t, i) => {
       const b = el("button", {
-        type: "button", role: "tab",
-        class: i === startIndex ? "is-active" : "",
-        "aria-selected": String(i === startIndex),
-        onclick: () => goTo(i),
+        type: "button",
+        role: "tab",
+        id: `qa-tab-${uid}-${i}`,
+        "aria-controls": `qa-panel-${uid}-${i}`,
+        onclick: () => { buzz(6); settle(i); },
       }, t.label);
       tabs.append(b);
       return b;
     });
 
-    const pager = el("div", { class: "qa-pager" });
-    for (const t of QA_TABS) {
-      const page = el("div", { class: "qa-page" });
-      page.append(t.key === "expense" ? buildExpenseForm(null) : t.key === "income" ? buildMoneyForm(null) : buildTransferForm());
-      pager.append(page);
+    /* ---------- state ---------- */
+    const heights = new Array(N).fill(0);
+    let width = 1;
+    let pos = startIndex;    // fractional page position — the source of truth
+    let active = startIndex; // committed tab
+    let painted = -1;
+    let posTween = null;
+    let hTween = null;
+
+    function measure() {
+      width = pager.clientWidth || pager.getBoundingClientRect().width || 1;
+      for (let i = 0; i < N; i++) heights[i] = Math.ceil(pages[i].getBoundingClientRect().height);
     }
 
-    let active = startIndex;
-    let syncing = false;
-    function setActive(i) {
-      active = i;
+    // Only ever one writer for the container height, so a content-driven tween
+    // and the per-frame drag writes can't fight over it. The track is sized
+    // along with the pager: as a flex row it is otherwise as tall as the
+    // TALLEST page, which would leave the pager scrollable past the end of a
+    // short tab into the empty space under it.
+    const boxes = [pager, track];
+    function setHeight(h, animate) {
+      if (hTween) { hTween.kill(); hTween = null; }
+      if (!(h > 0)) return;
+      if (animate && motionOK()) {
+        hTween = gsap.to(boxes, { height: h, duration: 0.24, ease: "power2.out", onComplete: () => (hTween = null) });
+      } else {
+        for (const b of boxes) b.style.height = `${h}px`;
+      }
+    }
+
+    function paintTabs(i) {
+      if (i === painted) return;
+      painted = i;
       tabBtns.forEach((b, idx) => {
         b.classList.toggle("is-active", idx === i);
         b.setAttribute("aria-selected", String(idx === i));
+        b.tabIndex = idx === i ? 0 : -1; // roving tabindex: Tab leaves the strip for the form
       });
-      syncHeight();
     }
-    // Each page's own content height — the pager only shows the active one, so its
-    // container height must track that page, not the tallest of the three (which
-    // left a block of blank space under the shorter Income/Transfer tabs).
-    function syncHeight() {
-      const page = pager.children[active];
-      if (!page) return;
-      const h = page.scrollHeight;
-      if (motionOK()) gsap.to(pager, { height: h, duration: 0.3, ease: "power2.out" });
-      else pager.style.height = `${h}px`;
+
+    function render() {
+      track.style.transform = `translate3d(${(-pos * width).toFixed(2)}px,0,0)`;
+      const i = Math.max(0, Math.min(N - 1, Math.floor(pos)));
+      const j = Math.min(N - 1, i + 1);
+      const f = Math.max(0, Math.min(1, pos - i));
+      setHeight(Math.ceil(heights[i] + (heights[j] - heights[i]) * f), false);
+      paintTabs(Math.max(0, Math.min(N - 1, Math.round(pos))));
     }
-    function goTo(i) {
+
+    /** Settle on a tab: only the pane you can see stays focusable and readable. */
+    function commit(i) {
+      active = i;
+      paintTabs(i);
+      pages.forEach((p, idx) => (idx === i ? p.removeAttribute("inert") : p.setAttribute("inert", "")));
+    }
+
+    /** Re-read the page we landed on — a cached height can only go stale. */
+    function lockHeight() {
+      const h = Math.ceil(pages[active].getBoundingClientRect().height);
+      if (h) heights[active] = h;
+      setHeight(heights[active], false);
+    }
+
+    function settle(i) {
+      const to = Math.max(0, Math.min(N - 1, i));
+      commit(to);
+      if (posTween) { posTween.kill(); posTween = null; }
+      if (!motionOK()) { pos = to; render(); lockHeight(); return; }
+      const s = { p: pos };
+      posTween = gsap.to(s, {
+        p: to,
+        duration: 0.34,
+        ease: "power3.out",
+        onUpdate: () => { pos = s.p; render(); },
+        onComplete: () => { posTween = null; pos = to; render(); lockHeight(); },
+      });
+    }
+
+    /* ---------- horizontal drag (JS owns this axis; CSS hands us pan-y) ---------- */
+    const CLAIM = 8;
+    let touchId = null, x0 = 0, y0 = 0, basePos = 0, lastX = 0, lastT = 0, vx = 0;
+    let dragging = false, dead = true;
+
+    pager.addEventListener("touchstart", (e) => {
+      if (e.touches.length > 1) { dead = true; return; }
+      const t = e.touches[0];
+      // A previous drag that never got its touchend (the browser can swallow
+      // one) would otherwise have us measure from a half-dragged position and
+      // compound the error. Re-anchor on the committed tab instead.
+      if (dragging) { pos = active; render(); }
+      touchId = t.identifier;
+      x0 = lastX = t.clientX;
+      y0 = t.clientY;
+      lastT = performance.now();
+      vx = 0;
+      dead = false;
+      dragging = false;
+      if (posTween) { posTween.kill(); posTween = null; } // catch a tab mid-flight
+      basePos = pos;
+    }, { passive: true });
+
+    pager.addEventListener("touchmove", (e) => {
+      if (dead) return;
+      const t = [...e.touches].find((x) => x.identifier === touchId);
+      if (!t) return;
+      const dx = t.clientX - x0;
+      const dy = t.clientY - y0;
+      if (!dragging) {
+        if (Math.max(Math.abs(dx), Math.abs(dy)) < CLAIM) return;
+        if (Math.abs(dx) <= Math.abs(dy)) { dead = true; return; } // vertical — the sheet's
+        dragging = true;
+      }
+      e.stopPropagation();                  // never also read as a dismiss drag
+      if (e.cancelable) e.preventDefault(); // no diagonal scrolling under the drag
+      const now = performance.now();
+      vx = (t.clientX - lastX) / Math.max(1, now - lastT); // px/ms
+      lastX = t.clientX;
+      lastT = now;
+      let p = basePos - dx / width;
+      if (p < 0) p *= 0.35;                                  // rubber band at the ends
+      else if (p > N - 1) p = N - 1 + (p - (N - 1)) * 0.35;
+      pos = p;
+      render();
+    }, { passive: false });
+
+    function endDrag() {
+      if (!dragging) { dead = true; return; }
+      dragging = false;
+      dead = true;
+      const from = Math.round(basePos);
+      const moved = (lastX - x0) / width;                        // in pages; + = towards the previous tab
+      const v = performance.now() - lastT > 100 ? 0 : vx;        // finger paused before lifting: no flick
+      // Exactly one tab per gesture, whatever the fling does.
+      let target = from;
+      if (Math.abs(v) > 0.4) target = from + (v < 0 ? 1 : -1);
+      else if (moved < -0.25) target = from + 1;
+      else if (moved > 0.25) target = from - 1;
+      if (target !== from) buzz(6);
+      settle(target);
+    }
+    pager.addEventListener("touchend", endDrag);
+    pager.addEventListener("touchcancel", endDrag);
+
+    tabs.addEventListener("keydown", (e) => {
+      const i = tabBtns.indexOf(document.activeElement);
+      if (i < 0) return;
+      const to = e.key === "ArrowRight" ? i + 1
+        : e.key === "ArrowLeft" ? i - 1
+          : e.key === "Home" ? 0
+            : e.key === "End" ? N - 1
+              : null;
+      if (to == null) return;
+      e.preventDefault();
+      const n = Math.max(0, Math.min(N - 1, to));
       buzz(6);
-      syncing = true;
-      setActive(i);
-      pager.scrollTo({ left: i * pager.clientWidth, behavior: "smooth" });
-      setTimeout(() => (syncing = false), 350);
+      settle(n);
+      tabBtns[n].focus();
+    });
+
+    // Nothing should scroll the pager itself — focus tries to when the
+    // on-screen keyboard opens, and that would double-offset the track.
+    pager.addEventListener("scroll", () => { pager.scrollLeft = 0; pager.scrollTop = 0; });
+
+    // Bank logos are <img>s that arrive after the forms are measured, and a
+    // chip growing by a few pixels used to push the submit button behind the
+    // clip. load doesn't bubble, so listen for it on the way down.
+    pager.addEventListener("load", () => {
+      measure();
+      if (!dragging && !posTween) lockHeight();
+    }, true);
+
+    /* ---------- keep the cached measurements honest ---------- */
+    // Width has to be watched on the pager itself, not just on window resize:
+    // it also changes when the sheet gains or loses its scrollbar as a taller
+    // or shorter tab comes in, and a stale width offsets the track by pixels
+    // that add up to a visibly half-scrolled page.
+    const ro = new ResizeObserver((entries) => {
+      if (onResize()) return; // width moved: everything was just re-measured
+      let changed = false;
+      for (const entry of entries) {
+        const i = pages.indexOf(entry.target);
+        if (i < 0) continue;
+        const h = Math.ceil(entry.target.getBoundingClientRect().height);
+        if (h && h !== heights[i]) { heights[i] = h; changed = true; }
+      }
+      if (!changed) return;
+      // A validation error or a revealed row just grew the pane: ease to the
+      // new height. The old fixed height simply clipped it.
+      if (dragging || posTween) render();
+      else setHeight(heights[active], true);
+    });
+
+    /** Re-anchor on a width change. Returns true if it acted. */
+    function onResize() {
+      if (Math.abs((pager.clientWidth || width) - width) < 1) return false; // our own height writes
+      measure();
+      if (!dragging) pos = active; // never left sitting between two pages
+      render();
+      return true;
     }
-    pager.addEventListener("scroll", () => {
-      if (syncing) return;
-      // Clamp to one step at a time — a fast fling can report scrollLeft
-      // partway past the next page before scroll-snap settles, which would
-      // otherwise read as the tab *after* it and skip the one in between.
-      const raw = Math.round(pager.scrollLeft / Math.max(1, pager.clientWidth));
-      const i = Math.max(active - 1, Math.min(active + 1, raw));
-      if (i !== active) setActive(i);
+
+    onSheetMounted(() => {
+      measure();
+      commit(startIndex);
+      pos = startIndex;
+      render();
+      for (const p of pages) ro.observe(p);
+      ro.observe(pager);
+      addEventListener("resize", onResize);
+      addEventListener("orientationchange", onResize);
+    });
+    onSheetClosed(() => {
+      ro.disconnect();
+      removeEventListener("resize", onResize);
+      removeEventListener("orientationchange", onResize);
+      if (posTween) posTween.kill();
+      if (hTween) hTween.kill();
     });
 
     body.append(tabs, pager);
-    requestAnimationFrame(() => {
-      if (startIndex > 0) pager.scrollLeft = startIndex * pager.clientWidth;
-      syncHeight();
-    });
   });
 }
 

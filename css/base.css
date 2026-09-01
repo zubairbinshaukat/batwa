@@ -113,7 +113,18 @@ ul { margin: 0; padding: 0; list-style: none; }
     gap: var(--s-6);
     align-items: start;
   }
-  .home-grid > .home-left { position: sticky; top: var(--s-6); }
+  .home-grid > .home-left {
+    position: sticky;
+    top: var(--s-6);
+    /* An account grid can outgrow the viewport, and a sticky column taller
+       than the screen parks its own bottom permanently out of reach — so cap
+       it and let the column itself scroll once it gets that tall. */
+    max-height: calc(100dvh - var(--s-6) * 2);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-width: none;
+  }
+  .home-grid > .home-left::-webkit-scrollbar { display: none; }
 }
 
 /* ---- Reduced motion ---- */

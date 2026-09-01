@@ -60,7 +60,8 @@ export function trapFocus(container) {
   const prev = document.activeElement;
   function onKey(e) {
     if (e.key !== "Tab") return;
-    const items = $$(sel, container).filter((n) => !n.disabled && n.offsetParent !== null);
+    const items = $$(sel, container)
+      .filter((n) => !n.disabled && n.offsetParent !== null && !n.closest("[inert]"));
     if (!items.length) return;
     const first = items[0], last = items[items.length - 1];
     if (e.shiftKey && document.activeElement === first) { last.focus(); e.preventDefault(); }

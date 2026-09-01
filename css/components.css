@@ -86,6 +86,19 @@
 .acc-card .acc-bal.is-neg { color: var(--c-neg); }
 .acc-add { border: 1.5px dashed var(--c-border-strong); background: transparent; box-shadow: none; align-items: center; justify-content: center; min-width: 84px; }
 
+/* Desktop: the accounts sit in a grid, every balance readable at a glance,
+   instead of a row you have to swipe through sideways. */
+@media (min-width: 640px) {
+  .acc-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(116px, 1fr));
+    overflow: visible;
+    scroll-snap-type: none;
+  }
+  .acc-card, .acc-add { min-width: 0; }
+  .acc-card .acc-name { max-width: 100%; }
+}
+
 /* Fill tone thresholds — shared by the card fills and the account-sheet
    bucket fill. P = committed/balance. <80% is violet (the app's aurora
    accent, not the account's brand color); 80–90% turns amber; 90–100%
@@ -297,6 +310,15 @@
 .acc-chip:not(:has(.acc-logo)) { padding-left: 14px; }
 .acc-chip.is-active { border-color: var(--c-violet); background: var(--c-violet-soft); color: var(--c-violet-deep); }
 .acc-chip .acc-logo { border-radius: 8px; }
+/* A picked transfer account collapses to one chip; the cross reopens the list. */
+.acc-chip.is-picked { padding-right: 8px; }
+.acc-chip .chip-x {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 24px; height: 24px;
+  margin-left: 2px;
+  border-radius: 50%;
+  background: rgba(79, 51, 232, 0.12);
+}
 
 .copy-box {
   display: flex;
@@ -691,12 +713,13 @@
   max-width: var(--max-w);
   max-height: 92dvh;
   overflow-y: auto;
-  overscroll-behavior-y: contain;
   background: var(--c-surface);
   border-radius: var(--r-xl) var(--r-xl) 0 0;
   box-shadow: var(--shadow-sheet);
   padding: var(--s-3) var(--s-5) calc(var(--s-6) + var(--safe-b));
-  overscroll-behavior: contain;
+  /* `none`, not `contain`: it also kills the rubber-band at the top, so a
+     downward drag there does nothing until the dismiss gesture claims it. */
+  overscroll-behavior: none;
 }
 .sheet-grab {
   width: 42px; height: 5px;
@@ -724,6 +747,10 @@
     border-radius: var(--r-xl);
     max-height: min(86dvh, 780px);
     padding: var(--s-5) var(--s-5) var(--s-6);
+    /* Reserve the scrollbar so a taller or shorter quick-add tab can't change
+       the sheet's inner width mid-transition and offset the pager. Mobile uses
+       overlay scrollbars, which never took the space to begin with. */
+    scrollbar-gutter: stable;
   }
   .sheet-grab { display: none; }
 }
@@ -821,6 +848,21 @@ select.input {
   color: var(--c-neg);
   margin-top: 6px;
 }
+/* Balance line under a form: info states what's there, warn is a heads-up you
+   can act through, block explains the greyed-out button under it. */
+.form-note {
+  display: flex; align-items: flex-start; gap: 7px;
+  font-size: var(--fs-sm); font-weight: 600;
+  color: var(--c-muted);
+  margin: calc(var(--s-2) * -1) 0 var(--s-4);
+}
+.form-note svg.ico { flex: 0 0 auto; margin-top: 1px; }
+.form-note.is-warn  { color: var(--c-warn); }
+.form-note.is-block { color: var(--c-neg); }
+
+.btn:disabled { opacity: 0.45; cursor: not-allowed; box-shadow: none; }
+.btn:disabled:active { transform: none; }
+
 .field.has-error .field-error { display: block; }
 .field.has-error .input { border-color: var(--c-neg); box-shadow: 0 0 0 4px rgba(239,70,103,0.12); }
 
@@ -848,25 +890,29 @@ select.input {
   box-shadow: var(--shadow-xs);
 }
 
-/* Quick-add sheet: tab strip + native horizontal-scroll-snap pager (real swipe,
-   no gesture code — and it can't fight the sheet's own vertical dismiss-drag). */
+/* Quick-add sheet: tab strip + a JS-driven pager (see quickAddSheet).
+   The axes are split by owner and that split is the whole trick:
+   `pan-y` leaves vertical panning to the browser, so the sheet scrolls on the
+   first swipe from anywhere — including on top of the pager — while JS owns
+   the horizontal axis, so one flick moves exactly one tab. */
 .qa-tabs { margin-bottom: var(--s-4); }
 .qa-pager {
-  display: flex;
-  align-items: flex-start;   /* each page keeps its own natural height — JS sets the container's */
-  overflow-x: auto;
-  overflow-y: hidden;
-  scroll-snap-type: x mandatory;
-  touch-action: pan-x;
-  overscroll-behavior-x: contain;
+  /* Clips both ways: sideways to hide the neighbouring pages, vertically so a
+     taller tab can't add scroll under a shorter one. That makes the measured
+     height load-bearing — see lockHeight() and the image-load listener in
+     quickAddSheet, which keep it honest so nothing is ever clipped away. */
+  overflow: hidden;
+  touch-action: pan-y;
   margin: 0 calc(var(--s-5) * -1);
-  scrollbar-width: none;
 }
 .qa-pager::-webkit-scrollbar { display: none; }
+.qa-track {
+  display: flex;
+  align-items: flex-start;   /* each page keeps its own natural height — JS sets the container's */
+  will-change: transform;
+}
 .qa-page {
   flex: 0 0 100%;
-  scroll-snap-align: start;
-  scroll-snap-stop: always;  /* a fast flick must land on the next page, never skip it */
   padding: 0 var(--s-5);
   min-width: 0;
 }
