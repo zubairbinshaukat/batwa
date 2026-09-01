@@ -777,7 +777,11 @@ export function quickAddSheet(initialKind = "expense") {
     }
     pager.addEventListener("scroll", () => {
       if (syncing) return;
-      const i = Math.round(pager.scrollLeft / Math.max(1, pager.clientWidth));
+      // Clamp to one step at a time — a fast fling can report scrollLeft
+      // partway past the next page before scroll-snap settles, which would
+      // otherwise read as the tab *after* it and skip the one in between.
+      const raw = Math.round(pager.scrollLeft / Math.max(1, pager.clientWidth));
+      const i = Math.max(active - 1, Math.min(active + 1, raw));
       if (i !== active) setActive(i);
     });
 

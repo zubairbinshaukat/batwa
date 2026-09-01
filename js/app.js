@@ -207,14 +207,21 @@ async function registerSW() {
 }
 
 function showUpdateToast(worker) {
-  const root = $("#toast-root");
-  const t = el("div", { class: "toast" });
-  t.append(
-    el("span", { class: "toast-ico", html: icon("sparkles", 16) }),
-    el("span", {}, "New version ready"),
-    el("button", { class: "toast-undo", onclick: () => worker.postMessage("SKIP_WAITING") }, "Reload"),
-  );
-  root.append(t);
+  const slot = $("#update-slot");
+  if (!slot) return;
+  slot.innerHTML = "";
+  const banner = el("div", { class: "install-banner" });
+  banner.innerHTML = `
+    <span class="ib-ico" style="color:#fff">${icon("sparkles", 20)}</span>
+    <span class="grow"><strong>Update available</strong>
+    <p>Restart Batwa to get the latest version — a tap does it, no browser reload needed</p></span>
+  `;
+  banner.append(el("button", {
+    class: "btn btn-sm", style: "background:#fff;color:var(--c-ink);flex:0 0 auto",
+    onclick: () => worker.postMessage("SKIP_WAITING"),
+  }, "Reload"));
+  slot.append(banner);
+  anim(banner, { y: -14, opacity: 0 }, { y: 0, opacity: 1, duration: 0.4, ease: "power2.out" });
 }
 
 /* ============================================================
