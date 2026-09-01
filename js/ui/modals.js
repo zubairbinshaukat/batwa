@@ -958,14 +958,31 @@ export function quickAddSheet(initialKind = "expense") {
       });
     }
 
-    /* ---------- horizontal drag (JS owns this axis; CSS hands us pan-y) ---------- */
+    /* ---------- horizontal drag (the tab swipe claims this axis) ---------- */
     const CLAIM = 8;
     let touchId = null, x0 = 0, y0 = 0, basePos = 0, lastX = 0, lastT = 0, vx = 0;
-    let dragging = false, dead = true;
+    let dragging = false, dead = true, innerX = null;
+
+    /** The chip row (recents, accounts) under the finger, if it scrolls sideways. */
+    function scrollerX(node) {
+      for (let n = node; n && n !== pager; n = n.parentElement) {
+        if (n.scrollWidth > n.clientWidth + 1) {
+          const ox = getComputedStyle(n).overflowX;
+          if (ox === "auto" || ox === "scroll") return n;
+        }
+      }
+      return null;
+    }
+    /** Has it got room left to move the way the finger is going? */
+    function canScrollX(elm, dx) {
+      const max = elm.scrollWidth - elm.clientWidth;
+      return dx < 0 ? elm.scrollLeft < max - 1 : elm.scrollLeft > 1;
+    }
 
     pager.addEventListener("touchstart", (e) => {
       if (e.touches.length > 1) { dead = true; return; }
       const t = e.touches[0];
+      innerX = scrollerX(t.target);
       // A previous drag that never got its touchend (the browser can swallow
       // one) would otherwise have us measure from a half-dragged position and
       // compound the error. Re-anchor on the committed tab instead.
@@ -990,6 +1007,9 @@ export function quickAddSheet(initialKind = "expense") {
       if (!dragging) {
         if (Math.max(Math.abs(dx), Math.abs(dy)) < CLAIM) return;
         if (Math.abs(dx) <= Math.abs(dy)) { dead = true; return; } // vertical — the sheet's
+        // Horizontal, but starting on a chip row with somewhere left to go:
+        // that scroll is the browser's, not a tab change.
+        if (innerX && canScrollX(innerX, dx)) { dead = true; return; }
         dragging = true;
       }
       e.stopPropagation();                  // never also read as a dismiss drag

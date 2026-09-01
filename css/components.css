@@ -902,7 +902,12 @@ select.input {
      height load-bearing — see lockHeight() and the image-load listener in
      quickAddSheet, which keep it honest so nothing is ever clipped away. */
   overflow: hidden;
-  touch-action: pan-y;
+  /* Both axes stay with the browser. `pan-y` alone kept the sheet scrolling,
+     but touch-action only ever narrows as it inherits down, so it also barred
+     the chip rows inside the forms from panning sideways — and the tab swipe
+     then ate the gesture. The tab swipe claims the horizontal axis in JS
+     instead, and yields to a chip row that still has somewhere to scroll. */
+  touch-action: pan-x pan-y;
   margin: 0 calc(var(--s-5) * -1);
 }
 .qa-pager::-webkit-scrollbar { display: none; }
