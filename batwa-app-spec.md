@@ -142,6 +142,8 @@ Include a schema `version` field and a migration path so future changes don't co
 - "Change PIN" in Settings re-encrypts existing data.
 - Settings must warn clearly: **there is no PIN recovery.** Losing it loses the data. Tell the user to keep an export backup.
 - After 10 wrong attempts, add an escalating delay. Never wipe data.
+- Optional **fingerprint unlock** (WebAuthn PRF): the platform authenticator's PRF output is run through HKDF into a wrap key that seals a copy of the PIN-derived key. The PIN stays the only key to the data; the fingerprint just hands it over. Removing it needs no PIN (it only deletes the sealed copy); adding it back needs the PIN once. No PRF support means no enrolment — a fingerprint that only gates the UI would give it no cryptographic role.
+- A **refresh keeps the app unlocked**: the non-extractable key is parked in `meta.session` under a random id held in `sessionStorage`, so it survives reload (including the service worker's own `location.reload()`) but dies with the tab. It also expires after 24 h and obeys the same 60 s background rule.
 
 ---
 

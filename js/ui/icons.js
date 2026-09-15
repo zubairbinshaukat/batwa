@@ -15,6 +15,7 @@ const PATHS = {
   upload:       '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/>',
   download:     '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/>',
   lock:         '<rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>',
+  fingerprint:  '<path d="M2 12a10 10 0 0 1 15-8.7M22 12a10 10 0 0 1-.6 3.4"/><path d="M5.6 18.4A8 8 0 0 1 12 5.5a6.5 6.5 0 0 1 6.5 6.5c0 1.2-.1 2.4-.4 3.5"/><path d="M8.5 20.6A10.5 10.5 0 0 0 12 12"/><path d="M12 8.5a3.5 3.5 0 0 1 3.5 3.5c0 2.6-.4 5.1-1.2 7.5"/><path d="M11.5 15.5a19 19 0 0 1-.7 5.9"/>',
   tag:          '<path d="M2 2h9.2a2 2 0 0 1 1.4.6l9 9a2 2 0 0 1 0 2.8l-6.2 6.2a2 2 0 0 1-2.8 0l-9-9A2 2 0 0 1 3 10.2V2z" transform="translate(0.5,0.5) scale(0.92)"/><circle cx="7.5" cy="7.5" r="1.3"/>',
   "credit-card": '<rect x="2" y="5" width="20" height="14" rx="2.5"/><path d="M2 10h20M6 15h4"/>',
   smartphone:   '<rect x="7" y="2" width="10" height="20" rx="2.5"/><path d="M11.2 18h1.6"/>',

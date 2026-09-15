@@ -12,6 +12,7 @@ Status: approved plan, ready to implement. Branch: `develop`. Do not commit; lea
 - Title normalisation precedent: `recentTitles()` in modals.js keys by `title.trim().toLowerCase()`.
 
 ### Data caveats that shape the algorithms
+
 - **Spend date** = `(e.dueDate || e.paidAt || e.createdAt).slice(0,10)`. Use this everywhere (same key as `entriesForMonth`) so numbers agree with the tiles.
 - **Do not use hour-of-day.** `paidAt` is when the user tapped "Mark paid", not when they spent. Any time-of-day insight would be wrong.
 - **`isAdjustment` "Balance fix" expenses** count in `spent` (they are real money gone). Keep them in totals so tiles and breakdown agree, but flag them and surface a dedicated insight when they are a meaningful share.
@@ -71,6 +72,7 @@ Tone: factual, calm, second person, never scolding. Each caution line states the
 ## 2. Architecture
 
 ### 2.1 New pure module: `js/insights.js`
+
 - **No DOM, no imports from `util/dom.js`** (it calls `matchMedia` at load). Import only from `util/format.js` (`isoDate`, `parseDay`, `shiftMonth`). Must run under plain Node so it can be smoke-tested with a fixture.
 - Signature: `analyzeMonth(entries, ym, { today = isoDate() } = {})`. `entries` is the full ledger array (`state.entries`); the function filters to paid, non-transfer expenses whose spend date is in `ym`.
 - Returns structured facts only; no strings for the UI. Shape:
@@ -103,36 +105,40 @@ Tone: factual, calm, second person, never scolding. Each caution line states the
 - All divisions guard zero. Every array exists even when empty.
 
 ### 2.2 Insight text generation stays in `js/ui/reports.js`
+
 A single `buildInsights(analysis, sum, prev)` returns `[{ id, tone: "good" | "info" | "caution", weight, html }]`. The existing three insight lines move into it (tone info/good). Rendering:
+
 - Top `#insights` block: top 2 by weight among tone `good` / `info` (keeps today's behaviour).
 - "Worth watching" card: top 3 by weight among tone `caution`. Card hidden entirely when there are none.
-No insight appears in both places.
+  No insight appears in both places.
 
 ### 2.3 Confidence gates (this is what makes it feel like a real report, not a random sentence)
+
 Only emit an insight when its gate passes. Weights order the list; higher shows first.
 
-| id | tone | gate | text template | weight |
-|---|---|---|---|---|
-| `top-category` | info | any spend | (existing) "**Food** was your biggest category this month at **Rs 8,400**." | 50 |
-| `vs-last-month` | good/info | (existing) `abs(diff) > 10% prev` | (existing) | 60 |
-| `recurring-baseline` | info | (existing) recurring >= 40% | (existing) | 40 |
-| `concentration` | caution | >= 5 distinct titles and top-3 share >= 50% | "Three things are **59%** of your month: **Hostel fees**, **Groceries**, **Fuel**. These decide the month, so plan them first." (render the three as pills under the line) | 90 |
-| `largest-single` | caution | only when `concentration` did NOT fire; largest share >= 25% and count >= 3 | "One payment, **Hostel fees, Rs 12,000**, was **31%** of everything you spent." | 80 |
-| `habit` | caution | top habit count >= 4 and its total >= 5% of spent | "**Chai**, **18 times**. Small each time, **Rs 2,700** together." | 70 |
-| `weekend` | caution | count >= 8, at least 2 Saturdays and 2 Sundays elapsed, ratio >= 1.25 | "Weekends cost you **42%** more per day than weekdays." | 75 |
-| `weekday-peak` | info | `weekend` did not fire; count >= 8; `perDay[top] >= 1.5 * mean(perDay)` | "**Fridays** are your most expensive day, about **Rs 2,100** each." | 30 |
-| `front-loaded` | info | daysElapsed >= 20 and early share >= 50% | "More than half your month (**58%**) goes in the first 10 days." | 35 |
-| `back-loaded` | caution | daysElapsed >= 25 and late share >= 45% | "**45%** of your spending landed in the last 10 days. The month got expensive at the end." | 45 |
-| `pace` | caution if `projected > prevSpent * 1.1`, else info | current month, daysElapsed >= 5, prevSpent > 0 | "At this pace you'll end at about **Rs 37,000**, vs **Rs 31,000** last month." | 65 caution / 25 info |
-| `peak-day` | info | spendDays >= 3 and peak.total >= 2 * daily.avg and peak.total >= 15% of spent | "**14 Sep** was your priciest day: **Rs 9,400** across 3 payments." | 20 |
-| `riser` | caution | first of `deltas.risers` | "**Groceries** is up **Rs 1,800** (+39%) vs August." | 55 |
-| `newcomer` | info | first newcomer with total >= 10% of spent | "**Bike repair** is new this month: **Rs 4,500** you didn't have in the last few months." | 15 |
-| `adjustments` | caution | adjustments.share >= 15% and total > 0 | "**Rs 3,000** of this month is balance fixes, money you couldn't trace. Logging as you go keeps this number small." | 85 |
-| `no-spend` | good | daysElapsed >= 10, noSpendDays >= 30% of daysElapsed | "**9 no-spend days** this month. Nice." | 20 |
+| id                     | tone                                                 | gate                                                                          | text template                                                                                                                                                                                     | weight               |
+| ---------------------- | ---------------------------------------------------- | ----------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------- |
+| `top-category`       | info                                                 | any spend                                                                     | (existing) "**Food** was your biggest category this month at **Rs 8,400**."                                                                                                           | 50                   |
+| `vs-last-month`      | good/info                                            | (existing)`abs(diff) > 10% prev`                                            | (existing)                                                                                                                                                                                        | 60                   |
+| `recurring-baseline` | info                                                 | (existing) recurring >= 40%                                                   | (existing)                                                                                                                                                                                        | 40                   |
+| `concentration`      | caution                                              | >= 5 distinct titles and top-3 share >= 50%                                   | "Three things are**59%** of your month: **Hostel fees**, **Groceries**, **Fuel**. These decide the month, so plan them first." (render the three as pills under the line) | 90                   |
+| `largest-single`     | caution                                              | only when`concentration` did NOT fire; largest share >= 25% and count >= 3  | "One payment,**Hostel fees, Rs 12,000**, was **31%** of everything you spent."                                                                                                        | 80                   |
+| `habit`              | caution                                              | top habit count >= 4 and its total >= 5% of spent                             | "**Chai**, **18 times**. Small each time, **Rs 2,700** together."                                                                                                               | 70                   |
+| `weekend`            | caution                                              | count >= 8, at least 2 Saturdays and 2 Sundays elapsed, ratio >= 1.25         | "Weekends cost you**42%** more per day than weekdays."                                                                                                                                      | 75                   |
+| `weekday-peak`       | info                                                 | `weekend` did not fire; count >= 8; `perDay[top] >= 1.5 * mean(perDay)`   | "**Fridays** are your most expensive day, about **Rs 2,100** each."                                                                                                                   | 30                   |
+| `front-loaded`       | info                                                 | daysElapsed >= 20 and early share >= 50%                                      | "More than half your month (**58%**) goes in the first 10 days."                                                                                                                            | 35                   |
+| `back-loaded`        | caution                                              | daysElapsed >= 25 and late share >= 45%                                       | "**45%** of your spending landed in the last 10 days. The month got expensive at the end."                                                                                                  | 45                   |
+| `pace`               | caution if`projected > prevSpent * 1.1`, else info | current month, daysElapsed >= 5, prevSpent > 0                                | "At this pace you'll end at about**Rs 37,000**, vs **Rs 31,000** last month."                                                                                                         | 65 caution / 25 info |
+| `peak-day`           | info                                                 | spendDays >= 3 and peak.total >= 2 * daily.avg and peak.total >= 15% of spent | "**14 Sep** was your priciest day: **Rs 9,400** across 3 payments."                                                                                                                   | 20                   |
+| `riser`              | caution                                              | first of`deltas.risers`                                                     | "**Groceries** is up **Rs 1,800** (+39%) vs August."                                                                                                                                  | 55                   |
+| `newcomer`           | info                                                 | first newcomer with total >= 10% of spent                                     | "**Bike repair** is new this month: **Rs 4,500** you didn't have in the last few months."                                                                                             | 15                   |
+| `adjustments`        | caution                                              | adjustments.share >= 15% and total > 0                                        | "**Rs 3,000** of this month is balance fixes, money you couldn't trace. Logging as you go keeps this number small."                                                                         | 85                   |
+| `no-spend`           | good                                                 | daysElapsed >= 10, noSpendDays >= 30% of daysElapsed                          | "**9 no-spend days** this month. Nice."                                                                                                                                                     | 20                   |
 
 Month names in text come from `monthLabel(shiftMonth(ym, -1)).split(" ")[0]`.
 
 ### 2.4 `js/ui/reports.js` changes
+
 - Module state: add `let breakdownTab = "category"` and `let titlesExpanded = false` next to `currentMonth`. Tab survives month navigation; `titlesExpanded` resets on month change.
 - Page skeleton: replace the category `section-head` + `#cat-chart` with:
   ```html
@@ -145,6 +151,7 @@ Month names in text come from `monthLabel(shiftMonth(ym, -1)).split(" ")[0]`.
   <div class="card chart-card" id="patterns"></div>
   <div id="watch"></div>   <!-- Worth watching card; empty when nothing qualifies -->
   ```
+
   then trend and split as before.
 - `renderBreakdown(root, sum, analysis)`: builds the tab strip with the shared `segmented()` helper (see 2.6) with options `[{value:"category",label:"Category"},{value:"title",label:"Title"}]`. Switching a tab repaints **only** `#bd-panel` with a short fade (`anim(panel, {opacity:0,y:6}, {opacity:1,y:0,duration:.22})`) and re-runs `animateCharts(panel)`. Never re-render the page on tab switch.
 - Category panel = existing `renderCatChart` body, unchanged visually.
@@ -163,15 +170,19 @@ Month names in text come from `monthLabel(shiftMonth(ym, -1)).split(" ")[0]`.
 - Desktop (>= 900px): wrap the page in `.reports-grid`: left column = tiles, insights, breakdown; right column = patterns, watch, trend, split. Two columns `minmax(0,1fr) minmax(0,1fr)`, gap `var(--s-6)`, `align-items:start`. Below 900px it is a normal stack (grid with one column), so the DOM order is identical on both.
 
 ### 2.5 `js/ui/charts.js` additions
+
 - `weekdayBars(perDay, topIndex, { height = 120 })` -> SVG, `viewBox 0 0 340 H`, bars class `bar-anim` so `animateCharts` picks them up, labels under bars, exact per-day value as `<title>` on each bar.
 - `phaseBar({ early, mid, late })` -> element built like `splitBar` (three segments, `div.bar-anim`), legend with the three shares.
 - Export both.
 
 ### 2.6 Shared `segmented()` helper
+
 Move `segmented(options, active, onPick)` from `js/ui/modals.js` to `js/util/dom.js` (it only needs `el` and `buzz`, both already there), export it, and import it back into modals.js. Add roving `tabindex` + Left/Right arrow key handling inside it (small, benefits the quick-add sheet too). Behaviour of existing callers must not change.
 
 ### 2.7 CSS (`css/components.css`, Reports block)
+
 Add, using tokens only:
+
 - `.bd-tabs { margin-bottom: var(--s-4); }`
 - `.title-row` (button, full width, text-align left, grid `auto 1fr auto`, gap `var(--s-3)`, padding `10px 0`, border-top between rows, min-height 56px, `:active` background `var(--c-surface-2)`), `.title-rank` (26px circle, `.is-top` variant with `var(--grad-action)` + white), `.title-name`, `.title-count` (tiny pill like `.badge`), `.title-meta` (xsmall muted), `.title-amt` (num, 800), `.title-pct` (xsmall muted right), reuse `.cat-bar-track` + `.cat-bar` classes for the bar.
 - `.title-detail` (indented list, border-left 2px `var(--c-border-strong)`, rows 40px min, `.title-detail-row:active` feedback), `.title-more` (full-width ghost button, margin-top `var(--s-3)`).
@@ -183,10 +194,12 @@ Add, using tokens only:
 - Every tappable thing >= 44px tall. `prefers-reduced-motion` is already handled globally by `anim()`.
 
 ### 2.8 Service worker + docs
+
 - `sw.js`: add `"./js/insights.js"` to `SHELL`; bump `CACHE` to `"batwa-v15"`.
 - `README.md` "The four tabs" table, Reports row: "Month summary, spending breakdown by category or title, spending patterns (weekday, month phase, daily pace), worth-watching callouts, 6-month trend, fixed vs one-off".
 
 ## 3. Implementation order
+
 1. `js/insights.js` (pure). Write a throwaway Node fixture script in the scratchpad (not in the repo) that imports it with ~30 synthetic entries spanning weekdays/weekends, repeated titles, one adjustment, a previous month, and asserts: shares sum to ~100, weekend ratio > 1 for weekend-heavy data, `daysElapsed` respects `today`, `projection` null for a past month, deltas pick up a riser. Run with `node`.
 2. Move + export `segmented()` (2.6); confirm modals still import it.
 3. `charts.js` additions.
@@ -196,6 +209,7 @@ Add, using tokens only:
 7. `node --check` every changed `.js` file. Serve with `python -m http.server 8000` (or `npx serve`) from the repo root and load `http://localhost:8000` in a browser if one can be driven from this environment; otherwise state clearly that the browser pass was not done.
 
 ## 4. Acceptance checklist
+
 - Reports opens on the Category tab and looks the same as before in that tab.
 - Title tab: top 5 by total, `xN` counts, share %, bars; "Show N more" reveals the rest and flips to "Show less"; row tap expands its transactions; tapping a transaction opens the edit sheet; the tab choice survives switching months.
 - Patterns card: weekday bars with top day highlighted; phase bar; three stat tiles readable at 320px; pace line only in the current month.

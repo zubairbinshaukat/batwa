@@ -2,7 +2,7 @@
 
 import { openDB, ensureSchema, getMeta, setMeta } from "./db.js";
 import {
-  hasPin, hasDeviceKey, isFirstRun, unlockWithDeviceKey,
+  hasPin, hasDeviceKey, isFirstRun, unlockWithDeviceKey, unlockWithSession,
   showSetup, showLock, showOnboarding, showAccountsStep, initAutoLock,
 } from "./auth.js";
 import { loadLedger, onChange } from "./ledger.js";
@@ -253,7 +253,8 @@ function initOnlineState() {
 async function unlockFlow() {
   unlocked = false;
   let firstRun = false;
-  if (await hasPin()) await showLock();
+  // a refresh (or the SW's own reload) must not re-ask for the PIN
+  if (await hasPin()) { if (!(await unlockWithSession())) await showLock(); }
   else if (await hasDeviceKey()) await unlockWithDeviceKey();
   else if (await isFirstRun()) { firstRun = true; await showOnboarding(); }
   else await showSetup();

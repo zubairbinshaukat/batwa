@@ -3,12 +3,20 @@
 // The PIN is never stored — only a salt and an AES-GCM verification token.
 
 import { openDB, getMeta, setMeta, dbGet } from "./db.js";
-import { deriveKey, encrypt, decrypt, randomSalt, b64, unb64 } from "./crypto.js";
+import { deriveKey, deriveKeyBits, importAesKey, encrypt, decrypt, randomSalt, b64, unb64 } from "./crypto.js";
+import {
+  bioAvailable, bioHint, isBioEnrolled, enrollBio, unwrapWithBio, rewrapBio, removeBio,
+} from "./biometric.js";
+import { saveSession, restoreSession, clearSession, touchHidden, touchVisible } from "./session.js";
 import { $, el, esc, anim, animTo, motionOK, buzz } from "./util/dom.js";
 import { icon } from "./ui/icons.js";
 
 const VERIFY_TOKEN = "batwa-ok";
 const LOCK_TIMEOUT_MS = 60000; // relock after 60s in background
+/** After this many biometric failures the keypad is offered first. */
+export const BIO_MAX_FAILS = 3;
+/** A get() that rejects faster than this never showed a prompt — don't blame the user. */
+const BIO_NO_PROMPT_MS = 300;
 
 let _key = null;         // in-memory AES key while unlocked
 let _mode = "none";      // "pin" | "device" | "none" — synchronous view of the key mode
@@ -61,6 +69,18 @@ export async function createDeviceKey() {
   await setMeta("deviceKey", raw);
   _key = key;
   _mode = "device";
+  return key;
+}
+
+/**
+ * Boot path for a page reload: the key is still in this browsing session, so
+ * asking for the PIN again would be theatre. Null means "show the lock".
+ */
+export async function unlockWithSession() {
+  const key = await restoreSession(LOCK_TIMEOUT_MS);
+  if (!key) return null;
+  _key = key;
+  _mode = "pin";
   return key;
 }
 
@@ -147,6 +167,14 @@ export async function changePin(oldPin, newPin) {
   });
   _key = newKey;
   _mode = "pin";
+  await saveSession(newKey);
+  // The fingerprint wraps a copy of the PIN key, so it has to follow the key.
+  if (await isBioEnrolled()) {
+    const bits = await deriveKeyBits(newPin, salt);
+    const res = await rewrapBio(bits);
+    new Uint8Array(bits).fill(0);
+    if (!res.ok) return { ok: true, bioDropped: true };
+  }
   return { ok: true };
 }
 
@@ -182,6 +210,10 @@ export async function disablePin(currentPin) {
   });
   _key = newKey;
   _mode = "device";
+  // No lock screen means no fingerprint to unlock it with — the enrolment would
+  // just be an orphaned copy of a key nothing opens.
+  await removeBio();
+  await clearSession();
   return { ok: true };
 }
 
@@ -206,11 +238,13 @@ export async function enablePin(newPin) {
   });
   _key = newKey;
   _mode = "pin";
+  await saveSession(newKey);
   return { ok: true };
 }
 
 export function lock() {
   _key = null;
+  clearSession();
 }
 
 /** Relock automatically when backgrounded past the timeout. No-PIN mode never locks. */
@@ -219,13 +253,73 @@ export function initAutoLock(onLock) {
   document.addEventListener("visibilitychange", async () => {
     if (document.hidden) {
       hiddenAt = Date.now();
+      touchHidden(); // survives Chrome killing the tab while it's in the background
     } else if (hiddenAt && _key && Date.now() - hiddenAt > LOCK_TIMEOUT_MS) {
       // there is nothing to ask for without a PIN — relocking would just be a dead end
       if (!(await hasPin())) return;
       lock();
       onLock();
+    } else {
+      touchVisible();
     }
   });
+  window.addEventListener("pagehide", () => touchHidden());
+}
+
+/* ============================================================
+   Biometrics
+   The fingerprint never replaces the PIN — it unwraps a copy of the
+   PIN-derived key, which is still the only thing that opens the ledger.
+   ============================================================ */
+
+/**
+ * Enrol using a PIN the user has just typed. Needs the PIN because the key it
+ * wraps can only be re-derived from it. Must be called from a user tap.
+ */
+export async function enrollBiometricWithPin(pin) {
+  const wait = await cooldownLeft();
+  if (wait) return { ok: false, code: "cancel", reason: `Too many attempts — wait ${wait}s` };
+  const key = await tryPin(pin);
+  if (!key) return { ok: false, code: "cancel", reason: "That PIN is incorrect" };
+  const salt = await getMeta("pinSalt");
+  const bits = await deriveKeyBits(pin, salt);
+  try {
+    return await enrollBio(bits);
+  } finally {
+    new Uint8Array(bits).fill(0);
+  }
+}
+
+/** Fingerprint -> key bytes -> verified working key. Resolves the unlock. */
+export async function tryBiometricUnlock() {
+  const r = await unwrapWithBio();
+  if (!r.ok) {
+    if (r.code === "corrupt") await removeBio();
+    else if (r.code === "cancel" && r.elapsedMs >= BIO_NO_PROMPT_MS) {
+      await setMeta("bioFails", ((await getMeta("bioFails")) || 0) + 1);
+    }
+    return r;
+  }
+  const bits = r.keyBits;
+  try {
+    const key = await importAesKey(bits);
+    const verifier = await getMeta("pinVerifier");
+    const token = await decrypt(key, verifier);
+    if (token !== VERIFY_TOKEN) throw new Error("verifier");
+    _key = key;
+    _mode = "pin";
+    await setMeta("bioFails", 0);
+    await setMeta("pinAttempts", 0);
+    await setMeta("pinLockUntil", 0);
+    await saveSession(key);
+    return { ok: true, key };
+  } catch {
+    // The wrap opened but no longer matches the ledger's key — it's dead weight.
+    await removeBio();
+    return { ok: false, code: "corrupt", reason: "Fingerprint unlock was turned off" };
+  } finally {
+    bits.fill(0); // a Uint8Array view — zeroed in place, not copied
+  }
 }
 
 /* ============================================================
@@ -244,31 +338,54 @@ function keypadSVG() {
   </svg>`;
 }
 
-function renderLockScreen({ title, sub, back = null }) {
+function renderLockScreen({ title, sub, back = null, variant = "pin", bioKey = false }) {
   const root = $("#lock-root");
   root.innerHTML = "";
   const screen = el("div", { class: "lock-screen", role: "dialog", "aria-modal": "true", "aria-label": title });
+  // Both halves are always in the DOM: switching between fingerprint and keypad
+  // is a hidden-attribute toggle plus a fade, never a re-render.
   screen.innerHTML = `
     <div class="lock-logo">${keypadSVG()}</div>
+    <div class="lock-bio" hidden>
+      <button class="bio-btn" data-key="bio" type="button" aria-label="Unlock with fingerprint">
+        <span class="bio-ring" aria-hidden="true"></span>${icon("fingerprint", 44)}
+      </button>
+    </div>
     <div style="text-align:center">
       <div class="lock-title">${title}</div>
       <div class="lock-sub">${sub}</div>
     </div>
-    <div class="pin-dots" aria-hidden="true">
-      ${'<span class="pin-dot"></span>'.repeat(4)}
+    <div class="lock-pin-wrap">
+      <div class="pin-dots" aria-hidden="true">
+        ${'<span class="pin-dot"></span>'.repeat(4)}
+      </div>
+      <div class="lock-msg" role="alert"></div>
+      <div class="keypad"></div>
+      <div class="lock-offer-slot"></div>
     </div>
-    <div class="lock-msg" role="alert"></div>
-    <div class="keypad"></div>
+    <button class="lock-alt" type="button" hidden>Use PIN instead</button>
   `;
   const pad = $(".keypad", screen);
   for (const k of KEYS) {
-    if (k === "") { pad.append(el("span", { class: "key key-ghost", "aria-hidden": "true" })); continue; }
+    if (k === "") {
+      // the dead cell becomes the way back to the fingerprint sheet
+      if (bioKey) {
+        pad.append(el("button", {
+          class: "key key-bio", "data-key": "bio", "aria-label": "Use fingerprint",
+          html: icon("fingerprint", 28),
+        }));
+      } else {
+        pad.append(el("span", { class: "key key-ghost", "aria-hidden": "true" }));
+      }
+      continue;
+    }
     const btn = el("button", { class: "key" + (k === "del" ? " key-ghost" : ""), "data-key": k, "aria-label": k === "del" ? "Delete" : k });
     btn.innerHTML = k === "del"
       ? '<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 4H8l-6 8 6 8h13a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2z"/><path d="m18 9-6 6M12 9l6 6"/></svg>'
       : k;
     pad.append(btn);
   }
+  if (variant === "bio") showBioHalf(screen);
   if (back) {
     screen.prepend(el("button", {
       class: "lock-back", "aria-label": "Back", onclick: () => { buzz(6); back(); },
@@ -284,10 +401,46 @@ function renderLockScreen({ title, sub, back = null }) {
 }
 const $$keys = (screen) => [...screen.querySelectorAll(".key")];
 
+/** Fingerprint half in, keypad half out. Called synchronously during render. */
+function showBioHalf(screen) {
+  $(".lock-logo", screen).hidden = true;
+  $(".lock-bio", screen).hidden = false;
+  $(".lock-alt", screen).hidden = false;
+  $(".lock-pin-wrap", screen).hidden = true;
+  if (motionOK()) {
+    const ring = $(".bio-ring", screen);
+    gsap.fromTo(ring, { scale: 0.85, opacity: 0.55 },
+      { scale: 1.18, opacity: 0, duration: 1.6, repeat: -1, ease: "power1.out" });
+  }
+}
+
+/**
+ * Morph, don't re-mount: the fingerprint column fades out and the dots +
+ * keypad slide in inside the same .lock-screen.
+ */
+function morphToPin(screen, sub) {
+  const bio = $(".lock-bio", screen), alt = $(".lock-alt", screen), pin = $(".lock-pin-wrap", screen);
+  if (!pin.hidden) return;
+  if (sub) $(".lock-sub", screen).textContent = sub;
+  animTo([bio, alt], {
+    opacity: 0, y: -10, duration: 0.22, ease: "power2.in",
+    onComplete: () => {
+      bio.hidden = true; alt.hidden = true;
+      $(".lock-logo", screen).hidden = false;
+      pin.hidden = false;
+      anim($(".lock-logo", screen), { scale: 0.7, opacity: 0 }, { scale: 1, opacity: 1, duration: 0.35, ease: "back.out(1.6)" });
+      anim($$keys(screen), { y: 16, opacity: 0 },
+        { y: 0, opacity: 1, duration: 0.3, stagger: 0.02, ease: "power2.out" });
+      screen.focus();
+    },
+  });
+}
+
 function wireKeypad(screen, onDigit, onDelete) {
   screen.addEventListener("click", (e) => {
     const btn = e.target.closest("[data-key]");
     if (!btn) return;
+    if (btn.dataset.key === "bio") return; // owned by the biometric handler
     buzz(8);
     btn.dataset.key === "del" ? onDelete() : onDigit(btn.dataset.key);
   });
@@ -323,7 +476,7 @@ function dismiss(screen, done) {
  * `onBack` (onboarding only) shows a back chevron; the promise then never
  * settles — the caller re-renders its own screen instead.
  */
-export function showSetup({ onBack = null } = {}) {
+export function showSetup({ onBack = null, wantPin = false } = {}) {
   return new Promise((resolve) => {
     const screen = renderLockScreen({
       title: "Create your PIN",
@@ -347,10 +500,14 @@ export function showSetup({ onBack = null } = {}) {
             msg.textContent = "";
           }, 180);
         } else if (buf === first) {
-          const key = await persistNewPin(buf);
+          const pin = buf;
+          const key = await persistNewPin(pin);
           _key = key;
+          await saveSession(key);
           buzz(20);
-          dismiss(screen, () => resolve(key));
+          // wantPin keeps the PIN in hand for the fingerprint step; the legacy
+          // callers still just get the key.
+          dismiss(screen, () => resolve(wantPin ? { key, pin } : key));
         } else {
           first = null; buf = "";
           msg.textContent = "PINs didn't match — start again";
@@ -364,15 +521,113 @@ export function showSetup({ onBack = null } = {}) {
   });
 }
 
-/** Every open / resume: verify PIN. Resolves with the key. */
+/** A short toast without dragging the UI layer into auth.js statically. */
+function lockToast(text, iconName) {
+  import("./ui/toast.js").then((m) => m.toast(text, { icon: icon(iconName, 18) })).catch(() => {});
+}
+
+/**
+ * Every open / resume: fingerprint first when it's enrolled, keypad otherwise.
+ * Both halves live in one screen, so falling back is a morph, not a re-mount.
+ * Resolves with the key.
+ */
 export function showLock() {
-  return new Promise((resolve) => {
+  return new Promise(async (resolve) => {
+    const enrolled = bioHint() && (await isBioEnrolled());
+    const usable = enrolled && (await bioAvailable());
+    const fails = (await getMeta("bioFails")) || 0;
+    const bioFirst = usable && fails < BIO_MAX_FAILS;
+    const offer = !enrolled && (await bioAvailable()) && !(await getMeta("bioOfferDismissed"));
+
     const screen = renderLockScreen({
       title: "Welcome back",
-      sub: "Enter your PIN to unlock your money.",
+      sub: bioFirst ? "Touch the fingerprint sensor" : "Enter your PIN to unlock your money.",
+      variant: bioFirst ? "bio" : "pin",
+      bioKey: usable,
     });
     const msg = screen.querySelector(".lock-msg");
-    let buf = "", busy = false;
+    let buf = "", busy = false, bioBusy = false;
+    let armed = false; // the offer chip's "set up right after the PIN" intent
+
+    if (usable && !bioFirst) msg.textContent = "Use your PIN this time";
+    if (offer) mountOffer();
+
+    /* ---- biometric half ---- */
+
+    const bioBtn = $(".bio-btn", screen);
+
+    async function runBio({ auto = false } = {}) {
+      if (bioBusy || busy) return;
+      bioBusy = true;
+      bioBtn.classList.add("is-busy");
+      const r = await tryBiometricUnlock();
+      bioBtn.classList.remove("is-busy");
+      bioBusy = false;
+      if (r.ok) { buzz(20); dismiss(screen, () => resolve(r.key)); return; }
+      // Chrome refuses get() without a gesture: it rejects instantly and no
+      // sheet was ever shown, so there is nothing to tell the user about.
+      if (auto && r.code === "cancel" && r.elapsedMs < BIO_NO_PROMPT_MS) return;
+      if (r.code === "cancel") morphToPin(screen, "Use your PIN, or tap the fingerprint key to try again");
+      else morphToPin(screen, "Fingerprint unlock was turned off — enter your PIN");
+    }
+
+    screen.addEventListener("click", (e) => {
+      if (!e.target.closest('[data-key="bio"]')) return;
+      buzz(8);
+      runBio();
+    });
+    $(".lock-alt", screen).addEventListener("click", () => {
+      buzz(6);
+      morphToPin(screen, "Enter your PIN to unlock your money.");
+    });
+
+    // one best-effort auto attempt; the big button is the guaranteed path
+    if (bioFirst) requestAnimationFrame(() => runBio({ auto: true }));
+
+    /* ---- offer chip ---- */
+
+    function mountOffer() {
+      const chip = el("div", { class: "lock-offer", role: "group", "aria-label": "Fingerprint unlock" });
+      chip.innerHTML = `
+        <span class="lock-offer-ico">${icon("fingerprint", 20)}</span>
+        <span class="lock-offer-txt">
+          <span class="lock-offer-title">Unlock faster with your fingerprint</span>
+          <span class="lock-offer-sub">Set up after you enter your PIN</span>
+        </span>`;
+      const go = el("button", { class: "lock-offer-btn", type: "button" }, "Set up");
+      go.addEventListener("click", () => {
+        buzz(8);
+        armed = true;
+        chip.classList.add("is-armed");
+        $(".lock-offer-sub", chip).textContent = "Will set up right after your PIN";
+        go.innerHTML = icon("check", 16);
+        go.setAttribute("aria-label", "Will set up after your PIN");
+      });
+      const x = el("button", {
+        class: "lock-offer-x", type: "button", "aria-label": "Dismiss", html: icon("x", 15),
+        onclick: async () => {
+          buzz(6);
+          armed = false;
+          await setMeta("bioOfferDismissed", true);
+          try { localStorage.setItem("batwa.bioOffer", "0"); } catch {}
+          animTo(chip, { opacity: 0, y: 8, duration: 0.2, onComplete: () => chip.remove() });
+        },
+      });
+      chip.append(go, x);
+      $(".lock-offer-slot", screen).append(chip);
+      anim(chip, { y: 12, opacity: 0 }, { y: 0, opacity: 1, duration: 0.35, delay: 0.3, ease: "power2.out" });
+    }
+
+    /** Enrol with the PIN that just worked, then let the screen go. */
+    async function finishPin(key, pin) {
+      if (!armed) return dismiss(screen, () => resolve(key));
+      const res = await enrollBiometricWithPin(pin);
+      if (res.ok) lockToast("Fingerprint unlock is on", "check-circle");
+      else lockToast(res.reason || "Fingerprint wasn't set up", "alert");
+      dismiss(screen, () => resolve(key));
+    }
+
+    /* ---- keypad half ---- */
 
     async function refreshCooldown() {
       const until = (await getMeta("pinLockUntil")) || 0;
@@ -393,13 +648,18 @@ export function showLock() {
         paintDots(screen, buf.length);
         if (buf.length < 4) return;
         busy = true;
-        const key = await tryPin(buf);
+        const pin = buf;
+        const key = await tryPin(pin);
         if (key) {
           _key = key;
           await setMeta("pinAttempts", 0);
           await setMeta("pinLockUntil", 0);
+          if (fails) await setMeta("bioFails", 0);
+          await saveSession(key);
           buzz(20);
-          dismiss(screen, () => resolve(key));
+          // the fingerprint clearly isn't working — point at the way to fix it
+          if (usable && fails > 0) lockToast("Fingerprint didn't work? Reset it in Settings", "fingerprint");
+          await finishPin(key, pin);
         } else {
           const { attempts, waitMs } = await registerFailure();
           buf = "";
@@ -513,9 +773,43 @@ export function showOnboarding() {
     }
 
     async function toPinSetup() {
-      const key = await showSetup({ onBack: () => choice() });
+      const { key, pin } = await showSetup({ onBack: () => choice(), wantPin: true });
+      if (await bioAvailable()) { await bioStep(pin); }
       await markOnboarded();
       resolve(key);
+    }
+
+    /** Optional fingerprint offer, straight after the PIN is confirmed. */
+    function bioStep(pin) {
+      return new Promise((done) => {
+        const screen = onbScreen("Add your fingerprint");
+        const card = onbCard(screen, `
+          <div class="onb-logo onb-logo-sm">${icon("fingerprint", 28)}</div>
+          <div class="onb-title">Add your fingerprint?</div>
+          <p class="onb-lead onb-lead-sm">Open Batwa with a touch. Your PIN still works and is still the key — the fingerprint just unlocks it for you.</p>
+        `);
+        const err = el("div", { class: "lock-msg", role: "alert" });
+        const go = el("button", { class: "onb-btn" }, "Use fingerprint");
+        const skip = el("button", { class: "onb-btn onb-btn-ghost" }, "Not now");
+        card.append(err, el("div", { class: "onb-actions" }, go, skip),
+          el("p", { class: "onb-foot" }, "You can turn this on or off any time in Settings."));
+        anim([go, skip], { y: 14, opacity: 0 },
+          { y: 0, opacity: 1, duration: 0.4, stagger: 0.06, delay: 0.22, ease: "power2.out" });
+
+        let busy = false;
+        go.addEventListener("click", async () => {
+          if (busy) return;
+          busy = true; go.disabled = true; err.textContent = "";
+          const res = await enrollBiometricWithPin(pin);
+          busy = false; go.disabled = false;
+          if (!res.ok) { err.textContent = `${res.reason} — try again or skip`; return; }
+          buzz(20);
+          lockToast("Fingerprint unlock is on", "check-circle");
+          dismiss(screen, done);
+        });
+        skip.addEventListener("click", () => { buzz(8); dismiss(screen, done); });
+        focusFirst(card);
+      });
     }
 
     async function toNoPin(btn) {

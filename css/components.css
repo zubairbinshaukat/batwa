@@ -1068,6 +1068,96 @@ select.input {
 }
 .lock-msg { min-height: 22px; font-size: var(--fs-sm); font-weight: 600; color: #FFD48A; text-align: center; }
 
+/* ---- fingerprint unlock ---- */
+/* Both halves are rendered; only one is un-hidden, so the swap is a fade,
+   not a re-mount of the whole screen. */
+.lock-pin-wrap {
+  display: flex; flex-direction: column; align-items: center;
+  gap: var(--s-5);
+  width: 100%;
+}
+/* an author `display` outranks the UA's [hidden] rule — say it explicitly */
+.lock-logo[hidden], .lock-bio[hidden], .lock-pin-wrap[hidden], .lock-alt[hidden] { display: none; }
+.lock-bio { position: relative; display: grid; place-items: center; }
+.bio-btn {
+  position: relative;
+  width: 96px; height: 96px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.16);
+  backdrop-filter: blur(8px);
+  color: #fff;
+  display: grid; place-items: center;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.3);
+  transition: background var(--t-fast), transform var(--t-fast) var(--ease-out), opacity var(--t-fast);
+}
+.bio-btn:active { background: rgba(255,255,255,0.3); transform: scale(0.94); }
+.bio-btn.is-busy { opacity: 0.6; }
+.bio-ring {
+  position: absolute; inset: -6px;
+  border-radius: 50%;
+  border: 2px solid rgba(255,255,255,0.45);
+  pointer-events: none;
+}
+.lock-alt {
+  min-height: 44px;
+  padding: 0 20px;
+  width: auto;
+  border-radius: var(--r-pill);
+  background: transparent;
+  color: rgba(255,255,255,0.9);
+  border: 1.5px solid rgba(255,255,255,0.32);
+  font-size: var(--fs-sm);
+  font-weight: 700;
+}
+.lock-alt:active { background: rgba(255,255,255,0.14); }
+.key.key-bio { font-size: 0; }
+
+/* ---- "add your fingerprint" chip under the keypad ---- */
+.lock-offer-slot:empty { display: none; }
+.lock-offer {
+  display: grid;
+  grid-template-columns: auto 1fr auto auto;
+  gap: 10px;
+  align-items: center;
+  max-width: 360px; width: 100%;
+  padding: 10px 12px;
+  border-radius: var(--r-lg);
+  background: rgba(255,255,255,0.12);
+  border: 1px solid rgba(255,255,255,0.18);
+  backdrop-filter: blur(8px);
+}
+.lock-offer-ico { display: grid; place-items: center; color: #fff; }
+.lock-offer-txt { display: flex; flex-direction: column; gap: 2px; min-width: 0; text-align: left; }
+.lock-offer-title { font-weight: 800; font-size: var(--fs-sm); }
+.lock-offer-sub { font-size: var(--fs-xs); color: rgba(255,255,255,0.72); }
+.lock-offer-btn {
+  background: #fff;
+  color: var(--c-violet-deep);
+  font-weight: 800;
+  font-size: var(--fs-xs);
+  padding: 8px 12px;
+  border-radius: var(--r-pill);
+  display: grid; place-items: center;
+}
+.lock-offer-x {
+  width: 32px; height: 32px;
+  border-radius: 50%;
+  color: rgba(255,255,255,0.7);
+  background: transparent;
+  display: grid; place-items: center;
+}
+.lock-offer-x:active { background: rgba(255,255,255,0.16); }
+@media (max-height: 700px) {
+  .lock-screen { gap: var(--s-4); }
+  .lock-pin-wrap { gap: var(--s-4); }
+}
+@media (max-height: 640px) {
+  .lock-screen { gap: var(--s-3); }
+  .lock-pin-wrap { gap: var(--s-3); }
+  .lock-offer-sub { display: none; }
+  .bio-btn { width: 84px; height: 84px; }
+}
+
 /* =================== Reports =================== */
 .month-nav {
   display: flex; align-items: center; justify-content: space-between;
@@ -1339,6 +1429,8 @@ select.input {
 }
 .set-row + .set-row { border-top: 1px solid var(--c-border); }
 .set-row:active { background: var(--c-surface-2); }
+.set-row[disabled] { opacity: 0.55; }
+.set-row[disabled]:active { background: transparent; }
 .set-row .set-ico {
   width: 38px; height: 38px;
   border-radius: 12px;

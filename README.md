@@ -42,6 +42,8 @@ It opens full-screen without browser chrome and works fully offline afterwards.
 
 The 4-digit PIN derives the AES-256 encryption key (PBKDF2, 150k iterations). **There is no recovery.** If you forget the PIN, the data is mathematically gone. Keep an export backup (Settings → Backup → Export).
 
+Fingerprint unlock is optional and sits on top of the PIN: your phone's fingerprint (via WebAuthn PRF) opens a sealed copy of the same key, so the PIN is still the only thing that can recover the data. Turn it off any time in Settings → Security; refreshing the page keeps Batwa unlocked, closing it does not.
+
 ## Accounts (JazzCash, banks, cash…)
 
 Add your real accounts in Settings → Accounts (or straight from the home screen). Pick a logo (JazzCash, Easypaisa, NayaPay, SadaPay, Meezan, UBL, HBL, Bank Alfalah, MCB, cash…), optionally enter the current balance, and every Add Money / Add Expense sheet lets you pick which account the money moved through. Home shows a swipeable card per account with its live balance.
