@@ -78,3 +78,61 @@ export function trapFocus(container) {
 export function buzz(ms = 10) {
   try { navigator.vibrate && navigator.vibrate(ms); } catch {}
 }
+
+/**
+ * Segmented tab strip. `options` is [{ label, value }]; `onPick` gets the value.
+ * Roving tabindex: only the selected tab is in the Tab order, and Left/Right
+ * (plus Home/End) move — and activate — within the strip, the way a tablist
+ * is expected to behave.
+ */
+export function segmented(options, active, onPick) {
+  const seg = el("div", { class: "segmented", role: "tablist" });
+  let index = Math.max(0, options.findIndex((o) => o.value === active));
+
+  const btns = options.map((opt, i) => {
+    const on = i === index;
+    const b = el("button", {
+      type: "button",
+      role: "tab",
+      class: on ? "is-active" : "",
+      "aria-selected": String(on),
+      tabindex: on ? "0" : "-1",
+      onclick: () => pick(i),
+    }, opt.label);
+    seg.append(b);
+    return b;
+  });
+
+  function paint(focus = false) {
+    btns.forEach((b, j) => {
+      const on = j === index;
+      b.classList.toggle("is-active", on);
+      b.setAttribute("aria-selected", String(on));
+      b.tabIndex = on ? 0 : -1;
+    });
+    if (focus && btns[index]) btns[index].focus();
+  }
+
+  function pick(i, focus = false) {
+    if (i === index) return;
+    index = i;
+    paint(focus);
+    buzz(6);
+    onPick(options[i].value);
+  }
+
+  seg.addEventListener("keydown", (e) => {
+    const n = options.length;
+    if (!n) return;
+    let next = null;
+    if (e.key === "ArrowRight" || e.key === "ArrowDown") next = (index + 1) % n;
+    else if (e.key === "ArrowLeft" || e.key === "ArrowUp") next = (index - 1 + n) % n;
+    else if (e.key === "Home") next = 0;
+    else if (e.key === "End") next = n - 1;
+    if (next == null) return;
+    e.preventDefault();
+    pick(next, true);
+  });
+
+  return seg;
+}

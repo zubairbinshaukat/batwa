@@ -1,7 +1,7 @@
 // Bottom sheets (mobile) / centered modals (desktop):
 // add money, add/edit expense, confirm, and multi-choice sheets.
 
-import { $, el, esc, anim, animTo, trapFocus, motionOK, buzz } from "../util/dom.js";
+import { $, el, esc, anim, animTo, trapFocus, motionOK, buzz, segmented } from "../util/dom.js";
 import { state, addEntry, updateEntry, deleteEntry, deleteSeriesFuture, restoreEntries, transferMoney, accountBalance, balances } from "../ledger.js";
 import { isoDate, fmtMoney, shortDate } from "../util/format.js";
 import { CURRENCY } from "../util/format.js";
@@ -254,27 +254,6 @@ function categorySelect(selected) {
     sel.append(el("option", { value: c, selected: c === selected }, c));
   }
   return sel;
-}
-
-function segmented(options, active, onPick) {
-  const seg = el("div", { class: "segmented", role: "tablist" });
-  for (const opt of options) {
-    const b = el("button", {
-      type: "button",
-      role: "tab",
-      class: opt.value === active ? "is-active" : "",
-      "aria-selected": String(opt.value === active),
-      onclick: () => {
-        [...seg.children].forEach((c) => { c.classList.remove("is-active"); c.setAttribute("aria-selected", "false"); });
-        b.classList.add("is-active");
-        b.setAttribute("aria-selected", "true");
-        buzz(6);
-        onPick(opt.value);
-      },
-    }, opt.label);
-    seg.append(b);
-  }
-  return seg;
 }
 
 function toggleRow(labelText, checked, onFlip) {

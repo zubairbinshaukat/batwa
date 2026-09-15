@@ -9,6 +9,13 @@
   font-display: swap;
   src: url("../fonts/outfit-var.woff2") format("woff2");
 }
+@font-face {
+  font-family: "Caveat";
+  font-style: normal;
+  font-weight: 400 700;
+  font-display: swap;
+  src: url("../fonts/caveat-var.woff2") format("woff2");
+}
 
 *, *::before, *::after { box-sizing: border-box; }
 

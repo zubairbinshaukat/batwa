@@ -53,7 +53,7 @@ Add your real accounts in Settings → Accounts (or straight from the home scree
 | Tab | What's there |
 |---|---|
 | **Home** | The three balances (blur toggle), your account cards, upcoming expenses, quick add |
-| **Reports** | Month summary, spending by category, 6-month trend, fixed vs one-off, insights |
+| **Reports** | Month summary, spending breakdown by category or title, spending patterns (weekday, month phase, daily pace), worth-watching callouts, 6-month trend, fixed vs one-off |
 | **History** | Every transaction for a month, filterable by kind / status / account / category. Tap a row to edit it |
 | **Settings** | Accounts, cloud sync, backup, PIN, categories, install |
 

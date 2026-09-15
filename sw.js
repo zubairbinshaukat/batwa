@@ -1,5 +1,5 @@
 /* Batwa service worker — app shell cache only. Never touches user data. */
-const CACHE = "batwa-v14";
+const CACHE = "batwa-v16";
 
 const SHELL = [
   "./",
@@ -10,6 +10,7 @@ const SHELL = [
   "./css/components.css",
   "./css/onboarding.css",
   "./fonts/outfit-var.woff2",
+  "./fonts/caveat-var.woff2",
   "./branding/logo.svg",
   "./js/vendor/gsap.min.js",
   "./js/app.js",
@@ -17,6 +18,7 @@ const SHELL = [
   "./js/crypto.js",
   "./js/auth.js",
   "./js/ledger.js",
+  "./js/insights.js",
   "./js/sync.js",
   "./js/ui/home.js",
   "./js/ui/accounts.js",

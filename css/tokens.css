@@ -70,6 +70,8 @@
 
   /* ---- Type ---- */
   --font: "Outfit", -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-hand: "Caveat", "Segoe Print", "Bradley Hand", cursive;   /* tips, facts, insights */
+  --fs-hand: 1.25rem;   /* Caveat runs small; 20px reads like 15px body */
   --fs-xs:   0.75rem;   /* 12 */
   --fs-sm:   0.8125rem; /* 13 */
   --fs-base: 0.9375rem; /* 15 */
