@@ -19,7 +19,7 @@ import { mountBackupNudge } from "./nudge.js";
 import { parseTransactionSms, matchAccount, prefillTitle } from "./smsparse.js";
 import { LOGO_KINDS } from "./ui/accounts.js";
 import { isoDate } from "./util/format.js";
-import { initTheme } from "./theme.js";
+import { initTheme, resolvedTheme, setThemeMode, onThemeChange } from "./theme.js";
 
 /* ============================================================
    Views + nav
@@ -96,6 +96,30 @@ function renderView() {
 
 // re-render on any data change + queue a sync
 onChange(() => { renderView(); scheduleSync(); updateSyncPill(); });
+
+/* ============================================================
+   Theme toggle (header) — one tap flips light <-> dark. Settings keeps the
+   three-way choice, including "follow system"; this just flips away from
+   whatever is on screen right now.
+   ============================================================ */
+
+function paintThemeToggle() {
+  const b = $("#theme-toggle");
+  if (!b) return;
+  const dark = resolvedTheme() === "dark";
+  b.innerHTML = icon(dark ? "sun" : "moon", 19);
+  b.setAttribute("aria-label", dark ? "Switch to light theme" : "Switch to dark theme");
+}
+
+function initThemeToggle() {
+  const b = $("#theme-toggle");
+  if (!b) return;
+  paintThemeToggle();
+  onThemeChange(paintThemeToggle);
+  b.addEventListener("click", () => {
+    setThemeMode(resolvedTheme() === "dark" ? "light" : "dark");
+  });
+}
 
 /* ============================================================
    Sync status pill (right of the greeting)
@@ -333,6 +357,7 @@ async function unlockFlow() {
 async function boot() {
   try {
     initTheme();   // the inline boot script already painted it; this keeps it live
+    initThemeToggle();
     await openDB();
     await ensureSchema();
     initOnlineState();

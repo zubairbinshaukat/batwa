@@ -25,6 +25,13 @@
 }
 .icon-btn:active { transform: scale(0.92); }
 
+/* Theme toggle — sits beside the sync pill */
+.theme-toggle {
+  width: 38px; height: 38px;
+  flex: 0 0 auto;
+}
+:root[data-theme="dark"] .theme-toggle { color: var(--c-violet); }
+
 /* Sync status pill — right of the greeting */
 .sync-pill {
   display: inline-flex;

@@ -1,5 +1,5 @@
 /* Batwa service worker — app shell cache only. Never touches user data. */
-const CACHE = "batwa-v19";
+const CACHE = "batwa-v20";
 
 const SHELL = [
   "./",

@@ -15,7 +15,7 @@ import { shortDate } from "../util/format.js";
 import { manageAccountsSheet } from "./accounts.js";
 import { icon, catIcon } from "./icons.js";
 import { getInstallState, promptInstall } from "../app.js";
-import { getThemeMode, setThemeMode, themeLabel, resolvedTheme } from "../theme.js";
+import { getThemeMode, setThemeMode, themeLabel, resolvedTheme, onThemeChange } from "../theme.js";
 
 const ICONS = {
   sync:    ["cloud",       "var(--c-aqua-soft)",   "#0B87B8"],
@@ -136,9 +136,15 @@ export function renderSettings(view) {
   // ---- Appearance ----
   const appg = el("div", { class: "set-group" });
   appg.append(el("h2", {}, "Appearance"));
-  appg.append(el("div", { class: "card set-card" },
-    row("theme", "Theme", themeLabel(), themeSheet)));
+  const themeRow = row("theme", "Theme", themeLabel(), themeSheet);
+  appg.append(el("div", { class: "card set-card" }, themeRow));
   view.append(appg);
+  // the header toggle can flip the theme while this screen is open
+  const offTheme = onThemeChange(() => {
+    if (!themeRow.isConnected) { offTheme(); return; }
+    const val = themeRow.querySelector(".set-val");
+    if (val) val.textContent = themeLabel();
+  });
 
   // ---- Categories ----
   const cats = el("div", { class: "set-group" });
