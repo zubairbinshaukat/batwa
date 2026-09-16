@@ -104,7 +104,9 @@ body.is-onboarding { overflow: hidden; }
   min-height: 54px;
   border-radius: var(--r-pill);
   background: #fff;
-  color: var(--c-violet-deep);
+  /* onboarding always sits on the violet gradient, so this white pill needs the
+     light-theme violet in both themes — the dark token is too pale on white */
+  color: #4630C9;
   font-size: var(--fs-md);
   font-weight: 800;
   letter-spacing: -0.01em;

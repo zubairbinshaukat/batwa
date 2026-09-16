@@ -15,6 +15,7 @@ import { shortDate } from "../util/format.js";
 import { manageAccountsSheet } from "./accounts.js";
 import { icon, catIcon } from "./icons.js";
 import { getInstallState, promptInstall } from "../app.js";
+import { getThemeMode, setThemeMode, themeLabel, resolvedTheme } from "../theme.js";
 
 const ICONS = {
   sync:    ["cloud",       "var(--c-aqua-soft)",   "#0B87B8"],
@@ -29,6 +30,7 @@ const ICONS = {
   install: ["smartphone",  "var(--c-pos-soft)",    "var(--c-pos)"],
   rem:     ["clock",       "var(--c-warn-soft)",   "var(--c-warn)"],
   remtest: ["sparkles",    "var(--c-violet-soft)", "var(--c-violet)"],
+  theme:   ["moon",        "var(--c-violet-soft)", "var(--c-violet)"],
 };
 
 function row(key, label, value, onClick) {
@@ -130,6 +132,13 @@ export function renderSettings(view) {
   sec.append(warn);
   view.append(sec);
   if (pinOn) paintBioRow(bioSlot, bioNote, warn);
+
+  // ---- Appearance ----
+  const appg = el("div", { class: "set-group" });
+  appg.append(el("h2", {}, "Appearance"));
+  appg.append(el("div", { class: "card set-card" },
+    row("theme", "Theme", themeLabel(), themeSheet)));
+  view.append(appg);
 
   // ---- Categories ----
   const cats = el("div", { class: "set-group" });
@@ -626,4 +635,23 @@ function categoriesSheet() {
       el("div", { class: "row", style: "margin-top:16px" }, el("div", { class: "grow" }, inp), add),
     );
   });
+}
+
+/** Light / dark / follow the phone. Applies instantly, no reload. */
+async function themeSheet() {
+  const current = getThemeMode();
+  const mark = (m, label) => (m === current ? `✓ ${label}` : label);
+  const pick = await chooseSheet({
+    title: "Theme",
+    message: "Dark uses the same colours, dimmed for a dark room. System follows your phone.",
+    options: [
+      { value: "system", label: mark("system", "Follow system"), style: current === "system" ? "btn-primary" : "btn-ghost" },
+      { value: "light",  label: mark("light", "Light"),          style: current === "light" ? "btn-primary" : "btn-ghost" },
+      { value: "dark",   label: mark("dark", "Dark"),            style: current === "dark" ? "btn-primary" : "btn-ghost" },
+    ],
+  });
+  if (!pick || pick === current) return;
+  setThemeMode(pick);
+  toast(`Theme: ${themeLabel(pick)}`, { icon: icon(resolvedTheme() === "dark" ? "moon" : "sun", 18) });
+  refresh();
 }

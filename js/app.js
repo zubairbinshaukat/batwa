@@ -19,6 +19,7 @@ import { mountBackupNudge } from "./nudge.js";
 import { parseTransactionSms, matchAccount, prefillTitle } from "./smsparse.js";
 import { LOGO_KINDS } from "./ui/accounts.js";
 import { isoDate } from "./util/format.js";
+import { initTheme } from "./theme.js";
 
 /* ============================================================
    Views + nav
@@ -331,6 +332,7 @@ async function unlockFlow() {
 
 async function boot() {
   try {
+    initTheme();   // the inline boot script already painted it; this keeps it live
     await openDB();
     await ensureSchema();
     initOnlineState();

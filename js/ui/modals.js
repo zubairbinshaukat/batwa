@@ -232,7 +232,7 @@ function field(labelText, inputEl, errorText) {
 /**
  * Amount input, plus quick math: type `120+80` and a hint under the field
  * shows the running total; blur (or submit) replaces the text with the result.
- * Android's decimal keypad has no operators, so touch devices also get a
+ * Android's decimal keypad has no operators, so the field also gets a
  * four-button row that inserts one at the caret without stealing focus.
  */
 function amountField(value = "") {
@@ -270,7 +270,7 @@ function amountField(value = "") {
   input.addEventListener("blur", () => { settle(); hint.hidden = true; });
   paintHint();
 
-  if ("ontouchstart" in window) {
+  {
     const ops = el("div", { class: "amt-ops", hidden: true });
     const insert = (ch) => {
       const a = input.selectionStart ?? input.value.length;
@@ -282,16 +282,33 @@ function amountField(value = "") {
       paintHint();
     };
     for (const [label, ch] of [["+", "+"], ["−", "-"], ["×", "*"], ["÷", "/"]]) {
-      const b = el("button", { type: "button", class: "amt-op" }, label);
-      b.addEventListener("mousedown", (e) => e.preventDefault()); // keep the caret
-      b.addEventListener("touchstart", (e) => e.preventDefault(), { passive: false });
-      b.addEventListener("click", () => { buzz(6); insert(ch); });
+      const b = el("button", { type: "button", class: "amt-op", "aria-label": `Insert ${ch}` }, label);
+      // Cancelling touchstart keeps the caret, but it also cancels the click the
+      // browser would have synthesised — which is why these used to do nothing on
+      // a phone. Insert on pointerdown instead, and let click handle keyboard use.
+      let lastPointer = 0;
+      b.addEventListener("pointerdown", (e) => {
+        e.preventDefault();           // keep focus (and the caret) in the input
+        lastPointer = Date.now();
+        buzz(6);
+        insert(ch);
+      });
+      b.addEventListener("click", () => {
+        // a click that follows our own pointerdown is the same tap; anything
+        // else is Enter/Space on a focused button, which still has to work
+        if (Date.now() - lastPointer < 700) return;
+        buzz(6);
+        insert(ch);
+      });
       ops.append(b);
     }
     f.append(ops);
     input.addEventListener("focus", () => { ops.hidden = false; });
-    // a tap on an operator blurs the input first — give it a beat to land
-    input.addEventListener("blur", () => setTimeout(() => { ops.hidden = true; }, 200));
+    // a tap on an operator can still blur the input on some browsers — give it a
+    // beat to land, and keep the row up while the pointer is inside it
+    input.addEventListener("blur", () => setTimeout(() => {
+      if (!ops.contains(document.activeElement)) ops.hidden = true;
+    }, 250));
   }
 
   return { f, input };

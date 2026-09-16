@@ -451,8 +451,8 @@
 .tip {
   position: fixed;
   z-index: 90;
-  background: var(--c-ink);
-  color: #fff;
+  background: var(--c-inverse);
+  color: var(--c-on-inverse);
   font-size: var(--fs-sm);
   font-weight: 600;
   font-variant-numeric: tabular-nums;
@@ -981,8 +981,8 @@ select.input {
 .toast {
   pointer-events: auto;
   display: flex; align-items: center; gap: var(--s-3);
-  background: var(--c-ink);
-  color: #fff;
+  background: var(--c-inverse);
+  color: var(--c-on-inverse);
   padding: 13px 18px;
   border-radius: var(--r-md);
   box-shadow: var(--shadow-lift);
@@ -1132,7 +1132,8 @@ select.input {
 .lock-offer-sub { font-size: var(--fs-xs); color: rgba(255,255,255,0.72); }
 .lock-offer-btn {
   background: #fff;
-  color: var(--c-violet-deep);
+  /* the lock screen is violet in both themes — keep the light-theme violet */
+  color: #4630C9;
   font-weight: 800;
   font-size: var(--fs-xs);
   padding: 8px 12px;
@@ -1237,9 +1238,9 @@ select.input {
   transition: all var(--t-fast);
 }
 .filter-chip.is-active {
-  background: var(--c-ink);
-  border-color: var(--c-ink);
-  color: #fff;
+  background: var(--c-inverse);
+  border-color: var(--c-inverse);
+  color: var(--c-on-inverse);
 }
 
 .hist-row {
@@ -1503,8 +1504,8 @@ select.input {
 /* =================== Install banner =================== */
 .install-banner {
   display: flex; align-items: center; gap: var(--s-3);
-  background: var(--c-ink);
-  color: #fff;
+  background: var(--c-inverse);
+  color: var(--c-on-inverse);
   border-radius: var(--r-lg);
   padding: var(--s-4);
   margin-bottom: var(--s-4);
@@ -1667,3 +1668,47 @@ svg.ico { display: inline-block; vertical-align: -0.16em; flex: 0 0 auto; }
   font-variant-numeric: tabular-nums;
 }
 .cat-limit-row .cat-x-spacer { width: 24px; height: 24px; }
+
+/* =================== Dark theme touch-ups ===================
+   The tokens carry almost everything; these are the few places that were
+   painted with a literal light colour. Surfaces that sit on the violet
+   gradient (lock screen, onboarding, hero) already read as dark and are
+   deliberately left alone. */
+:root[data-theme="dark"] .bottom-nav {
+  background: rgba(20, 16, 44, 0.82);
+}
+:root[data-theme="dark"] .badge-once {
+  background: rgba(148, 160, 184, 0.16);
+  color: #A9B4CA;
+}
+:root[data-theme="dark"] .warn-card {
+  border-color: rgba(255, 180, 63, 0.28);
+  color: #FFCE85;
+}
+:root[data-theme="dark"] .nudge-banner {
+  border-color: rgba(255, 180, 63, 0.24);
+  background: linear-gradient(135deg, rgba(255, 180, 63, 0.12), rgba(255, 112, 137, 0.08));
+}
+:root[data-theme="dark"] .nudge-banner .nb-ico {
+  background: rgba(255, 255, 255, 0.1);
+}
+:root[data-theme="dark"] .sheet-backdrop {
+  background: rgba(4, 2, 16, 0.62);
+}
+:root[data-theme="dark"] .switch::after {
+  background: #F2F0FF;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.5);
+}
+/* Bank marks are transparent SVGs drawn for a white card — keep the card white
+   in both themes, just soften its edge so it doesn't glare. */
+:root[data-theme="dark"] .acc-logo {
+  border-color: rgba(255, 255, 255, 0.14);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.45);
+}
+:root[data-theme="dark"] .acc-invite {
+  border-color: rgba(155, 133, 255, 0.35);
+  background: rgba(155, 133, 255, 0.07);
+}
+:root[data-theme="dark"] .amt-ops .amt-op {
+  color: var(--c-ink);
+}

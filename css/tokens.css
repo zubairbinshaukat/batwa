@@ -17,6 +17,9 @@
   --c-muted:      #837FA3;
   --c-faint:      #B4B1CC;
   --c-on-grad:    #FFFFFF;
+  /* "inverse" chip/toast/tooltip surface: dark in light theme, lifted in dark */
+  --c-inverse:    #17133A;
+  --c-on-inverse: #FFFFFF;
   --c-on-grad-dim: rgba(255, 255, 255, 0.72);
 
   /* ---- Brand ---- */
@@ -38,6 +41,10 @@
   --rec-once:    #94A0B8;
   --rec-weekly:  #2FB6E9;
   --rec-monthly: #7C55F7;
+
+  /* ---- Chart fills that aren't brand colours (weekday bars) ---- */
+  --wd-bar-1: #D9D3FA;
+  --wd-bar-2: #B49AFF;
 
   /* ---- Gradients ---- */
   --grad-hero:   linear-gradient(140deg, #4F33E8 0%, #7C55F7 46%, #9E7BFF 72%, #3FBCF8 125%);
@@ -94,4 +101,72 @@
   /* Full height the fixed bottom nav occupies. Every page reserves at least
      this much space so content is never trapped behind it — on ANY breakpoint. */
   --nav-total: calc(var(--nav-h) + var(--safe-b));
+}
+
+/* ============================================================
+   Dark theme
+   Only the colour tokens flip — spacing, type and motion are shared.
+   `data-theme` is written on <html> by js/theme.js (and by the boot
+   script in index.html, before first paint, so there is no flash).
+   ============================================================ */
+:root[data-theme="dark"] {
+  color-scheme: dark;
+
+  /* ---- Canvas & surfaces ---- */
+  --c-bg:            #0E0B22;
+  --c-bg-deep:       #171331;
+  --c-surface:       #1A1638;
+  --c-surface-2:     #221D45;
+  --c-border:        rgba(255, 255, 255, 0.09);
+  --c-border-strong: rgba(255, 255, 255, 0.18);
+
+  /* ---- Ink ---- */
+  --c-ink:        #EFEDFB;
+  --c-ink-soft:   #C3BFE0;
+  --c-muted:      #938FB6;
+  --c-faint:      #625D8A;
+  --c-inverse:    #3A3270;
+  --c-on-inverse: #F3F1FF;
+
+  /* ---- Brand (lifted, so violet still reads on a dark canvas) ---- */
+  --c-violet:      #9B85FF;
+  --c-violet-deep: #BCACFF;
+  --c-violet-soft: #2B2358;
+  --c-aqua:        #56C7F2;
+  --c-aqua-soft:   #133447;
+
+  /* ---- Semantic ---- */
+  --c-pos:        #3ED9A4;
+  --c-pos-soft:   #103A2E;
+  --c-warn:       #FFB43F;
+  --c-warn-soft:  #3B2A0E;
+  --c-neg:        #FF7089;
+  --c-neg-soft:   #3D1420;
+
+  /* ---- Recurrence system ---- */
+  --rec-once:    #7C8AA6;
+  --rec-weekly:  #56C7F2;
+  --rec-monthly: #9B85FF;
+
+  /* ---- Chart fills that aren't brand colours (weekday bars) ---- */
+  --wd-bar-1: #342C63;
+  --wd-bar-2: #5B4BA8;
+
+  /* ---- Gradients ---- */
+  --grad-hero:   linear-gradient(140deg, #3A22C2 0%, #5E3ADF 46%, #7A5AF0 72%, #2C93D6 125%);
+  --grad-action: linear-gradient(135deg, #5B3DF0 0%, #8257F6 100%);
+  --grad-mint:   linear-gradient(135deg, #0B8B60 0%, #12B08A 100%);
+  --grad-danger: linear-gradient(140deg, #C42E4F 0%, #E05D50 100%);
+  --grad-page:
+    radial-gradient(60% 40% at 12% -6%, rgba(124, 85, 247, 0.22), transparent 70%),
+    radial-gradient(50% 36% at 96% 2%,  rgba(47, 182, 233, 0.16), transparent 70%),
+    radial-gradient(42% 30% at 70% 26%, rgba(18, 183, 127, 0.08), transparent 70%);
+
+  /* ---- Elevation: shadows read as depth only if they go darker than the canvas ---- */
+  --shadow-xs:    0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-card:  0 1px 2px rgba(0, 0, 0, 0.35), 0 10px 28px -10px rgba(0, 0, 0, 0.6);
+  --shadow-lift:  0 2px 6px rgba(0, 0, 0, 0.4), 0 18px 44px -12px rgba(0, 0, 0, 0.7);
+  --shadow-hero:  0 14px 36px -10px rgba(0, 0, 0, 0.7);
+  --shadow-btn:   0 8px 20px -6px rgba(46, 25, 160, 0.7);
+  --shadow-sheet: 0 -14px 56px rgba(0, 0, 0, 0.6);
 }

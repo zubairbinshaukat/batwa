@@ -15,6 +15,22 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="Batwa">
 
+  <script>
+    // Theme, before the first paint — a module import would land after it and
+    // flash white. Mirrors js/theme.js; keep the key and values in step.
+    (function () {
+      try {
+        var m = localStorage.getItem("batwa.theme");
+        if (m !== "light" && m !== "dark") {
+          m = matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+        }
+        document.documentElement.setAttribute("data-theme", m);
+        var meta = document.querySelector('meta[name="theme-color"]');
+        if (meta && m === "dark") meta.setAttribute("content", "#100D28");
+      } catch (e) {}
+    })();
+  </script>
+
   <link rel="stylesheet" href="css/tokens.css">
   <link rel="stylesheet" href="css/base.css">
   <link rel="stylesheet" href="css/components.css">
