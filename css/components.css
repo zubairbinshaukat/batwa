@@ -1543,3 +1543,127 @@ svg.ico { display: inline-block; vertical-align: -0.16em; flex: 0 0 auto; }
 .sync-status.is-off .sync-dot { background: var(--c-faint); }
 
 #view { min-height: 40vh; }
+
+/* =================== Daily helpers =================== */
+
+/* Quick math under the amount field — a one-line tip, so it wears the hand font */
+.amt-hint {
+  margin-top: 7px;
+  font-family: var(--font-hand);
+  font-size: var(--fs-hand);
+  line-height: 1.2;
+  color: var(--c-violet-deep);
+}
+.amt-hint[hidden] { display: none; }
+
+/* Android's decimal keypad has no operators — these do */
+.amt-ops { display: grid; grid-auto-flow: column; gap: var(--s-2); margin-top: 9px; }
+.amt-ops[hidden] { display: none; }
+.amt-ops .amt-op {
+  min-height: 40px;
+  border-radius: var(--r-md);
+  background: var(--c-surface-2);
+  border: 1.5px solid var(--c-border);
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--c-ink-soft);
+}
+.amt-ops .amt-op:active { transform: scale(0.95); }
+
+/* Backup nudge — same shape as the install banner, warmer and never violet,
+   so the two are never mistaken for each other */
+.nudge-banner {
+  display: flex; align-items: center; gap: var(--s-3);
+  flex-wrap: wrap;
+  background: var(--c-warn-soft);
+  color: var(--c-ink);
+  border: 1.5px solid rgba(232, 147, 12, 0.28);
+  border-radius: var(--r-lg);
+  padding: var(--s-4);
+  margin-bottom: var(--s-4);
+}
+.nudge-banner .nb-ico {
+  width: 44px; height: 44px;
+  border-radius: 14px;
+  background: #fff;
+  color: var(--c-warn);
+  display: grid; place-items: center;
+  flex: 0 0 auto;
+}
+.nudge-banner .grow { flex: 1 1 180px; min-width: 0; }
+.nudge-banner strong { display: block; font-size: var(--fs-base); }
+.nudge-banner p { font-size: var(--fs-sm); color: var(--c-ink-soft); }
+/* beside the text when it fits, right-aligned on its own row when it doesn't */
+.nudge-banner .nb-actions { display: flex; gap: var(--s-2); margin-left: auto; flex: 0 0 auto; }
+
+/* Category limits — the same track everywhere it appears */
+.limit-track {
+  flex: 1;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--c-border);
+  overflow: hidden;
+  display: block;
+}
+.limit-fill { display: block; height: 100%; border-radius: 2px; background: var(--c-pos); }
+.limit-fill.is-warn { background: var(--c-warn); }
+.limit-fill.is-over { background: var(--c-neg); }
+
+/* Reports: second line under a category row */
+.cat-limit {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: -4px 0 6px 22px;
+  font-size: var(--fs-xs);
+  color: var(--c-muted);
+}
+.cat-limit .cat-limit-txt { white-space: nowrap; text-align: right; font-weight: 600; }
+.cat-limit .cat-limit-txt.is-warn { color: var(--c-warn); }
+.cat-limit .cat-limit-txt.is-over { color: var(--c-neg); }
+
+/* Home: compact limits card */
+.limits-card { padding: var(--s-4); margin-bottom: var(--s-4); }
+.limits-card .limits-head {
+  display: flex; align-items: center; gap: 7px;
+  font-size: var(--fs-sm); font-weight: 700; color: var(--c-ink-soft);
+  margin-bottom: var(--s-3);
+}
+.limits-card .limit-row {
+  display: grid;
+  grid-template-columns: 18px minmax(56px, 1fr) minmax(40px, 1.4fr) auto;
+  align-items: center;
+  gap: var(--s-2);
+  padding: 5px 0;
+}
+.limits-card .limit-ico { color: var(--c-muted); display: inline-flex; }
+.limits-card .limit-num { color: var(--c-muted); white-space: nowrap; }
+.limits-card .limits-more { margin-top: var(--s-2); width: 100%; }
+
+/* Settings: one row per category, with its cap */
+.cat-limit-list { display: flex; flex-direction: column; }
+.cat-limit-row {
+  display: grid;
+  grid-template-columns: auto 1fr 110px auto;
+  align-items: center;
+  gap: var(--s-3);
+  padding: 8px 0;
+}
+.cat-limit-row + .cat-limit-row { border-top: 1px solid var(--c-border); }
+.cat-limit-row .cat-limit-ico { color: var(--c-muted); display: inline-flex; }
+.cat-limit-row .cat-limit-field { position: relative; display: block; }
+.cat-limit-row .cat-limit-cur {
+  position: absolute; left: 11px; top: 50%;
+  transform: translateY(-50%);
+  font-size: var(--fs-xs); font-weight: 700; color: var(--c-muted);
+  pointer-events: none;
+}
+.cat-limit-row .input-sm {
+  min-height: 40px;
+  padding: 8px 10px 8px 34px;
+  font-size: var(--fs-sm);
+  font-weight: 700;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.cat-limit-row .cat-x-spacer { width: 24px; height: 24px; }

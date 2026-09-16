@@ -61,6 +61,45 @@ Add your real accounts in Settings → Accounts (or straight from the home scree
 
 Adding an expense or income offers **Recent** chips under the title field — tap one to refill the title, amount, and category from the last time you logged it.
 
+## Quick math in the amount field
+
+Type a sum instead of a total: `120+80`, `1,500/3`, `2*450-100`, `(300+200)*2`.
+A hint under the field shows the running result, and leaving the field replaces
+it with the number. On a phone a `+ − × ÷` row appears under the field, because
+Android's number keypad doesn't have one.
+
+## Share a bank SMS to Batwa
+
+Once Batwa is installed to your home screen, it shows up in Android's share
+sheet. Long-press a bank or wallet SMS in Messages → Share → Batwa, and after
+the usual unlock the right sheet opens already filled in: amount, who it was to
+or from, the date, a category guess, and the account if Batwa can tell which one
+(wallets name themselves in the message; most banks only do so in the sender ID,
+which Android doesn't pass on — then you pick once and it remembers). The full
+message is kept as the note so you can check the reading. Everything stays
+editable, OTP and reversal messages are ignored, and opening Batwa normally is
+completely unchanged. iOS Safari has no share targets, so this is Android only.
+
+## Bill reminders and backup nudges
+
+Settings → Reminders can post a daily "2 bills due today" notification, even
+when Batwa is closed. Only the **due dates and how many bills fall on each** are
+kept outside the encrypted ledger to make that possible — never titles or
+amounts. It needs the app installed to the home screen (Chrome only runs
+background sync for installed apps) and Android decides how often it actually
+runs.
+
+Home will also remind you to export a backup if you have no cloud sync and
+haven't taken one in a month — there is no PIN recovery, so a backup file is the
+only way back.
+
+## Monthly category limits
+
+Settings → Categories lets you set a monthly cap per category. Reports then
+shows how each one is tracking (`Rs 4,200 of 6,000`, `9 days left`), Home gets a
+compact **Monthly limits** card, and going over shows up in "Worth watching".
+Leave a limit blank and nothing changes anywhere.
+
 ## Optional cloud sync (JSONBin)
 
 1. Create a free account at [jsonbin.io](https://jsonbin.io)
@@ -84,7 +123,9 @@ manifest.webmanifest  PWA manifest (icons, shortcuts)
 sw.js                 service worker — precaches the shell, cache-first offline
 css/                  tokens (design system) / base / components
 js/                   app, db (IndexedDB), crypto (PBKDF2+AES-GCM), auth (PIN),
-                      ledger (balances + recurrence), sync (JSONBin)
+                      ledger (balances + recurrence), sync (JSONBin),
+                      reminders (bill notifications), nudge (backup banner),
+                      smsparse (shared bank SMS), util/expr (quick math)
 js/ui/                home, reports, settings, modals, charts, toast
 js/vendor/gsap.min.js animations (self-hosted, works offline)
 fonts/                Outfit variable font (self-hosted)

@@ -1,17 +1,19 @@
 // Settings: sync config, backup, PIN, categories, install, about.
 
 import { $, el, esc, anim } from "../util/dom.js";
-import { state, saveCategories } from "../ledger.js";
+import { state, saveCategories, saveLimits } from "../ledger.js";
 import { changePin, disablePin, enablePin, getKeyMode, enrollBiometricWithPin } from "../auth.js";
 import { bioAvailable, isBioEnrolled, removeBio } from "../biometric.js";
 import { openSheet, closeSheet, confirmSheet, chooseSheet } from "./modals.js";
 import { toast } from "./toast.js";
 import {
   getSyncConfig, setSyncConfig, syncNow, syncStatusText,
-  exportEncrypted, exportPlain, importBackup, onSyncState, STARTER_JSON,
+  exportEncrypted, exportPlain, importBackup, onSyncState, STARTER_JSON, getLastExportAt,
 } from "../sync.js";
+import { remindersState, enableReminders, disableReminders, sendTestReminder } from "../reminders.js";
+import { shortDate } from "../util/format.js";
 import { manageAccountsSheet } from "./accounts.js";
-import { icon } from "./icons.js";
+import { icon, catIcon } from "./icons.js";
 import { getInstallState, promptInstall } from "../app.js";
 
 const ICONS = {
@@ -25,6 +27,8 @@ const ICONS = {
   cat:     ["tag",         "var(--c-aqua-soft)",   "#0B87B8"],
   acc:     ["credit-card", "var(--c-violet-soft)", "var(--c-violet)"],
   install: ["smartphone",  "var(--c-pos-soft)",    "var(--c-pos)"],
+  rem:     ["clock",       "var(--c-warn-soft)",   "var(--c-warn)"],
+  remtest: ["sparkles",    "var(--c-violet-soft)", "var(--c-violet)"],
 };
 
 function row(key, label, value, onClick) {
@@ -78,11 +82,26 @@ export function renderSettings(view) {
   // ---- Backup ----
   const bk = el("div", { class: "set-group" });
   bk.append(el("h2", {}, "Backup"));
-  bk.append(el("div", { class: "card set-card" },
-    row("exp", "Export data", "", exportSheet),
-    row("imp", "Import from file", "", importSheet),
-  ));
+  const expRow = row("exp", "Export data", "…", exportSheet);
+  bk.append(el("div", { class: "card set-card" }, expRow, row("imp", "Import from file", "", importSheet)));
   view.append(bk);
+  paintExportValue(expRow);
+
+  // ---- Reminders ----
+  const rem = el("div", { class: "set-group" });
+  rem.append(el("h2", {}, "Reminders"));
+  const remCard = el("div", { class: "card set-card" });
+  const remSlot = row("rem", "Bill reminders", "…", () => {});
+  const testRow = row("remtest", "Send a test reminder", "", async () => {
+    const res = await sendTestReminder();
+    toast(res.ok ? "Sent — check your notification shade" : res.reason,
+      { icon: icon(res.ok ? "check-circle" : "alert", 18) });
+  });
+  remCard.append(remSlot, testRow);
+  rem.append(remCard, el("p", { class: "xsmall muted", style: "margin-top:8px;padding:0 4px" },
+    "Reminders run in the background even when Batwa is closed. To do that, only the due dates and how many bills fall on each are kept outside the encrypted ledger — never titles or amounts. Android decides how often it runs (usually once or twice a day) and only for apps you actually use."));
+  view.append(rem);
+  paintRemindersRow(remSlot, testRow);
 
   // ---- Security ----
   const sec = el("div", { class: "set-group" });
@@ -146,6 +165,55 @@ export function renderSettings(view) {
     "Batwa · your money never leaves your device unencrypted"));
 
   anim(view.children, { y: 18, opacity: 0 }, { y: 0, opacity: 1, duration: 0.35, stagger: 0.06, ease: "power2.out" });
+}
+
+/* ---- backup + reminders rows (both resolve asynchronously) ---- */
+
+async function paintExportValue(r) {
+  if (!r.isConnected) return;
+  let at = null;
+  try { at = await getLastExportAt(); } catch {}
+  const val = r.querySelector(".set-val");
+  if (val) val.textContent = at ? `Last: ${shortDate(String(at).slice(0, 10))}` : "Never";
+}
+
+/**
+ * Chrome only exposes periodic sync to an installed PWA, and the permission can
+ * be revoked from Android settings behind our back — so this re-reads the real
+ * state on every paint rather than trusting the stored flag alone.
+ */
+async function paintRemindersRow(slot, testRow) {
+  if (!slot.isConnected) return;
+  const st = await remindersState();
+  const value = st === "on" ? "On" : st === "off" ? "Off" : "Unavailable";
+
+  const turnOn = async () => {
+    const res = await enableReminders();
+    toast(res.ok ? "Bill reminders are on" : res.reason, { icon: icon(res.ok ? "clock" : "alert", 18) });
+    refresh();
+  };
+  const turnOff = async () => {
+    await disableReminders();
+    toast("Bill reminders are off", { icon: icon("clock", 18) });
+    refresh();
+  };
+
+  const r = row("rem", "Bill reminders", value, st === "on" ? turnOff : st === "off" ? turnOn : () => {});
+  if (st !== "on" && st !== "off") r.disabled = true;
+  slot.replaceWith(r);
+  testRow.disabled = st !== "on";
+
+  if (st === "not-installed") {
+    r.insertAdjacentElement("afterend", el("div", { style: "padding:0 16px 12px" },
+      el("p", { class: "xsmall muted" }, "Install Batwa to the home screen first — Chrome only runs background sync for an installed app.")));
+  } else if (st === "off") {
+    let perm = "default";
+    try { perm = Notification.permission; } catch {}
+    if (perm === "denied") {
+      r.insertAdjacentElement("afterend", el("div", { style: "padding:0 16px 12px" },
+        el("p", { class: "xsmall muted" }, "Allow notifications for Batwa in Android settings.")));
+    }
+  }
 }
 
 /* ---- fingerprint unlock ---- */
@@ -494,22 +562,50 @@ function setupPinSheet() {
 
 function categoriesSheet() {
   openSheet("Categories", (body) => {
-    const wrap = el("div", { style: "display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px" });
+    const wrap = el("div", { class: "cat-limit-list" });
+    const draft = { ...state.limits };
+
     const paint = () => {
-      wrap.innerHTML = "";
+      wrap.replaceChildren();
       for (const c of state.categories) {
-        const pill = el("span", { class: "cat-pill" }, c);
+        const limitInput = el("input", {
+          class: "input input-sm", type: "text", inputmode: "numeric",
+          autocomplete: "off", placeholder: "No limit",
+          "aria-label": `Monthly limit for ${c}`,
+          value: draft[c] ? String(draft[c]) : "",
+        });
+        // digits only; empty clears the limit. Saved on change, never per keystroke.
+        limitInput.addEventListener("change", async () => {
+          const clean = limitInput.value.replace(/[^0-9]/g, "");
+          limitInput.value = clean;
+          if (clean && Number(clean) > 0) draft[c] = Number(clean);
+          else delete draft[c];
+          await saveLimits(draft);
+        });
+
+        const rowEl = el("div", { class: "cat-limit-row" },
+          el("span", { class: "cat-limit-ico", html: catIcon(c, 15) }),
+          el("span", { class: "small strong truncate" }, c),
+          el("span", { class: "cat-limit-field" }, el("span", { class: "cat-limit-cur" }, "Rs"), limitInput),
+        );
         if (c !== "Others") {
-          pill.append(el("button", {
+          rowEl.append(el("button", {
             class: "cat-x", "aria-label": `Remove ${c}`,
-            onclick: async () => { await saveCategories(state.categories.filter((x) => x !== c)); paint(); },
+            onclick: async () => {
+              delete draft[c];
+              await saveCategories(state.categories.filter((x) => x !== c));
+              paint();
+            },
             html: icon("x", 13),
           }));
+        } else {
+          rowEl.append(el("span", { class: "cat-x-spacer" }));
         }
-        wrap.append(pill);
+        wrap.append(rowEl);
       }
     };
     paint();
+
     const inp = el("input", { class: "input", type: "text", placeholder: "New category…", maxlength: "24" });
     const add = el("button", {
       class: "btn btn-primary", style: "flex:0 0 auto;min-width:90px",
@@ -522,10 +618,12 @@ function categoriesSheet() {
         paint();
       },
     }, "Add");
+
     body.append(
-      el("p", { class: "small muted", style: "margin-bottom:12px" }, "“Others” always stays — it's the fallback for anything deleted."),
+      el("p", { class: "small muted", style: "margin-bottom:12px" },
+        "Set a monthly limit to see how a category is tracking in Reports and on Home. Leave it blank for no limit. “Others” always stays — it's the fallback for anything deleted."),
       wrap,
-      el("div", { class: "row" }, el("div", { class: "grow" }, inp), add),
+      el("div", { class: "row", style: "margin-top:16px" }, el("div", { class: "grow" }, inp), add),
     );
   });
 }

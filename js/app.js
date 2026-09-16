@@ -5,7 +5,7 @@ import {
   hasPin, hasDeviceKey, isFirstRun, unlockWithDeviceKey, unlockWithSession,
   showSetup, showLock, showOnboarding, showAccountsStep, initAutoLock,
 } from "./auth.js";
-import { loadLedger, onChange } from "./ledger.js";
+import { loadLedger, onChange, state } from "./ledger.js";
 import { scheduleSync, syncNow, getSyncState, onSyncState } from "./sync.js";
 import { $, el, anim } from "./util/dom.js";
 import { renderHome } from "./ui/home.js";
@@ -15,6 +15,10 @@ import { renderSettings } from "./ui/settings.js";
 import { addMoneySheet, addExpenseSheet, quickAddSheet, sheetOpen } from "./ui/modals.js";
 import { toast } from "./ui/toast.js";
 import { icon } from "./ui/icons.js";
+import { mountBackupNudge } from "./nudge.js";
+import { parseTransactionSms, matchAccount, prefillTitle } from "./smsparse.js";
+import { LOGO_KINDS } from "./ui/accounts.js";
+import { isoDate } from "./util/format.js";
 
 /* ============================================================
    Views + nav
@@ -64,7 +68,7 @@ function fabSlot() {
   return slot;
 }
 
-function go(view) {
+export function go(view) {
   if (view === currentView && unlocked) return;
   currentView = view;
   history.replaceState({ view }, "");
@@ -79,7 +83,7 @@ function renderView() {
   const viewEl = $("#view");
   try {
     VIEWS[currentView].render(viewEl);
-    if (currentView === "home") mountInstallBanner();
+    if (currentView === "home") mountHomeBanners();
   } catch (err) {
     console.error(err);
     viewEl.innerHTML = `
@@ -148,15 +152,22 @@ export async function promptInstall() {
 window.addEventListener("beforeinstallprompt", (e) => {
   e.preventDefault();
   deferredPrompt = e;
-  if (unlocked && currentView === "home") mountInstallBanner();
+  if (unlocked && currentView === "home") mountHomeBanners();
 });
 
+// One banner at a time: install wins, the backup nudge takes what's left.
+async function mountHomeBanners() {
+  const showingInstall = await mountInstallBanner();
+  await mountBackupNudge($("#nudge-slot"), { installShowing: showingInstall });
+}
+
+/** Returns true when the install banner is on screen. */
 async function mountInstallBanner() {
   const slot = $("#install-slot");
-  if (!slot || isStandalone()) return;
-  if (await getMeta("installDismissed")) return;
+  if (!slot || isStandalone()) return false;
+  if (await getMeta("installDismissed")) return false;
   const state = getInstallState();
-  if (state !== "installable" && state !== "ios") return;
+  if (state !== "installable" && state !== "ios") return false;
   slot.innerHTML = "";
   const banner = el("div", { class: "install-banner" });
   banner.innerHTML = `
@@ -175,6 +186,57 @@ async function mountInstallBanner() {
   }));
   slot.append(banner);
   anim(banner, { y: -14, opacity: 0 }, { y: 0, opacity: 1, duration: 0.4, ease: "power2.out" });
+  return true;
+}
+
+/* ============================================================
+   Shared bank SMS (manifest share_target)
+   ============================================================ */
+
+/**
+ * The share payload, or null when this is an ordinary launch. Android puts the
+ * SMS body in `text`; `url` and `title` are usually empty but are joined in
+ * when present. `share=1` is what marks the launch — the body can be blank.
+ */
+function readSharedPayload() {
+  let q;
+  try { q = new URLSearchParams(location.search); } catch { return null; }
+  if (q.get("share") == null) return null;
+  const parts = [q.get("text"), q.get("url"), q.get("title")].filter(Boolean);
+  return parts.join("\n");
+}
+
+/** Parse the message and open the matching sheet, pre-filled and fully editable. */
+async function openSharedSheet(text) {
+  const note = String(text || "").slice(0, 300);
+  const parsed = parseTransactionSms(text);
+
+  if (!text || parsed.rejected) {
+    addExpenseSheet(null, { prefill: { note } });
+    const why = parsed.rejected === "reversal" ? "That's a reversal — nothing to add"
+      : parsed.rejected === "otp" ? "That message isn't a payment"
+        : "Couldn't read that message — fill it in yourself";
+    toast(why, { icon: icon("alert", 18) });
+    return;
+  }
+
+  let memory = {};
+  try { memory = (await getMeta("shareAccountMemory")) || {}; } catch {}
+  const providerName = parsed.providerKind ? LOGO_KINDS[parsed.providerKind]?.name : null;
+  const guess = parsed.categoryGuess;
+  const prefill = {
+    amount: parsed.amount ?? undefined,
+    title: prefillTitle(parsed, providerName),
+    date: parsed.date || isoDate(),
+    category: guess && state.categories.includes(guess) ? guess : "Others",
+    accountId: matchAccount(parsed, state.accounts, memory),
+    providerKind: parsed.providerKind,
+    note,
+  };
+
+  if (parsed.direction === "credit") addMoneySheet(null, { prefill });
+  else addExpenseSheet(null, { prefill });
+  if (parsed.amount == null) toast("Couldn't read an amount — type it in", { icon: icon("alert", 18) });
 }
 
 /* ============================================================
@@ -276,6 +338,11 @@ async function boot() {
     if ("scrollRestoration" in history) history.scrollRestoration = "manual";
     history.replaceState({ view: "home" }, "");
 
+    // Consumed once, and the query goes before the lock screen does — a reload
+    // must never re-open the sheet.
+    const shared = readSharedPayload();
+    if (shared !== null) history.replaceState({ view: "home" }, "", "./");
+
     await unlockFlow();
 
     initAutoLock(() => unlockFlow());
@@ -285,6 +352,8 @@ async function boot() {
     if (action === "add-expense") addExpenseSheet();
     if (action === "add-money") addMoneySheet();
     if (action) history.replaceState({ view: "home" }, "", "./");
+
+    if (shared !== null) await openSharedSheet(shared);
   } catch (err) {
     console.error(err);
     $("#view").innerHTML = `

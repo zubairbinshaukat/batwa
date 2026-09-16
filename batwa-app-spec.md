@@ -328,6 +328,68 @@ The non-negotiable: **it must not look like a default form app.** It should look
 
 ---
 
+## 10a. Daily helpers
+
+Four small things that make the app worth opening every day. Each degrades to
+nothing when the platform or the user hasn't opted in.
+
+### Bill reminders (Feature A)
+Chrome for Android has no Badging API, so an installed Batwa can never draw a
+count on its icon. Instead the service worker posts a local notification from a
+**periodic background sync** (`batwa-due`, `minInterval` 12 h) — Android then
+draws its own launcher dot. Settings → Reminders turns it on; the row reads
+`On` / `Off` / `Unavailable` (Firefox, Safari, or Chrome when Batwa is not
+installed). Body copy: `1 bill due today`, `2 overdue bills`,
+`2 overdue, 1 due today`. Tag `batwa-due`, so it replaces rather than stacks,
+and at most one per calendar day (`remindLastDay`).
+
+To run with the app closed, the worker needs facts outside the encrypted blob —
+so meta `dueSchedule` holds **dates and counts only**, never titles or amounts.
+`saveLedger()` rewrites it on every save while reminders are on. The worker
+reads `dueSchedule`, `remindLastDay` and `remindersOn` and nothing else; it has
+no key and could not open the blob if it tried. Android decides when periodic
+sync actually fires — there is no guaranteed time of day, and it never fires in
+a browser tab.
+
+### Backup nudge (Feature B)
+The PIN is the key and there is no recovery, so Home shows a soft warning banner
+(`#nudge-slot`, under the install slot) when there are ≥ 10 entries, cloud sync
+is off, no export in 30 days, and no active snooze. Install banner wins when
+both are eligible. `Export` writes an encrypted backup; `Later` snoozes 14 days.
+Every export stamps meta `lastExportAt`, which Settings → Backup shows on the
+`Export data` row.
+
+### Category limits (Feature C)
+Meta `catLimits` maps category → monthly cap (never in the blob, like
+`categories`). Settings → Categories is a row per category with an `Rs` limit
+input. Reports → Category gains a second line per limited category: a thin track
+(`--c-pos` under 80 %, `--c-warn` to 100 %, `--c-neg` over), `Rs 4,200 of 6,000`
+or `Rs 300 over`, plus `9 days left` for the current month. Insights add
+`limit-over`, `limit-near` and `limit-ok`. Home shows a compact `Monthly limits`
+card — only when at least one limit exists, and blurred with the rest of the
+money.
+
+### Quick math + shared SMS (Feature D)
+The amount field takes `120+80`, `1,500/3`, `(300+200)*2`; a hint under it shows
+the running total and blur folds the field down to the result. Evaluated by a
+hand-written tokeniser + recursive descent in `js/util/expr.js` — **never**
+`eval` or `Function`. Touch devices get a `+ − × ÷` row, because Android's
+decimal keypad has none.
+
+The manifest declares a `share_target` (`GET ./?share=1`), so sharing a bank or
+wallet SMS from the Android share sheet opens Batwa. After the normal unlock the
+app renders Home and opens **Add Expense** (debit) or **Add Money** (credit)
+pre-filled with amount, title, date, category and account; every field stays
+editable and the raw message rides along as the note so a mis-read is visible.
+`js/smsparse.js` is pure: it blanks the balance and fee spans before reading the
+amount, rejects OTP / reversal / no-direction messages, and treats the provider
+as nullable — traditional banks identify themselves only in the sender ID, which
+the share sheet drops. The query string is stripped with `history.replaceState`
+before the lock screen, so a reload never re-opens the sheet, and a launch with
+no `?share=1` behaves exactly as before.
+
+---
+
 ## 11. Quality floor
 
 - Responsive from 320px up.

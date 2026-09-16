@@ -1,12 +1,13 @@
 // Home: hero balances (blur + count-up reveal), upcoming expenses, quick actions.
 
 import { $, el, esc, anim, animTo, motionOK, buzz } from "../util/dom.js";
-import { fmtMoney, fmtCompact, fmtNum, dueHint, shortDate, greeting, CURRENCY } from "../util/format.js";
-import { state, balances, pendingExpenses, markPaid, unmarkPaid, deleteEntry, deleteSeriesFuture, restoreEntries } from "../ledger.js";
+import { fmtMoney, fmtCompact, fmtNum, dueHint, shortDate, greeting, thisMonth, CURRENCY } from "../util/format.js";
+import { state, balances, pendingExpenses, markPaid, unmarkPaid, deleteEntry, deleteSeriesFuture, restoreEntries, limitStatus } from "../ledger.js";
 import { addMoneySheet, addExpenseSheet, confirmSheet, chooseSheet } from "./modals.js";
 import { toast } from "./toast.js";
 import { renderAccountsRow, accountName } from "./accounts.js";
 import { icon, catIcon } from "./icons.js";
+import { go } from "../app.js";
 
 // Session-only: every launch starts blurred. Never persisted.
 let revealed = false;
@@ -86,6 +87,7 @@ export function renderHome(view) {
     <div class="home-grid">
       <div class="home-left">
         <div id="install-slot"></div>
+        <div id="nudge-slot"></div>
         <section class="hero-card ${negative ? "is-negative" : ""} ${revealed ? "" : "is-blurred"}" id="hero">
           <div class="hero-label">
             Free to spend
@@ -113,6 +115,7 @@ export function renderHome(view) {
       </div>
 
       <div class="home-right">
+        <div id="limits-slot"></div>
         <div id="expected-income-wrap"></div>
         <div class="section-head">
           <h2>Upcoming</h2>
@@ -130,6 +133,9 @@ export function renderHome(view) {
   // accounts row
   renderAccountsRow($("#acc-slot", view), { revealed });
 
+  // monthly limits — nothing at all when no limit is set
+  renderLimitsCard($("#limits-slot", view));
+
   // eye toggle
   $("#eye-btn", view).addEventListener("click", (e) => {
     e.stopPropagation();
@@ -139,6 +145,8 @@ export function renderHome(view) {
     hero.classList.toggle("is-blurred", !revealed);
     const accRow = $(".acc-row", view);
     if (accRow) accRow.classList.toggle("is-blurred", !revealed);
+    const limits = $(".limits-card", view);
+    if (limits) limits.classList.toggle("is-blurred", !revealed);
     const btn = $("#eye-btn", view);
     btn.innerHTML = eyeSVG(revealed);
     btn.setAttribute("aria-pressed", String(revealed));
@@ -183,6 +191,38 @@ export function renderHome(view) {
   anim($("#hero", view), { y: 24, opacity: 0, scale: 0.97 }, { y: 0, opacity: 1, scale: 1, duration: 0.55, ease: "power3.out" });
   anim([...($(".acc-row", view)?.children || $("#acc-slot", view).children)], { y: 18, opacity: 0 }, { y: 0, opacity: 1, duration: 0.4, stagger: 0.05, delay: 0.1, ease: "power2.out" });
   anim([...list.children], { y: 26, opacity: 0 }, { y: 0, opacity: 1, duration: 0.45, stagger: 0.07, delay: 0.12, ease: "power2.out" });
+}
+
+/**
+ * Compact "Monthly limits" card. Only the worst four fit; the rest live in
+ * Reports. Never rendered when no category has a limit — an empty state here
+ * would just be a nag about a feature the user hasn't opted into.
+ */
+function renderLimitsCard(slot) {
+  if (!slot) return;
+  const rows = limitStatus(thisMonth());
+  if (!rows.length) return;
+  const shown = rows.slice(0, 4);
+
+  const card = el("div", { class: `card limits-card ${revealed ? "" : "is-blurred"}` });
+  card.append(el("div", { class: "limits-head", html: `${icon("scale", 15)}<span>Monthly limits</span>` }));
+  for (const r of shown) {
+    const tone = r.over > 0 ? "is-over" : r.ratio >= 0.8 ? "is-warn" : "is-ok";
+    card.append(el("div", {
+      class: "limit-row",
+      html: `<span class="limit-ico">${catIcon(r.category, 14)}</span>
+        <span class="small strong truncate">${esc(r.category)}</span>
+        <span class="limit-track"><span class="limit-fill ${tone}" style="width:${Math.min(100, Math.round(r.ratio * 100))}%"></span></span>
+        <span class="limit-num xsmall num blurable">${fmtCompact(r.spent)} / ${fmtCompact(r.limit)}</span>`,
+    }));
+  }
+  if (rows.length > shown.length) {
+    card.append(el("button", {
+      type: "button", class: "btn btn-ghost btn-sm limits-more",
+      onclick: () => { buzz(6); go("reports"); },
+    }, `+${rows.length - shown.length} more in Reports`));
+  }
+  slot.append(card);
 }
 
 function incomeCard(e) {

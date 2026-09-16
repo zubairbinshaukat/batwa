@@ -302,6 +302,12 @@ export function downloadJSON(obj, filename) {
   setTimeout(() => URL.revokeObjectURL(url), 2000);
 }
 
+/** When the last backup file was written (meta, local only — never in a payload). */
+export const getLastExportAt = () => getMeta("lastExportAt");
+
+/** The browser can silently drop a download, so this is "we offered a file", not proof. */
+const stampExport = () => setMeta("lastExportAt", new Date().toISOString());
+
 export async function exportEncrypted() {
   const blob = await dbGet("entries", "blob");
   downloadJSON({
@@ -312,6 +318,7 @@ export async function exportEncrypted() {
     cipher: blob,
     categories: state.categories,
   }, `batwa-backup-${new Date().toISOString().slice(0, 10)}.json`);
+  await stampExport();
 }
 
 export async function exportPlain() {
@@ -323,6 +330,7 @@ export async function exportPlain() {
     accounts: state.accounts,
     categories: state.categories,
   }, `batwa-plain-${new Date().toISOString().slice(0, 10)}.json`);
+  await stampExport();
 }
 
 /**

@@ -16,7 +16,13 @@ export const state = {
   entries: [],
   accounts: [],   // { id, name, kind } — kind picks the logo
   categories: [...DEFAULT_CATEGORIES],
+  limits: {},     // category -> monthly cap (meta `catLimits`, never in the blob)
 };
+
+// Mirrors meta `remindersOn`. When set, every save republishes the due-date
+// counts the service worker reads — see dueSchedule() below.
+let remindersOn = false;
+export const setRemindersFlag = (on) => { remindersOn = !!on; };
 
 // ---- change notifications (app.js re-renders + schedules sync) ----
 const listeners = new Set();
@@ -32,6 +38,30 @@ export async function saveLedger() {
   const cipher = await encrypt(key, { entries: state.entries, accounts: state.accounts });
   await dbPut("entries", "blob", cipher);
   await setMeta("updatedAt", new Date().toISOString());
+  // Dates and counts only — the reminder needs them outside the blob, and the
+  // SW can read nothing else.
+  if (remindersOn) await setMeta("dueSchedule", dueSchedule(state.entries));
+}
+
+/**
+ * Pending bills grouped by their real due date, within the last 90 / next 60
+ * days, ascending. Pure — fixture-tested. No titles, no amounts: this is the
+ * only ledger fact that lives outside the encrypted blob.
+ */
+export function dueSchedule(entries, today = isoDate()) {
+  const base = parseDay(today).getTime();
+  const from = isoDate(new Date(base - 90 * 86400000));
+  const to = isoDate(new Date(base + 60 * 86400000));
+  const counts = new Map();
+  for (const e of entries || []) {
+    if (e.kind !== "expense" || e.status !== "pending" || !e.dueDate) continue;
+    const d = String(e.dueDate).slice(0, 10);
+    if (d < from || d > to) continue;
+    counts.set(d, (counts.get(d) || 0) + 1);
+  }
+  return [...counts.entries()]
+    .sort((a, b) => (a[0] < b[0] ? -1 : 1))
+    .map(([date, count]) => ({ date, count }));
 }
 
 export async function loadLedger() {
@@ -46,6 +76,8 @@ export async function loadLedger() {
     state.accounts = [];
   }
   state.categories = (await getMeta("categories")) || [...DEFAULT_CATEGORIES];
+  state.limits = (await getMeta("catLimits")) || {};
+  remindersOn = !!(await getMeta("remindersOn"));
   const created = await materializeRecurring();
   if (created) await saveLedger();
 }
@@ -55,7 +87,50 @@ export async function saveCategories(cats) {
   if (!list.includes("Others")) list.push("Others"); // Others always exists
   state.categories = list;
   await setMeta("categories", list);
+  // a limit on a category that no longer exists would be invisible forever
+  const kept = {};
+  for (const [c, v] of Object.entries(state.limits)) if (list.includes(c)) kept[c] = v;
+  if (Object.keys(kept).length !== Object.keys(state.limits).length) {
+    state.limits = kept;
+    await setMeta("catLimits", kept);
+  }
   emit();
+}
+
+/** Per-category monthly caps. Non-positive or unknown categories are dropped. */
+export async function saveLimits(map) {
+  const next = {};
+  for (const [c, v] of Object.entries(map || {})) {
+    const n = Number(v);
+    if (n > 0 && state.categories.includes(c)) next[c] = Math.round(n);
+  }
+  state.limits = next;
+  await setMeta("catLimits", next);
+  emit();
+}
+
+/**
+ * Where each limited category stands in "YYYY-MM", worst first.
+ * `daysLeft` is 0 for any month that is not the current one.
+ */
+export function limitStatus(ym, { today = isoDate() } = {}) {
+  const { byCat } = monthSummary(ym);
+  const [y, m] = ym.split("-").map(Number);
+  const daysInMonth = new Date(y, m, 0).getDate();
+  const daysLeft = ym === today.slice(0, 7) ? Math.max(0, daysInMonth - Number(today.slice(8, 10))) : 0;
+  return Object.entries(state.limits)
+    .filter(([cat, lim]) => lim > 0 && state.categories.includes(cat))
+    .map(([category, limit]) => {
+      const spent = byCat[category] || 0;
+      return {
+        category, limit, spent,
+        ratio: limit > 0 ? spent / limit : 0,
+        left: Math.max(0, limit - spent),
+        over: Math.max(0, spent - limit),
+        daysLeft,
+      };
+    })
+    .sort((a, b) => b.ratio - a.ratio);
 }
 
 // ---- CRUD ----

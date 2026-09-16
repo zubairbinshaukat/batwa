@@ -8,6 +8,8 @@ import { CURRENCY } from "../util/format.js";
 import { toast } from "./toast.js";
 import { logoTile, accountName, addAccountSheet } from "./accounts.js";
 import { icon } from "./icons.js";
+import { evalAmountExpr, looksLikeExpr } from "../util/expr.js";
+import { getMeta, setMeta } from "../db.js";
 
 let current = null; // { backdrop, sheet, release, resolveClosed }
 let pendingHooks = null; // collects onSheetMounted/onSheetClosed while build() runs
@@ -227,6 +229,12 @@ function field(labelText, inputEl, errorText) {
   return f;
 }
 
+/**
+ * Amount input, plus quick math: type `120+80` and a hint under the field
+ * shows the running total; blur (or submit) replaces the text with the result.
+ * Android's decimal keypad has no operators, so touch devices also get a
+ * four-button row that inserts one at the caret without stealing focus.
+ */
 function amountField(value = "") {
   const wrap = el("div", { class: "input-amount-wrap" });
   const input = el("input", {
@@ -240,12 +248,83 @@ function amountField(value = "") {
   wrap.append(el("span", { class: "cur-prefix" }, CURRENCY.symbol), input);
   const f = field("Amount", wrap, "Enter an amount");
   f.querySelector("label").setAttribute("for", "");
+
+  const hint = el("div", { class: "amt-hint", hidden: true });
+  f.append(hint);
+
+  function paintHint() {
+    if (!looksLikeExpr(input.value)) { hint.hidden = true; return; }
+    const v = evalAmountExpr(input.value);
+    hint.hidden = false;
+    hint.textContent = v == null ? "That's not a sum Batwa can work out" : `= ${fmtMoney(v)}`;
+  }
+  /** Fold a valid expression down to its result, so the field always submits a number. */
+  function settle() {
+    if (!looksLikeExpr(input.value)) return;
+    const v = evalAmountExpr(input.value);
+    if (v == null) return;
+    input.value = String(v);
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+  }
+  input.addEventListener("input", paintHint);
+  input.addEventListener("blur", () => { settle(); hint.hidden = true; });
+  paintHint();
+
+  if ("ontouchstart" in window) {
+    const ops = el("div", { class: "amt-ops", hidden: true });
+    const insert = (ch) => {
+      const a = input.selectionStart ?? input.value.length;
+      const b = input.selectionEnd ?? a;
+      input.value = input.value.slice(0, a) + ch + input.value.slice(b);
+      const at = a + ch.length;
+      try { input.setSelectionRange(at, at); } catch {}
+      input.focus();
+      paintHint();
+    };
+    for (const [label, ch] of [["+", "+"], ["−", "-"], ["×", "*"], ["÷", "/"]]) {
+      const b = el("button", { type: "button", class: "amt-op" }, label);
+      b.addEventListener("mousedown", (e) => e.preventDefault()); // keep the caret
+      b.addEventListener("touchstart", (e) => e.preventDefault(), { passive: false });
+      b.addEventListener("click", () => { buzz(6); insert(ch); });
+      ops.append(b);
+    }
+    f.append(ops);
+    input.addEventListener("focus", () => { ops.hidden = false; });
+    // a tap on an operator blurs the input first — give it a beat to land
+    input.addEventListener("blur", () => setTimeout(() => { ops.hidden = true; }, 200));
+  }
+
   return { f, input };
 }
 
 function parseAmount(raw) {
-  const n = parseFloat(String(raw).replace(/[, ]/g, ""));
+  const str = String(raw);
+  if (looksLikeExpr(str)) return evalAmountExpr(str);
+  const n = parseFloat(str.replace(/[, ]/g, ""));
   return isFinite(n) && n > 0 ? Math.round(n * 100) / 100 : null;
+}
+
+/**
+ * After a shared bank SMS is saved, remember which account the user picked for
+ * that brand — the next share from the same wallet lands on it by itself.
+ */
+async function rememberShareAccount(kind, accountId) {
+  if (!kind || !accountId) return;
+  try {
+    const mem = (await getMeta("shareAccountMemory")) || {};
+    if (mem[kind] === accountId) return;
+    mem[kind] = accountId;
+    await setMeta("shareAccountMemory", mem);
+  } catch {}
+}
+
+/** One-line banner above a form that was filled in from a shared message. */
+function prefillNote(prefill) {
+  if (!prefill) return null;
+  return el("p", { class: "form-note is-info", style: "margin-bottom:var(--s-4)" },
+    el("span", {}, prefill.note && !prefill.amount
+      ? "Filled from a shared message — Batwa couldn't read an amount."
+      : "Filled from a shared message — check the amount."));
 }
 
 function categorySelect(selected) {
@@ -461,9 +540,9 @@ function deleteRow(entry, { kindLabel, isExpense }) {
    Add Money
    ============================================================ */
 
-function buildMoneyForm(entry) {
-  const { f: amtF, input: amt } = amountField(entry?.amount);
-  const desc = el("input", { class: "input", type: "text", placeholder: "Salary, freelance, gift…", value: entry?.title || "" });
+function buildMoneyForm(entry, prefill = null) {
+  const { f: amtF, input: amt } = amountField(entry?.amount ?? prefill?.amount);
+  const desc = el("input", { class: "input", type: "text", placeholder: "Salary, freelance, gift…", value: entry?.title || prefill?.title || "" });
   const descF = field("Description", desc, "What is this money from?");
   if (!entry) {
     const sugg = suggestionRow("income", desc, (src) => {
@@ -476,7 +555,7 @@ function buildMoneyForm(entry) {
   }
 
   let pending = entry ? entry.status === "pending" : false;
-  const date = el("input", { class: "input", type: "date", value: (entry?.paidAt || entry?.dueDate || "").slice(0, 10) || isoDate() });
+  const date = el("input", { class: "input", type: "date", value: (entry?.paidAt || entry?.dueDate || "").slice(0, 10) || prefill?.date || isoDate() });
   const dateLabel = el("label", {}, pending ? "Expected date" : "Date");
   const dateF = el("div", { class: "field" }, dateLabel, date);
   const pendingWrap = el("div", { class: "field" },
@@ -485,14 +564,16 @@ function buildMoneyForm(entry) {
       dateLabel.textContent = pending ? "Expected date" : "Date";
     }));
 
-  const acc = accountPicker(entry ? entry.accountId : undefined);
-  const cat = categorySelect(entry?.category || "Others");
+  // `null` from a prefill means "we couldn't tell" — leave the picker unset
+  // rather than silently reusing the last account.
+  const acc = accountPicker(entry ? entry.accountId : prefill ? prefill.accountId ?? null : undefined);
+  const cat = categorySelect(entry?.category || prefill?.category || "Others");
   const catF = field("Category (optional)", cat);
 
   const save = el("button", { class: "btn btn-mint btn-block", type: "submit" },
     entry ? "Save changes" : "Add money");
 
-  const form = el("form", {}, amtF, descF, dateF, pendingWrap, acc.root, catF, el("div", { class: "form-actions" }, save),
+  const form = el("form", {}, prefillNote(prefill), amtF, descF, dateF, pendingWrap, acc.root, catF, el("div", { class: "form-actions" }, save),
     entry ? deleteRow(entry, { kindLabel: "income", isExpense: false }) : null);
   form.addEventListener("submit", async (e) => {
     e.preventDefault();
@@ -513,6 +594,7 @@ function buildMoneyForm(entry) {
     };
     if (entry) await updateEntry(entry.id, data);
     else await addEntry(data);
+    if (prefill) await rememberShareAccount(prefill.providerKind, data.accountId);
     closeSheet();
     toast(
       entry ? "Income updated" : pending ? `${desc.value.trim()} added as pending` : `${CURRENCY.symbol} ${amount.toLocaleString()} added`,
@@ -522,17 +604,17 @@ function buildMoneyForm(entry) {
   return form;
 }
 
-export function addMoneySheet(entry = null) {
-  openSheet(entry ? "Edit income" : "Add money", (body) => body.append(buildMoneyForm(entry)));
+export function addMoneySheet(entry = null, { prefill = null } = {}) {
+  openSheet(entry ? "Edit income" : "Add money", (body) => body.append(buildMoneyForm(entry, prefill)));
 }
 
 /* ============================================================
    Add / Edit Expense
    ============================================================ */
 
-function buildExpenseForm(entry) {
-  const { f: amtF, input: amt } = amountField(entry?.amount);
-  const title = el("input", { class: "input", type: "text", placeholder: "Hostel fees, groceries…", value: entry?.title || "" });
+function buildExpenseForm(entry, prefill = null) {
+  const { f: amtF, input: amt } = amountField(entry?.amount ?? prefill?.amount);
+  const title = el("input", { class: "input", type: "text", placeholder: "Hostel fees, groceries…", value: entry?.title || prefill?.title || "" });
   const titleF = field("Title", title, "Give it a title");
 
   let recurrence = entry?.recurrence || "one-time";
@@ -548,13 +630,15 @@ function buildExpenseForm(entry) {
   const segF = el("div", { class: "field" });
   segF.append(el("label", {}, "Type"), seg);
 
-  const due = el("input", { class: "input", type: "date", value: entry?.dueDate || isoDate() });
+  const due = el("input", { class: "input", type: "date", value: entry?.dueDate || prefill?.date || isoDate() });
   const dueF = field("Due date", due, "Pick a due date");
-  const acc = accountPicker(entry ? entry.accountId : undefined, () => checkFunds());
-  const cat = categorySelect(entry?.category || "Others");
+  // `null` from a prefill means "we couldn't tell" — leave the picker unset
+  // rather than silently reusing the last account.
+  const acc = accountPicker(entry ? entry.accountId : prefill ? prefill.accountId ?? null : undefined, () => checkFunds());
+  const cat = categorySelect(entry?.category || prefill?.category || "Others");
   const catF = field("Category", cat);
   const note = el("textarea", { class: "input", placeholder: "Anything to remember (optional)" });
-  note.value = entry?.note || "";
+  note.value = entry?.note || prefill?.note || "";
   const noteF = field("Note", note);
 
   if (!entry) {
@@ -596,7 +680,7 @@ function buildExpenseForm(entry) {
   amt.addEventListener("input", checkFunds);
   checkFunds();
 
-  const form = el("form", {}, amtF, titleF, segF, dueF, acc.root, catF, noteF, paidWrap, funds.node,
+  const form = el("form", {}, prefillNote(prefill), amtF, titleF, segF, dueF, acc.root, catF, noteF, paidWrap, funds.node,
     el("div", { class: "form-actions" }, save),
     entry ? deleteRow(entry, { kindLabel: "expense", isExpense: true }) : null);
 
@@ -622,14 +706,15 @@ function buildExpenseForm(entry) {
     };
     if (entry) await updateEntry(entry.id, data);
     else await addEntry(data);
+    if (prefill) await rememberShareAccount(prefill.providerKind, data.accountId);
     closeSheet();
     toast(entry ? "Expense updated" : "Expense added", { icon: icon("receipt", 18) });
   });
   return form;
 }
 
-export function addExpenseSheet(entry = null) {
-  openSheet(entry ? "Edit expense" : "Add expense", (body) => body.append(buildExpenseForm(entry)));
+export function addExpenseSheet(entry = null, { prefill = null } = {}) {
+  openSheet(entry ? "Edit expense" : "Add expense", (body) => body.append(buildExpenseForm(entry, prefill)));
 }
 
 /* ============================================================

@@ -4,8 +4,8 @@
 // sentences and pixels.
 
 import { $, el, esc, anim, buzz, segmented } from "../util/dom.js";
-import { fmtMoney, fmtCompact, monthLabel, thisMonth, shiftMonth, shortDate } from "../util/format.js";
-import { state, monthSummary } from "../ledger.js";
+import { fmtMoney, fmtCompact, fmtNum, monthLabel, thisMonth, shiftMonth, shortDate } from "../util/format.js";
+import { state, monthSummary, limitStatus } from "../ledger.js";
 import { analyzeMonth, spendDate } from "../insights.js";
 import { donut, trendBars, splitBar, weekdayBars, phaseBar, animateCharts, CHART_COLORS } from "./charts.js";
 import { icon, catIcon } from "./icons.js";
@@ -222,6 +222,24 @@ function buildInsights(a, sum, prev) {
       `<b>${fmtMoney(a.adjustments.total)}</b> of this month is balance fixes, money you couldn't trace. Logging as you go keeps this number small.`);
   }
 
+  // --- category limits: the plan the user set for themselves ---
+  const lims = limitStatus(a.ym);
+  for (const l of lims) {
+    if (l.over > 0) {
+      add("limit-over", "caution", 95,
+        `<b>${esc(l.category)}</b> is <b>${fmtMoney(l.over)} over</b> its ${fmtMoney(l.limit)} limit.`,
+        { pills: [l.category] });
+    } else if (l.ratio >= 0.8 && l.daysLeft >= 3) {
+      add("limit-near", "caution", 70,
+        `<b>${esc(l.category)}</b> has used <b>${pct(l.ratio)}%</b> of its limit with ${l.daysLeft} days left.`,
+        { pills: [l.category] });
+    }
+  }
+  if (lims.length && lims.every((l) => l.ratio < 0.8)) {
+    add("limit-ok", "good", 15,
+      `Every category you set a limit on is still under <b>80%</b> of it.`);
+  }
+
   // --- the quiet days ---
   if (a.daysElapsed >= 10 && a.daily.noSpendDays >= 0.3 * a.daysElapsed) {
     add("no-spend", "good", 20, `<b>${a.daily.noSpendDays} no-spend days</b> this month. Nice.`);
@@ -283,22 +301,49 @@ function renderBreakdown(root, sum, analysis) {
   paint(false);
 }
 
+/** Second line under a category row: how the month is tracking against its cap. */
+function limitLine(l) {
+  const tone = l.over > 0 ? "is-over" : l.ratio >= 0.8 ? "is-warn" : "is-ok";
+  const width = Math.round(Math.min(1, l.ratio) * 100);
+  const text = l.over > 0
+    ? `${fmtMoney(l.over)} over`
+    : `${fmtMoney(l.spent)} of ${fmtNum(l.limit)}`;
+  const left = l.daysLeft > 0 ? ` · ${l.daysLeft} day${l.daysLeft === 1 ? "" : "s"} left` : "";
+  return el("div", {
+    class: "cat-limit",
+    html: `<span class="limit-track"><span class="limit-fill ${tone}" style="width:${width}%"></span></span>
+      <span class="cat-limit-txt ${tone}">${text}${left}</span>`,
+  });
+}
+
 function renderCatPanel(panel, sum) {
   const cats = Object.entries(sum.byCat).sort((a, b) => b[1] - a[1]);
-  if (!cats.length) { panel.innerHTML = emptyCard("No paid expenses this month yet."); return; }
+  const limits = limitStatus(currentMonth);
+  const limByCat = new Map(limits.map((l) => [l.category, l]));
+  if (!cats.length && !limits.length) { panel.innerHTML = emptyCard("No paid expenses this month yet."); return; }
   const total = cats.reduce((s, [, v]) => s + v, 0);
   const data = cats.map(([label, value], i) => ({ label, value, color: CHART_COLORS[i % CHART_COLORS.length] }));
-  panel.append(donut(data, { centerLabel: "spent" }));
+  if (data.length) panel.append(donut(data, { centerLabel: "spent" }));
+
+  // A limit with nothing spent against it yet is still the plan — show it.
+  const rows = [...data];
+  for (const l of limits) {
+    if (!sum.byCat[l.category]) rows.push({ label: l.category, value: 0, color: "var(--c-faint)" });
+  }
+
   const list = el("div", { style: "margin-top:18px" });
-  data.forEach((d) => {
-    const pct = Math.round((d.value / total) * 100);
-    list.append(el("div", { class: "cat-row", html: `
+  rows.forEach((d) => {
+    const pct = total ? Math.round((d.value / total) * 100) : 0;
+    const row = el("div", { class: "cat-row", html: `
       <span class="cat-dot" style="background:${d.color}"></span>
       <span class="small strong truncate" style="min-width:86px">${esc(d.label)}</span>
       <span class="cat-bar-track"><span class="cat-bar" style="width:${pct}%;background:${d.color}"></span></span>
       <span class="cat-amt num">${fmtCompact(d.value)}</span>
       <span class="cat-pct num">${pct}%</span>
-    ` }));
+    ` });
+    list.append(row);
+    const l = limByCat.get(d.label);
+    if (l) list.append(limitLine(l));
   });
   panel.append(list);
 }
