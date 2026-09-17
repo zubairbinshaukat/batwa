@@ -46,7 +46,9 @@ const SHELL = [
   "./icons/icon-512.png",
   "./icons/icon-maskable-192.png",
   "./icons/icon-maskable-512.png",
-  "./icons/apple-touch-icon-180.png"
+  "./icons/apple-touch-icon-180.png",
+  "./icons/shortcut-expense-192.png",
+  "./icons/shortcut-money-192.png"
 ];
 
 self.addEventListener("install", (e) => {

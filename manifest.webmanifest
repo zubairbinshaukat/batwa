@@ -26,13 +26,19 @@
       "name": "Add Expense",
       "short_name": "Expense",
       "url": "./?action=add-expense",
-      "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }]
+      "icons": [
+        { "src": "icons/shortcut-expense-192.png", "sizes": "192x192", "type": "image/png" },
+        { "src": "icons/shortcut-expense-96.png", "sizes": "96x96", "type": "image/png" }
+      ]
     },
     {
       "name": "Add Money",
       "short_name": "Money",
       "url": "./?action=add-money",
-      "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }]
+      "icons": [
+        { "src": "icons/shortcut-money-192.png", "sizes": "192x192", "type": "image/png" },
+        { "src": "icons/shortcut-money-96.png", "sizes": "96x96", "type": "image/png" }
+      ]
     }
   ]
 }
