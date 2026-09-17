@@ -1975,56 +1975,81 @@ svg.ico { display: inline-block; vertical-align: -0.16em; flex: 0 0 auto; }
   color: var(--c-violet);
 }
 
-.cat-editor {
-  margin-top: var(--s-3);
-  padding: var(--s-4);
-  border-radius: var(--r-md);
-  background: var(--c-surface-2);
-  box-shadow: var(--clay-sunken);
+/* ---- Category editor: a floating dialog above the sheet and the keyboard ----
+   Mounted on <body> by catedit.js. Sheets sit at z 100/101, toasts at 200. */
+.cat-dialog-layer { position: fixed; inset: 0; z-index: 150; --kb: 0px; }
+.cat-dialog-layer[hidden] { display: none; }
+.cat-dialog-backdrop {
+  position: absolute; inset: 0;
+  background: rgba(23, 19, 58, 0.28);
+  backdrop-filter: blur(2px); -webkit-backdrop-filter: blur(2px);
 }
-.cat-editor[hidden] { display: none; }
-/* Reveal: opacity + a 4px slide only. No height/layout animation, so nothing
-   fights the quick-add pager's own height tween, and it is off under
-   prefers-reduced-motion. */
-.cat-editor.is-open { animation: cat-editor-in 180ms var(--ease-out) both; }
-@keyframes cat-editor-in {
-  from { opacity: 0; transform: translateY(-4px); }
+.cat-dialog {
+  position: absolute; left: 12px; right: 12px;
+  bottom: calc(var(--kb) + 12px + var(--safe-b));
+  width: min(440px, calc(100% - 24px)); margin: 0 auto;
+  max-height: calc(100% - var(--kb) - 24px - var(--safe-b));
+  overflow-y: auto; overscroll-behavior: contain;
+  padding: var(--s-4);
+  border-radius: var(--r-xl);
+  background: var(--c-surface); color: var(--c-ink);
+  box-shadow: var(--clay-surface), 0 24px 60px -20px rgba(23, 19, 58, 0.45);
+}
+.cat-dialog.is-open { animation: cat-dialog-in 200ms var(--ease-out) both; }
+@keyframes cat-dialog-in {
+  from { opacity: 0; transform: translateY(14px); }
   to   { opacity: 1; transform: none; }
 }
-@media (prefers-reduced-motion: reduce) {
-  .cat-editor.is-open { animation: none; }
+@media (prefers-reduced-motion: reduce) { .cat-dialog.is-open { animation: none; } }
+:root[data-theme="dark"] .cat-dialog-backdrop { background: rgba(0, 0, 0, 0.5); }
+:root[data-theme="dark"] .cat-dialog { box-shadow: var(--clay-surface), 0 24px 60px -20px rgba(0, 0, 0, 0.8); }
+
+.cat-dialog-tabs { margin-bottom: var(--s-3); }
+.cat-dialog-tabs .segmented button { min-height: 40px; }
+.cat-dialog .field { margin-bottom: var(--s-3); }
+.cat-dialog .cat-dialog-name .input { min-height: 48px; }
+
+/* one horizontal strip of icons keeps the dialog short above the keyboard */
+.cat-ico-strip {
+  display: flex; gap: 8px;
+  overflow-x: auto; overscroll-behavior-x: contain;
+  padding: 4px 2px 10px; margin: 0 -2px var(--s-2);
+  scrollbar-width: none; scroll-snap-type: x proximity;
 }
-.cat-editor .segmented { margin-bottom: var(--s-3); }
-.cat-editor .field { margin-bottom: var(--s-3); }
-.cat-editor .logo-grid { margin: var(--s-2) 0 var(--s-3); }
-.cat-editor .logo-opt { min-height: 46px; padding: 11px 4px; color: var(--c-ink-soft); }
-.cat-editor .cat-limit-field { position: relative; display: block; max-width: 170px; }
-/* the Rs prefix sits INSIDE the field — .cat-limit-row's rule doesn't reach here */
-.cat-editor .cat-limit-cur {
+.cat-ico-strip::-webkit-scrollbar { display: none; }
+.cat-ico-opt {
+  flex: none; width: 46px; height: 46px;
+  border-radius: 14px; display: grid; place-items: center;
+  color: var(--c-ink-soft); background: var(--c-surface-2);
+  box-shadow: var(--clay-soft);
+  scroll-snap-align: center;
+  transition: transform var(--t-fast) var(--ease-out);
+}
+.cat-ico-opt:active { transform: scale(0.94); box-shadow: var(--clay-soft-press); }
+.cat-ico-opt.is-active { color: #fff; background: var(--grad-action); box-shadow: var(--clay-btn), var(--glow-violet); }
+
+.cat-dialog-foot { display: flex; align-items: center; gap: var(--s-2); }
+.cat-dialog-foot .cat-limit-field { position: relative; flex: 1; min-width: 0; display: block; }
+.cat-dialog .cat-limit-cur {
   position: absolute; left: 13px; top: 50%;
   transform: translateY(-50%);
   font-size: var(--fs-xs); font-weight: 700; color: var(--c-muted);
   pointer-events: none;
 }
-.cat-editor .cat-limit-field .input-sm {
-  min-height: 44px;
+.cat-dialog .cat-limit-field .input-sm {
+  width: 100%; min-height: 48px;
   padding: 8px 12px 8px 36px;
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
+  font-weight: 700; font-variant-numeric: tabular-nums;
 }
-.cat-editor .field.is-disabled { opacity: 0.55; }
-.cat-editor .hint {
-  font-family: var(--font-hand);
-  font-size: var(--fs-hand);
-  line-height: 1.15;
-  color: var(--c-muted);
-  margin: 6px 0 0;
+.cat-dialog-actions { display: flex; gap: var(--s-2); flex: none; }
+.cat-dialog-actions .btn-sm { min-height: 48px; }
+.cat-dialog .is-disabled { opacity: 0.55; }
+.cat-dialog .hint {
+  font-family: var(--font-hand); font-size: var(--fs-hand); line-height: 1.15;
+  color: var(--c-muted); margin: 0 0 var(--s-2);
 }
-.cat-editor .cat-err { margin: 0 0 var(--s-3); }
-.cat-editor .cat-err.is-on { display: block; }
-.cat-editor .cat-lock-note { margin-bottom: var(--s-3); }
-.cat-editor-actions { display: flex; justify-content: flex-end; gap: var(--s-2); }
-
+.cat-dialog .cat-err { display: none; margin: 0 0 var(--s-2); }
+.cat-dialog .cat-err.is-on { display: block; }
 
 /* =================== Dark theme touch-ups ===================
    The tokens carry almost everything; these are the few places that were

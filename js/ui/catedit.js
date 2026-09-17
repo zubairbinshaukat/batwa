@@ -1,12 +1,17 @@
-// Inline category editor — the "+" beside a Category dropdown, and the same
-// panel reused in Settings > Categories.
+// Category editor — the "+" beside a Category dropdown, and the same dialog
+// reused in Settings > Categories.
 //
-// It is an INLINE panel, never a sheet. openSheet() closes whatever sheet is
-// already open (modals.js) and nesting leaves a stale history entry, so the
-// editor has to live inside the form it belongs to — the same trick the
-// account logo picker and the inline delete row use.
+// It is a floating DIALOG layered over the current sheet, never a second
+// sheet. openSheet() closes whatever sheet is already open (modals.js) and
+// nesting leaves a stale history entry, so the editor mounts its own fixed
+// layer on <body>, above the sheet, and removes it on close. The sheet and the
+// half-filled form underneath are untouched.
+//
+// It rides above the on-screen keyboard: visualViewport tells us how much of
+// the layout viewport the keyboard covers and the dialog's bottom offset
+// follows it, so Save is always reachable while typing.
 
-import { el, buzz, segmented, motionOK } from "../util/dom.js";
+import { el, buzz, segmented, motionOK, trapFocus } from "../util/dom.js";
 import {
   state, addCategory, updateCategory, findCategory, CATEGORY_MAX, RESERVED_CATEGORY,
 } from "../ledger.js";
@@ -51,13 +56,29 @@ const ERRORS = {
   missing: () => "That category is gone",
 };
 
+/* Keep the dialog's bottom edge above the on-screen keyboard. */
+function keyboardTracker(layer) {
+  const vv = window.visualViewport;
+  if (!vv) return () => {};
+  const update = () => {
+    const kb = Math.max(0, Math.round(window.innerHeight - vv.height - vv.offsetTop));
+    layer.style.setProperty("--kb", kb + "px");
+  };
+  vv.addEventListener("resize", update);
+  vv.addEventListener("scroll", update);
+  update();
+  return () => {
+    vv.removeEventListener("resize", update);
+    vv.removeEventListener("scroll", update);
+  };
+}
+
 /**
- * The panel itself. Returns { node, open, close, isOpen, setTarget }.
+ * The dialog. Returns { node, open, close, isOpen, setTarget }.
  *
  * `getTarget()` names the category the Edit tab should work on.
  * `onSaved(name, { mode, from })` fires after a successful save.
- * `modes` limits the tab strip — Settings' row-edit opens with both, the
- * standalone "New category" button opens on "new".
+ * `onClose({ refocus })` fires after the dialog is dismissed.
  */
 export function categoryEditorPanel({
   getTarget = () => RESERVED_CATEGORY,
@@ -65,11 +86,17 @@ export function categoryEditorPanel({
   onResize = null,
   onClose = null,
 } = {}) {
-  const node = el("div", { class: "cat-editor", hidden: true });
+  const node = el("div", {
+    class: "cat-dialog", role: "dialog", "aria-modal": "true", "aria-label": "Category",
+  });
+  const backdrop = el("div", { class: "cat-dialog-backdrop" });
+  const layer = el("div", { class: "cat-dialog-layer", hidden: true }, backdrop, node);
 
   let tab = "new";
   let busy = false;
   let target = RESERVED_CATEGORY;
+  let releaseTrap = null;
+  let stopKeyboard = null;
   // typed text survives a tab flip, one draft per tab
   const drafts = {
     new: { name: "", icon: DEFAULT_CATEGORY_ICON, limit: "" },
@@ -77,31 +104,25 @@ export function categoryEditorPanel({
   };
 
   /* ---- pieces ---- */
-  const segWrap = el("div", {});
+  const segWrap = el("div", { class: "cat-dialog-tabs" });
 
-  const nameId = uid();
   const nameInput = el("input", {
-    class: "input", type: "text", id: nameId,
+    class: "input", type: "text", id: uid(),
     maxlength: String(CATEGORY_MAX),
     autocapitalize: "words", autocomplete: "off", spellcheck: "false",
-    placeholder: "Chai, Gym, Books…",
+    placeholder: "Name — Chai, Gym, Books…", "aria-label": "Category name",
   });
-  const nameField = el("div", { class: "field" },
-    el("label", { for: nameId }, "Name"), nameInput);
+  const nameField = el("div", { class: "field cat-dialog-name" }, nameInput);
 
-  const grid = el("div", { class: "logo-grid" });
-  const iconField = el("div", { class: "field" }, el("label", {}, "Icon"), grid);
+  const strip = el("div", { class: "cat-ico-strip", role: "listbox", "aria-label": "Icon" });
 
-  const limitId = uid();
   const limitInput = el("input", {
-    class: "input input-sm", type: "text", id: limitId,
-    inputmode: "numeric", autocomplete: "off", placeholder: "No limit",
+    class: "input input-sm", type: "text", id: uid(),
+    inputmode: "numeric", autocomplete: "off", placeholder: "Monthly limit",
+    "aria-label": "Monthly limit",
   });
-  const limitField = el("div", { class: "field" },
-    el("label", { for: limitId }, "Monthly limit"),
-    el("span", { class: "cat-limit-field" },
-      el("span", { class: "cat-limit-cur" }, "Rs"), limitInput),
-    el("p", { class: "hint" }, "Optional — leave blank for no limit"));
+  const limitField = el("span", { class: "cat-limit-field" },
+    el("span", { class: "cat-limit-cur" }, "Rs"), limitInput);
 
   const errNode = el("div", { class: "field-error cat-err" });
   const lockNote = el("p", { class: "hint cat-lock-note", hidden: true },
@@ -109,14 +130,15 @@ export function categoryEditorPanel({
 
   const saveBtn = el("button", { class: "btn btn-primary btn-sm", type: "button" }, "Save");
   const cancelBtn = el("button", { class: "btn btn-ghost btn-sm", type: "button" }, "Cancel");
-  const actions = el("div", { class: "cat-editor-actions" }, cancelBtn, saveBtn);
+  const actions = el("div", { class: "cat-dialog-actions" }, cancelBtn, saveBtn);
+  const foot = el("div", { class: "cat-dialog-foot" }, limitField, actions);
 
-  node.append(segWrap, nameField, iconField, limitField, lockNote, errNode, actions);
+  node.append(segWrap, nameField, strip, lockNote, errNode, foot);
 
-  /* ---- icon grid ---- */
+  /* ---- icon strip ---- */
   for (const name of CATEGORY_ICONS) {
     const b = el("button", {
-      type: "button", class: "logo-opt cat-ico-opt", "data-ico": name,
+      type: "button", class: "cat-ico-opt", "data-ico": name, role: "option",
       "aria-label": name.replace(/-/g, " "),
       html: icon(name, 22),
     });
@@ -125,11 +147,19 @@ export function categoryEditorPanel({
       buzz(6);
       paintIcons();
     });
-    grid.append(b);
+    strip.append(b);
   }
-  function paintIcons() {
+  function paintIcons(scroll = false) {
     const on = drafts[tab].icon;
-    for (const b of grid.children) b.classList.toggle("is-active", b.dataset.ico === on);
+    for (const b of strip.children) {
+      const active = b.dataset.ico === on;
+      b.classList.toggle("is-active", active);
+      b.setAttribute("aria-selected", active ? "true" : "false");
+      if (active && scroll) {
+        // keep the chosen icon in view without scrolling the page
+        strip.scrollLeft = Math.max(0, b.offsetLeft - strip.clientWidth / 2 + b.offsetWidth / 2);
+      }
+    }
   }
 
   /* ---- errors ---- */
@@ -150,7 +180,7 @@ export function categoryEditorPanel({
     const d = drafts[tab];
     nameInput.value = d.name;
     limitInput.value = d.limit;
-    paintIcons();
+    paintIcons(true);
     const lock = locked();
     nameInput.disabled = lock;
     limitInput.disabled = lock;
@@ -171,7 +201,8 @@ export function categoryEditorPanel({
     segWrap.replaceChildren(seg);
   }
 
-  /* ---- resize hook: the quick-add pager caches page heights ---- */
+  /* ---- resize hook (kept for callers that care; the form itself no longer
+     changes height because the dialog floats above it) ---- */
   function resized() {
     node.dispatchEvent(new CustomEvent("cat-editor-resize", { bubbles: true }));
     onResize && onResize();
@@ -189,26 +220,37 @@ export function categoryEditorPanel({
       limit: state.limits[target] ? String(state.limits[target]) : "",
     };
     buildTabs();
-    applyTab();
-    node.hidden = false;
+    if (!layer.isConnected) document.body.append(layer);
+    layer.hidden = false;
     node.classList.add("is-open");
-    resized();
+    stopKeyboard = keyboardTracker(layer);
+    releaseTrap = trapFocus(node);
+    applyTab();
     requestAnimationFrame(() => {
-      node.scrollIntoView({ block: "nearest", behavior: "smooth" });
-      if (!nameInput.disabled) { try { nameInput.focus(); } catch {} }
+      if (!nameInput.disabled) { try { nameInput.focus({ preventScroll: true }); } catch {} }
     });
   }
 
   function close({ refocus = true } = {}) {
-    if (node.hidden) return;
-    node.hidden = true;
+    if (layer.hidden) return;
+    layer.hidden = true;
     node.classList.remove("is-open");
     clearErr();
+    stopKeyboard && stopKeyboard(); stopKeyboard = null;
+    // trapFocus's release restores focus to whatever opened us (the "+")
+    if (releaseTrap) { refocus ? releaseTrap() : releaseTrapSilently(); releaseTrap = null; }
+    layer.remove();
     resized();
     onClose && onClose({ refocus });
   }
+  function releaseTrapSilently() {
+    const active = document.activeElement;
+    releaseTrap();
+    // undo the refocus the trap just did, without stealing focus elsewhere
+    if (active && active !== document.body && active.isConnected) { try { active.blur(); } catch {} }
+  }
 
-  const isOpen = () => !node.hidden;
+  const isOpen = () => !layer.hidden;
 
   /* ---- input wiring ---- */
   nameInput.addEventListener("input", () => { drafts[tab].name = nameInput.value; clearErr(); });
@@ -219,8 +261,8 @@ export function categoryEditorPanel({
     clearErr();
   });
 
-  // Enter saves the CATEGORY, never the expense form around it; Escape closes
-  // the panel only — the global Escape handler would otherwise close the sheet.
+  // Enter saves the CATEGORY, never the form under the dialog; Escape closes
+  // the dialog only — the global Escape handler would otherwise close the sheet.
   node.addEventListener("keydown", (e) => {
     if (e.key === "Enter") {
       e.preventDefault();
@@ -232,6 +274,8 @@ export function categoryEditorPanel({
       close();
     }
   });
+  // a tap on the dimmed sheet behind the dialog dismisses the dialog, not the sheet
+  backdrop.addEventListener("click", () => { buzz(4); close(); });
 
   cancelBtn.addEventListener("click", () => { buzz(6); close(); });
   saveBtn.addEventListener("click", () => save());
@@ -269,12 +313,13 @@ export function categoryEditorPanel({
     }
   }
 
-  return { node, open, close, isOpen, setTarget: (n) => { target = n; } };
+  return { node, layer, open, close, isOpen, setTarget: (n) => { target = n; } };
 }
 
 /**
- * The whole Category field for a form: label, the select, the "+" button, and
- * the editor panel underneath. `onPick(name)` fires after any save.
+ * The whole Category field for a form: label, the select and the "+" button.
+ * The editor dialog mounts itself on <body> when opened. `onPick(name)` fires
+ * after any save.
  */
 export function categoryField(selected, { onPick = null, label = "Category" } = {}) {
   const select = categorySelect(selected);
@@ -293,16 +338,12 @@ export function categoryField(selected, { onPick = null, label = "Category" } = 
 
   const panel = categoryEditorPanel({
     getTarget: () => select.value,
-    onClose: ({ refocus }) => {
-      plus.setAttribute("aria-expanded", "false");
-      if (refocus) { try { plus.focus(); } catch {} }
-    },
+    onClose: () => { plus.setAttribute("aria-expanded", "false"); },
     onSaved: (name, { from }) => {
       syncCategorySelects({ from, to: name, only: select, pick: name });
       onPick && onPick(name);
     },
   });
-  field.append(panel.node);
 
   plus.addEventListener("click", () => {
     buzz(8);

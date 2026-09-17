@@ -666,7 +666,6 @@ function categoriesSheet() {
     body.append(
       el("p", { class: "small muted", style: "margin-bottom:12px" },
         "Tap a category to rename it, change its icon or set a monthly limit. Limits show up in Reports and on Home. “Others” always stays — it's the fallback for anything deleted."),
-      panel.node,
       wrap,
       el("div", { style: "margin-top:16px" }, newBtn),
     );
