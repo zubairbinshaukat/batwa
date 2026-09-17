@@ -317,6 +317,7 @@ export async function exportEncrypted() {
     ...(await keyMaterial()), // keyMode + salt (pin) + deviceKey (no-pin) — see keyMaterial()
     cipher: blob,
     categories: state.categories,
+    catIcons: state.catIcons, // travels with `categories` — same meta, same rules
   }, `batwa-backup-${new Date().toISOString().slice(0, 10)}.json`);
   await stampExport();
 }
@@ -329,6 +330,7 @@ export async function exportPlain() {
     entries: state.entries,
     accounts: state.accounts,
     categories: state.categories,
+    catIcons: state.catIcons, // travels with `categories` — same meta, same rules
   }, `batwa-plain-${new Date().toISOString().slice(0, 10)}.json`);
   await stampExport();
 }

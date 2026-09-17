@@ -1929,11 +1929,20 @@ svg.ico { display: inline-block; vertical-align: -0.16em; flex: 0 0 auto; }
 .cat-limit-list { display: flex; flex-direction: column; }
 .cat-limit-row {
   display: grid;
-  grid-template-columns: auto 1fr 110px auto;
+  grid-template-columns: 1fr 110px auto;
   align-items: center;
   gap: var(--s-3);
   padding: 8px 0;
 }
+/* Tapping the name (or its icon) opens the inline editor on that category. */
+.cat-limit-row .cat-row-name {
+  display: flex; align-items: center; gap: var(--s-3);
+  min-width: 0; min-height: 40px;
+  text-align: left; color: inherit;
+}
+.cat-limit-row .cat-row-name:active { transform: scale(0.98); }
+.cat-limit-row.is-confirming { grid-template-columns: 1fr auto auto; }
+.cat-limit-row .cat-confirm-txt { color: var(--c-neg); font-weight: 700; min-width: 0; }
 .cat-limit-row + .cat-limit-row { border-top: 1px solid var(--c-border); }
 .cat-limit-row .cat-limit-ico { color: var(--c-muted); display: inline-flex; }
 .cat-limit-row .cat-limit-field { position: relative; display: block; }
@@ -1952,6 +1961,70 @@ svg.ico { display: inline-block; vertical-align: -0.16em; flex: 0 0 auto; }
   font-variant-numeric: tabular-nums;
 }
 .cat-limit-row .cat-x-spacer { width: 24px; height: 24px; }
+
+/* =================== Inline category editor ===================
+   The "+" beside a Category dropdown opens a well INSIDE the sheet — never a
+   nested sheet (openSheet closes the one already open). Sunken surface, so it
+   reads as a recess in the card rather than a second card on top of it. */
+.cat-row { display: flex; gap: var(--s-2); align-items: center; }
+.cat-row select.input { flex: 1; min-width: 0; }
+.cat-plus {
+  width: 44px; height: 54px;
+  border-radius: var(--r-md);
+  flex: none;
+  color: var(--c-violet);
+}
+
+.cat-editor {
+  margin-top: var(--s-3);
+  padding: var(--s-4);
+  border-radius: var(--r-md);
+  background: var(--c-surface-2);
+  box-shadow: var(--clay-sunken);
+}
+.cat-editor[hidden] { display: none; }
+/* Reveal: opacity + a 4px slide only. No height/layout animation, so nothing
+   fights the quick-add pager's own height tween, and it is off under
+   prefers-reduced-motion. */
+.cat-editor.is-open { animation: cat-editor-in 180ms var(--ease-out) both; }
+@keyframes cat-editor-in {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .cat-editor.is-open { animation: none; }
+}
+.cat-editor .segmented { margin-bottom: var(--s-3); }
+.cat-editor .field { margin-bottom: var(--s-3); }
+.cat-editor .logo-grid { margin: var(--s-2) 0 var(--s-3); }
+.cat-editor .logo-opt { min-height: 46px; padding: 11px 4px; color: var(--c-ink-soft); }
+.cat-editor .cat-limit-field { position: relative; display: block; max-width: 170px; }
+/* the Rs prefix sits INSIDE the field — .cat-limit-row's rule doesn't reach here */
+.cat-editor .cat-limit-cur {
+  position: absolute; left: 13px; top: 50%;
+  transform: translateY(-50%);
+  font-size: var(--fs-xs); font-weight: 700; color: var(--c-muted);
+  pointer-events: none;
+}
+.cat-editor .cat-limit-field .input-sm {
+  min-height: 44px;
+  padding: 8px 12px 8px 36px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.cat-editor .field.is-disabled { opacity: 0.55; }
+.cat-editor .hint {
+  font-family: var(--font-hand);
+  font-size: var(--fs-hand);
+  line-height: 1.15;
+  color: var(--c-muted);
+  margin: 6px 0 0;
+}
+.cat-editor .cat-err { margin: 0 0 var(--s-3); }
+.cat-editor .cat-err.is-on { display: block; }
+.cat-editor .cat-lock-note { margin-bottom: var(--s-3); }
+.cat-editor-actions { display: flex; justify-content: flex-end; gap: var(--s-2); }
+
 
 /* =================== Dark theme touch-ups ===================
    The tokens carry almost everything; these are the few places that were

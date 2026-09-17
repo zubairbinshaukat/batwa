@@ -1,7 +1,7 @@
 // Settings: sync config, backup, PIN, categories, install, about.
 
-import { $, el, esc, anim } from "../util/dom.js";
-import { state, saveCategories, saveLimits } from "../ledger.js";
+import { $, el, esc, anim, buzz } from "../util/dom.js";
+import { state, saveLimits, deleteCategory, countInCategory, RESERVED_CATEGORY } from "../ledger.js";
 import { changePin, disablePin, enablePin, getKeyMode, enrollBiometricWithPin } from "../auth.js";
 import { bioAvailable, isBioEnrolled, removeBio } from "../biometric.js";
 import { openSheet, closeSheet, confirmSheet, chooseSheet } from "./modals.js";
@@ -14,6 +14,7 @@ import { remindersState, enableReminders, disableReminders, sendTestReminder } f
 import { shortDate } from "../util/format.js";
 import { manageAccountsSheet } from "./accounts.js";
 import { icon, catIcon } from "./icons.js";
+import { categoryEditorPanel } from "./catedit.js";
 import { getInstallState, promptInstall } from "../app.js";
 import { getThemeMode, setThemeMode, themeLabel, resolvedTheme, onThemeChange } from "../theme.js";
 
@@ -578,7 +579,43 @@ function setupPinSheet() {
 function categoriesSheet() {
   openSheet("Categories", (body) => {
     const wrap = el("div", { class: "cat-limit-list" });
-    const draft = { ...state.limits };
+
+    // The same inline editor the expense/income forms use — never a nested
+    // sheet. It lives at the top of the list and is aimed at whichever row
+    // (or "New category") opened it.
+    const panel = categoryEditorPanel({
+      getTarget: () => RESERVED_CATEGORY,
+      onSaved: () => paint(),
+    });
+
+    const newBtn = el("button", {
+      class: "btn btn-primary btn-block", type: "button",
+      onclick: () => { buzz(8); panel.open("new"); },
+    }, "New category");
+
+    /** Inline confirm, in place of the row — no second sheet, no window.confirm. */
+    function askDelete(c, rowEl) {
+      const n = countInCategory(c);
+      rowEl.classList.add("is-confirming");
+      rowEl.replaceChildren(
+        el("span", { class: "small cat-confirm-txt" },
+          n ? `Delete ${c}? ${n} ${n === 1 ? "entry moves" : "entries move"} to ${RESERVED_CATEGORY}` : `Delete ${c}?`),
+        el("button", {
+          class: "btn btn-ghost btn-sm", type: "button",
+          onclick: () => { buzz(6); paint(); },
+        }, "Cancel"),
+        el("button", {
+          class: "btn btn-danger btn-sm", type: "button",
+          onclick: async () => {
+            buzz(14);
+            const moved = await deleteCategory(c);
+            paint();
+            toast(moved ? `${c} deleted · ${moved} moved to ${RESERVED_CATEGORY}` : `${c} deleted`,
+              { icon: icon("trash", 17) });
+          },
+        }, "Delete"),
+      );
+    }
 
     const paint = () => {
       wrap.replaceChildren();
@@ -587,30 +624,35 @@ function categoriesSheet() {
           class: "input input-sm", type: "text", inputmode: "numeric",
           autocomplete: "off", placeholder: "No limit",
           "aria-label": `Monthly limit for ${c}`,
-          value: draft[c] ? String(draft[c]) : "",
+          value: state.limits[c] ? String(state.limits[c]) : "",
         });
         // digits only; empty clears the limit. Saved on change, never per keystroke.
         limitInput.addEventListener("change", async () => {
           const clean = limitInput.value.replace(/[^0-9]/g, "");
           limitInput.value = clean;
-          if (clean && Number(clean) > 0) draft[c] = Number(clean);
-          else delete draft[c];
-          await saveLimits(draft);
+          const map = { ...state.limits };
+          if (clean && Number(clean) > 0) map[c] = Number(clean);
+          else delete map[c];
+          await saveLimits(map);
         });
 
-        const rowEl = el("div", { class: "cat-limit-row" },
+        // Name + icon open the editor on this category.
+        const nameBtn = el("button", {
+          type: "button", class: "cat-row-name",
+          "aria-label": `Edit ${c}`,
+          onclick: () => { buzz(6); panel.open("edit", c); },
+        },
           el("span", { class: "cat-limit-ico", html: catIcon(c, 15) }),
-          el("span", { class: "small strong truncate" }, c),
+          el("span", { class: "small strong truncate" }, c));
+
+        const rowEl = el("div", { class: "cat-limit-row" },
+          nameBtn,
           el("span", { class: "cat-limit-field" }, el("span", { class: "cat-limit-cur" }, "Rs"), limitInput),
         );
-        if (c !== "Others") {
+        if (c !== RESERVED_CATEGORY) {
           rowEl.append(el("button", {
             class: "cat-x", "aria-label": `Remove ${c}`,
-            onclick: async () => {
-              delete draft[c];
-              await saveCategories(state.categories.filter((x) => x !== c));
-              paint();
-            },
+            onclick: () => { buzz(8); askDelete(c, rowEl); },
             html: icon("x", 13),
           }));
         } else {
@@ -621,24 +663,12 @@ function categoriesSheet() {
     };
     paint();
 
-    const inp = el("input", { class: "input", type: "text", placeholder: "New category…", maxlength: "24" });
-    const add = el("button", {
-      class: "btn btn-primary", style: "flex:0 0 auto;min-width:90px",
-      onclick: async () => {
-        const v = inp.value.trim();
-        if (!v) return;
-        if (state.categories.some((c) => c.toLowerCase() === v.toLowerCase())) { toast("Already exists"); return; }
-        await saveCategories([...state.categories.filter((c) => c !== "Others"), v, "Others"]);
-        inp.value = "";
-        paint();
-      },
-    }, "Add");
-
     body.append(
       el("p", { class: "small muted", style: "margin-bottom:12px" },
-        "Set a monthly limit to see how a category is tracking in Reports and on Home. Leave it blank for no limit. “Others” always stays — it's the fallback for anything deleted."),
+        "Tap a category to rename it, change its icon or set a monthly limit. Limits show up in Reports and on Home. “Others” always stays — it's the fallback for anything deleted."),
+      panel.node,
       wrap,
-      el("div", { class: "row", style: "margin-top:16px" }, el("div", { class: "grow" }, inp), add),
+      el("div", { style: "margin-top:16px" }, newBtn),
     );
   });
 }

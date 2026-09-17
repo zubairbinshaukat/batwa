@@ -9,6 +9,7 @@ import { toast } from "./toast.js";
 import { logoTile, accountName, addAccountSheet } from "./accounts.js";
 import { icon } from "./icons.js";
 import { evalAmountExpr, looksLikeExpr } from "../util/expr.js";
+import { categoryField } from "./catedit.js";
 import { getMeta, setMeta } from "../db.js";
 
 let current = null; // { backdrop, sheet, release, resolveClosed }
@@ -344,14 +345,6 @@ function prefillNote(prefill) {
       : "Filled from a shared message — check the amount."));
 }
 
-function categorySelect(selected) {
-  const sel = el("select", { class: "input" });
-  for (const c of state.categories) {
-    sel.append(el("option", { value: c, selected: c === selected }, c));
-  }
-  return sel;
-}
-
 function toggleRow(labelText, checked, onFlip) {
   let on = checked;
   const sw = el("button", { type: "button", class: "switch", role: "switch", "aria-checked": String(on) });
@@ -584,8 +577,9 @@ function buildMoneyForm(entry, prefill = null) {
   // `null` from a prefill means "we couldn't tell" — leave the picker unset
   // rather than silently reusing the last account.
   const acc = accountPicker(entry ? entry.accountId : prefill ? prefill.accountId ?? null : undefined);
-  const cat = categorySelect(entry?.category || prefill?.category || "Others");
-  const catF = field("Category (optional)", cat);
+  // "+" opens the inline category editor under the row — never a nested sheet.
+  const { field: catF, select: cat } =
+    categoryField(entry?.category || prefill?.category || "Others", { label: "Category (optional)" });
 
   const save = el("button", { class: "btn btn-mint btn-block", type: "submit" },
     entry ? "Save changes" : "Add money");
@@ -652,8 +646,9 @@ function buildExpenseForm(entry, prefill = null) {
   // `null` from a prefill means "we couldn't tell" — leave the picker unset
   // rather than silently reusing the last account.
   const acc = accountPicker(entry ? entry.accountId : prefill ? prefill.accountId ?? null : undefined, () => checkFunds());
-  const cat = categorySelect(entry?.category || prefill?.category || "Others");
-  const catF = field("Category", cat);
+  // "+" opens the inline category editor under the row — never a nested sheet.
+  const { field: catF, select: cat } =
+    categoryField(entry?.category || prefill?.category || "Others");
   const note = el("textarea", { class: "input", placeholder: "Anything to remember (optional)" });
   note.value = entry?.note || prefill?.note || "";
   const noteF = field("Note", note);
@@ -1151,6 +1146,16 @@ export function quickAddSheet(initialKind = "expense") {
       measure();
       if (!dragging && !posTween) lockHeight();
     }, true);
+
+    // The inline category editor opened or closed inside one of the forms: the
+    // cached page heights are now wrong and the Save button would be clipped.
+    // One frame later, so the panel's own layout has landed.
+    pager.addEventListener("cat-editor-resize", () => {
+      requestAnimationFrame(() => {
+        measure();
+        if (!dragging && !posTween) setHeight(heights[active], true);
+      });
+    });
 
     /* ---------- keep the cached measurements honest ---------- */
     // Width has to be watched on the pager itself, not just on window resize:

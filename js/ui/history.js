@@ -12,6 +12,7 @@ let currentMonth = thisMonth();
 let filters = { kind: "all", category: "all", status: "all", account: "all" };
 
 export function renderHistory(view) {
+  pruneFilters();
   const isNow = currentMonth === thisMonth();
 
   view.innerHTML = `
@@ -75,7 +76,19 @@ function renderFilters(root, view) {
   }
 }
 
+/**
+ * A category the filter is pinned to can be renamed or deleted from the inline
+ * editor while `filters` survives the re-render — drop it rather than showing
+ * an empty list for a name that no longer exists.
+ */
+function pruneFilters() {
+  if (filters.category !== "all" && !state.categories.includes(filters.category)) {
+    filters.category = "all";
+  }
+}
+
 function applyFilters() {
+  pruneFilters();
   let list = entriesForMonth(currentMonth);
   if (filters.kind !== "all") list = list.filter((e) => e.kind === filters.kind);
   if (filters.status !== "all") list = list.filter((e) => e.status === filters.status);

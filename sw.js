@@ -1,5 +1,5 @@
 /* Batwa service worker — app shell cache only. Never touches user data. */
-const CACHE = "batwa-v22";
+const CACHE = "batwa-v23";
 
 const SHELL = [
   "./",
@@ -36,9 +36,11 @@ const SHELL = [
   "./js/ui/history.js",
   "./js/ui/settings.js",
   "./js/ui/modals.js",
+  "./js/ui/catedit.js",
   "./js/ui/charts.js",
   "./js/ui/toast.js",
   "./js/util/format.js",
+  "./js/util/category.js",
   "./js/util/dom.js",
   "./js/util/expr.js",
   "./icons/favicon.svg",

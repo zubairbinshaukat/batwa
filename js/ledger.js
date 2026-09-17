@@ -6,6 +6,10 @@ import { encrypt, decrypt } from "./crypto.js";
 import { getKey } from "./auth.js";
 import { uuid } from "./util/dom.js";
 import { isoDate, parseDay, daysUntil } from "./util/format.js";
+import { RESERVED_CATEGORY, CATEGORY_MAX, normalizeCategoryName, findCategoryIn, isReservedName } from "./util/category.js";
+
+// Re-exported so the rest of the app has one import site for category rules.
+export { RESERVED_CATEGORY, CATEGORY_MAX, normalizeCategoryName };
 
 export const DEFAULT_CATEGORIES = [
   "Fees", "Rent/Hostel", "Food", "Transport", "Education",
@@ -17,6 +21,9 @@ export const state = {
   accounts: [],   // { id, name, kind } — kind picks the logo
   categories: [...DEFAULT_CATEGORIES],
   limits: {},     // category -> monthly cap (meta `catLimits`, never in the blob)
+  // category -> icon name (meta `catIcons`). Meta, like `categories` itself:
+  // an icon name reveals nothing the category name does not already reveal.
+  catIcons: {},
 };
 
 // Mirrors meta `remindersOn`. When set, every save republishes the due-date
@@ -77,12 +84,13 @@ export async function loadLedger() {
   }
   state.categories = (await getMeta("categories")) || [...DEFAULT_CATEGORIES];
   state.limits = (await getMeta("catLimits")) || {};
+  state.catIcons = (await getMeta("catIcons")) || {};
   remindersOn = !!(await getMeta("remindersOn"));
   const created = await materializeRecurring();
   if (created) await saveLedger();
 }
 
-export async function saveCategories(cats) {
+export async function saveCategories(cats, { silent = false } = {}) {
   const list = [...new Set(cats.map((c) => c.trim()).filter(Boolean))];
   if (!list.includes("Others")) list.push("Others"); // Others always exists
   state.categories = list;
@@ -94,11 +102,11 @@ export async function saveCategories(cats) {
     state.limits = kept;
     await setMeta("catLimits", kept);
   }
-  emit();
+  if (!silent) emit();
 }
 
 /** Per-category monthly caps. Non-positive or unknown categories are dropped. */
-export async function saveLimits(map) {
+export async function saveLimits(map, { silent = false } = {}) {
   const next = {};
   for (const [c, v] of Object.entries(map || {})) {
     const n = Number(v);
@@ -106,7 +114,122 @@ export async function saveLimits(map) {
   }
   state.limits = next;
   await setMeta("catLimits", next);
+  if (!silent) emit();
+}
+
+/* ---- categories: add / rename / delete ------------------------------------
+   Names live in meta (`categories`), caps in `catLimits`, icons in `catIcons`.
+   A rename is global: it rewrites every entry that carried the old name and
+   re-keys both maps, so History, Reports, Home and the month sheet all follow
+   without any of them knowing a rename happened.
+--------------------------------------------------------------------------- */
+
+/** The stored category matching `name` case-insensitively, or null. */
+export const findCategory = (name) => findCategoryIn(state.categories, name);
+
+/** The icon-name override for a category, if the user picked one. */
+export const getCatIcon = (name) => state.catIcons[name] || null;
+
+/** How many entries currently sit in this category (for the delete confirm). */
+export const countInCategory = (name) =>
+  state.entries.reduce((n, e) => n + (e.category === name ? 1 : 0), 0);
+
+/**
+ * Create a category. Throws Error("empty" | "reserved" | "duplicate").
+ * Inserted just before Others, which always stays last. Resolves to the
+ * stored (normalized) name.
+ */
+export async function addCategory(name, { icon = null, limit = null } = {}) {
+  const clean = normalizeCategoryName(name);
+  if (!clean) throw new Error("empty");
+  if (isReservedName(clean)) throw new Error("reserved");
+  if (findCategory(clean)) throw new Error("duplicate");
+
+  const rest = state.categories.filter((c) => c !== RESERVED_CATEGORY);
+  await saveCategories([...rest, clean, RESERVED_CATEGORY], { silent: true });
+
+  if (icon) {
+    state.catIcons[clean] = icon;
+    await setMeta("catIcons", state.catIcons);
+  }
+  // after saveCategories: saveLimits drops keys that aren't categories yet
+  if (Number(limit) > 0) await saveLimits({ ...state.limits, [clean]: Number(limit) }, { silent: true });
+
   emit();
+  return clean;
+}
+
+/**
+ * Rename / re-icon / re-cap a category. Throws Error("empty" | "reserved" |
+ * "duplicate" | "missing"). `Others` accepts an icon change only — its name and
+ * cap are ignored rather than rejected, so the same panel works for it.
+ * A case-only rename (Food -> food) is allowed. Resolves to the stored name.
+ */
+export async function updateCategory(oldName, { name, icon, limit } = {}) {
+  const locked = oldName === RESERVED_CATEGORY;
+  let next = oldName;
+
+  if (!locked) {
+    next = normalizeCategoryName(name ?? oldName);
+    if (!next) throw new Error("empty");
+    if (isReservedName(next)) throw new Error("reserved");
+    const clash = findCategory(next);
+    if (clash && clash !== oldName) throw new Error("duplicate");
+  }
+
+  const i = state.categories.indexOf(oldName);
+  if (i < 0) throw new Error("missing");
+
+  if (next !== oldName) {
+    state.categories[i] = next;
+    for (const e of state.entries) if (e.category === oldName) e.category = next;
+    if (oldName in state.limits) { state.limits[next] = state.limits[oldName]; delete state.limits[oldName]; }
+    if (oldName in state.catIcons) { state.catIcons[next] = state.catIcons[oldName]; delete state.catIcons[oldName]; }
+    await saveLedger();
+    await setMeta("categories", state.categories);
+    await setMeta("catLimits", state.limits);
+    await setMeta("catIcons", state.catIcons);
+  }
+
+  if (icon !== undefined) {
+    if (icon) state.catIcons[next] = icon;
+    else delete state.catIcons[next];
+    await setMeta("catIcons", state.catIcons);
+  }
+
+  if (!locked && limit !== undefined) {
+    const n = Number(limit);
+    const map = { ...state.limits };
+    if (n > 0) map[next] = n; else delete map[next];
+    await saveLimits(map, { silent: true });
+  }
+
+  emit();
+  return next;
+}
+
+/**
+ * Delete a category and move its entries to Others — orphaning them would
+ * make them vanish from every category view. Returns how many moved.
+ * Throws Error("reserved") for Others.
+ */
+export async function deleteCategory(name) {
+  if (name === RESERVED_CATEGORY) throw new Error("reserved");
+  if (!state.categories.includes(name)) return 0;
+
+  let moved = 0;
+  for (const e of state.entries) {
+    if (e.category === name) { e.category = RESERVED_CATEGORY; moved++; }
+  }
+  if (moved) await saveLedger();
+
+  if (name in state.catIcons) {
+    delete state.catIcons[name];
+    await setMeta("catIcons", state.catIcons);
+  }
+  // saveCategories prunes the now-orphaned limit and emits
+  await saveCategories(state.categories.filter((c) => c !== name));
+  return moved;
 }
 
 /**

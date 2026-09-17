@@ -1,6 +1,11 @@
 // Inline SVG icon library — stroke-based, inherits currentColor, zero assets.
 // Usage: icon("check", 18) -> svg string.
 
+// Only `state` (for per-category icon overrides), and only read inside a
+// function — ledger -> auth -> icons -> ledger is a cycle that resolves fine
+// because nothing here touches `state` at module-evaluation time.
+import { state } from "../ledger.js";
+
 const PATHS = {
   check:        '<path d="M20 6 9 17l-5-5"/>',
   "check-circle": '<circle cx="12" cy="12" r="9"/><path d="m8.5 12.5 2.5 2.5 5-5.5"/>',
@@ -83,6 +88,24 @@ const CAT_ICONS = {
   "Others": "box",
 };
 
+/**
+ * Icons offered by the inline category editor. 22 names -> a 4-column grid,
+ * six rows, reusing .logo-grid / .logo-opt.
+ */
+export const CATEGORY_ICONS = [
+  "tag", "utensils", "car", "home", "zap", "heart", "bag", "landmark",
+  "book", "graduation", "smartphone", "credit-card", "wallet", "banknote",
+  "receipt", "sparkles", "sprout", "cloud", "sun", "clock", "repeat", "box",
+];
+
+/** Default icon for a brand-new custom category. */
+export const DEFAULT_CATEGORY_ICON = "tag";
+
+/** The icon NAME for a category: user override, then the default map, then box. */
+export function catIconName(category) {
+  return state.catIcons?.[category] || CAT_ICONS[category] || "box";
+}
+
 export function catIcon(category, size = 14) {
-  return icon(CAT_ICONS[category] || "box", size);
+  return icon(catIconName(category), size);
 }
