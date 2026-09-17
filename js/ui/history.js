@@ -2,7 +2,7 @@
 // Filter changes re-render ONLY the list (with a brief loader), never the page.
 
 import { $, el, esc, anim, buzz } from "../util/dom.js";
-import { fmtCompact, monthLabel, thisMonth, shiftMonth, shortDate, relDayLabel } from "../util/format.js";
+import { fmtCompact, monthLabel, thisMonth, shiftMonth, dayLabel, daysUntil } from "../util/format.js";
 import { state, entriesForMonth } from "../ledger.js";
 import { accountName } from "./accounts.js";
 import { icon, catIcon } from "./icons.js";
@@ -94,23 +94,40 @@ function dateKey(e) {
   return String(d).slice(0, 10);
 }
 
-/** "−4.4k" / "−4.4k · +80k" / "+80k" for one day's rows. */
+/** Amount chips for one day: out (ink), in (green), transfers only when nothing else moved. */
 function dayTotal(rows) {
-  let out = 0, inn = 0;
+  let out = 0, inn = 0, tr = 0;
   for (const e of rows) {
-    if (e.kind === "expense") out += Number(e.amount) || 0;
-    else if (e.kind === "income" && e.status === "paid") inn += Number(e.amount) || 0;
+    const a = Number(e.amount) || 0;
+    if (e.kind === "expense") out += a;
+    else if (e.kind === "income") inn += a;
+    else if (e.kind === "transfer") tr += a;
   }
-  const parts = [];
-  if (out > 0 || inn === 0) parts.push(`\u2212${fmtCompact(out)}`);
-  if (inn > 0) parts.push(`<span style="color:var(--c-pos)">+${fmtCompact(inn)}</span>`);
-  return parts.join(" \u00b7 ");
+  const chips = [];
+  if (out > 0) chips.push(`<span class="sum out num">−${fmtCompact(out)}</span>`);
+  if (inn > 0) chips.push(`<span class="sum in num">+${fmtCompact(inn)}</span>`);
+  if (!chips.length && tr > 0) chips.push(`<span class="sum tr num">${icon("swap", 11)} ${fmtCompact(tr)}</span>`);
+  if (!chips.length) chips.push(`<span class="sum out num">−</span>`);
+  return chips.join("");
+}
+
+/* "Thu 17 Sep" -> { wd, num, mon } */
+function dayParts(iso) {
+  const [wd, num, mon] = dayLabel(iso).split(" ");
+  return { wd, num, mon };
 }
 
 function dayDivider(day, rows, first) {
+  const { wd, num, mon } = dayParts(day);
+  const d = daysUntil(day);
+  const rel = d === 0 ? "Today" : d === -1 ? "Yesterday" : d === 1 ? "Tomorrow" : "";
+  const longDay = new Date(`${day}T00:00:00`).toLocaleDateString("en-GB", { weekday: "long" });
   return el("div", {
-    class: `hist-day ${first ? "is-first" : ""}`,
-    html: `<span>${relDayLabel(day)}</span><span class="hist-day-sum num">${dayTotal(rows)}</span>`,
+    class: `hist-day ${first ? "is-first" : ""} ${d === 0 ? "is-today" : ""}`,
+    html: `
+      <span class="hist-day-date"><b class="num">${num}</b><small>${wd}</small></span>
+      <span class="hist-day-name">${rel || longDay}<span> · ${num} ${mon}</span></span>
+      <span class="hist-day-sum">${dayTotal(rows)}</span>`,
   });
 }
 
@@ -159,7 +176,6 @@ function historyRow(e) {
   if (e.kind === "transfer") return transferHistoryRow(e);
 
   const inn = e.kind === "income";
-  const dateIso = (inn ? (e.paidAt || e.dueDate || e.createdAt) : (e.dueDate || e.createdAt)).slice(0, 10);
   const row = el("div", { class: "hist-row" });
   row.innerHTML = `
     <span class="hist-ico" style="background:${inn ? "var(--c-pos-soft)" : "var(--c-violet-soft)"};color:${inn ? "var(--c-pos)" : "var(--c-violet)"}">
@@ -167,7 +183,7 @@ function historyRow(e) {
     </span>
     <span class="grow">
       <span class="strong small truncate" style="display:block">${esc(e.title)}</span>
-      <span class="xsmall muted">${shortDate(dateIso)} · ${esc(e.category)}
+      <span class="xsmall muted">${esc(e.category)}
         ${e.accountId && accountName(e.accountId) ? `· ${esc(accountName(e.accountId))}` : ""}
         ${e.isAdjustment ? `· <b style="color:var(--c-violet)">${icon("scale", 10)} adjustment</b>` : ""}
         ${e.status === "pending" ? '· <b style="color:var(--c-warn)">pending</b>' : ""}
@@ -184,7 +200,6 @@ function historyRow(e) {
 }
 
 function transferHistoryRow(e) {
-  const dateIso = (e.paidAt || e.createdAt).slice(0, 10);
   const from = accountName(e.fromAccountId) || "Removed";
   const to = accountName(e.toAccountId) || "Removed";
   const row = el("div", { class: "hist-row" });
@@ -192,7 +207,7 @@ function transferHistoryRow(e) {
     <span class="hist-ico" style="background:var(--c-aqua-soft);color:var(--c-aqua)">${icon("swap", 18)}</span>
     <span class="grow">
       <span class="strong small truncate" style="display:block">Transfer</span>
-      <span class="xsmall muted">${shortDate(dateIso)} · ${esc(from)} → ${esc(to)}</span>
+      <span class="xsmall muted">${esc(from)} → ${esc(to)}</span>
     </span>
     <span class="hist-amt num">${fmtCompact(e.amount)}</span>
   `;

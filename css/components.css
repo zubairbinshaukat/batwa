@@ -1503,26 +1503,34 @@ select.input {
 .hist-row + .hist-row { border-top: 1px solid var(--c-border); }
 .hist-row.is-day-first { border-top: none; }
 
-/* Day divider inside the transaction card */
+/* Day divider inside the transaction card: date pill, day name, amount chips */
 .hist-day {
-  display: flex; align-items: center; justify-content: space-between;
-  gap: var(--s-3);
-  padding: 10px var(--s-4) 6px;
-  font-size: var(--fs-xs);
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--c-muted);
-  background: var(--c-surface-2);
+  display: flex; align-items: center; gap: 10px;
+  padding: 14px var(--s-4) 8px;
 }
-.hist-day.is-first { border-radius: var(--r-lg) var(--r-lg) 0 0; }
-.hist-day-sum {
-  text-transform: none;
-  letter-spacing: 0;
-  font-size: var(--fs-sm);
-  color: var(--c-ink);
-  white-space: nowrap;
+.hist-day:not(.is-first) { border-top: 1px solid var(--c-border); margin-top: 4px; }
+.hist-day + .hist-row { border-top: none; }
+.hist-day-date {
+  width: 40px; height: 40px; flex: none;
+  border-radius: 12px;
+  background: var(--c-violet-soft); color: var(--c-violet);
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  line-height: 1;
 }
+.hist-day-date b { font-size: 15px; font-weight: 800; }
+.hist-day-date small { font-size: 9px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; margin-top: 3px; opacity: 0.85; }
+.hist-day.is-today .hist-day-date { background: var(--grad-action); color: #fff; box-shadow: var(--clay-btn); }
+.hist-day-name { flex: 1; min-width: 0; font-size: var(--fs-sm); font-weight: 700; color: var(--c-ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.hist-day-name span { color: var(--c-muted); font-weight: 500; }
+.hist-day-sum { display: flex; gap: 6px; flex: none; }
+.hist-day-sum .sum {
+  display: inline-flex; align-items: center; gap: 3px;
+  font-size: var(--fs-xs); font-weight: 700;
+  padding: 5px 9px; border-radius: var(--r-pill);
+  background: var(--c-bg-deep); color: var(--c-ink);
+}
+.hist-day-sum .sum.in { background: var(--c-pos-soft); color: var(--c-pos); }
+.hist-day-sum .sum.tr { background: var(--c-aqua-soft); color: var(--c-aqua); }
 .hist-ico {
   width: 42px; height: 42px;
   border-radius: 14px;
