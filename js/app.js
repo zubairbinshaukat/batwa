@@ -18,22 +18,19 @@ import { icon } from "./ui/icons.js";
 import { mountBackupNudge } from "./nudge.js";
 import { parseTransactionSms, matchAccount, prefillTitle } from "./smsparse.js";
 import { LOGO_KINDS } from "./ui/accounts.js";
-import { isoDate } from "./util/format.js";
+import { isoDate, greeting } from "./util/format.js";
 import { initTheme, resolvedTheme, setThemeMode, onThemeChange } from "./theme.js";
+import { initDock, expandDock } from "./ui/dock.js";
 
 /* ============================================================
    Views + nav
    ============================================================ */
 
 const VIEWS = {
-  home: { label: "Home", render: renderHome,
-    icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V21h5v-6h4v6h5V9.5"/></svg>' },
-  reports: { label: "Reports", render: renderReports,
-    icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>' },
-  history: { label: "History", render: renderHistory,
-    icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>' },
-  settings: { label: "Settings", render: renderSettings,
-    icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h.01a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v.01a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>' },
+  home:     { label: "Home",     render: renderHome,     iconName: "home" },
+  reports:  { label: "Reports",  render: renderReports,  iconName: "bar-chart" },
+  history:  { label: "History",  render: renderHistory,  iconName: "clock" },
+  settings: { label: "Settings", render: renderSettings, iconName: "settings" },
 };
 
 let currentView = "home";
@@ -52,21 +49,20 @@ function renderNav() {
       "aria-current": key === currentView ? "page" : false,
       onclick: () => go(key),
     });
-    b.innerHTML = `${v.icon}<span>${v.label}</span><span class="nav-ind"></span>`;
+    b.innerHTML = `<span class="nav-pebble"></span>${
+      icon(key === currentView ? `${v.iconName}-fill` : v.iconName, 22)
+    }<span class="lbl">${v.label}</span>`;
     nav.append(b);
     if (i === FAB_AFTER_INDEX) nav.append(fabSlot());
   });
 }
 
 function fabSlot() {
-  const slot = el("div", { class: "nav-fab-slot" });
-  const fab = el("button", {
+  return el("button", {
     class: "nav-fab", "aria-label": "Quick add",
     onclick: () => { if (!sheetOpen()) quickAddSheet("expense"); },
-    html: icon("plus", 24),
+    html: icon("plus", 22),
   });
-  slot.append(fab);
-  return slot;
 }
 
 export function go(view) {
@@ -77,11 +73,20 @@ export function go(view) {
   renderView();
   // each tab starts at the top — never inherit the previous tab's scroll
   window.scrollTo(0, 0);
+  expandDock();
 }
 
 function renderView() {
   if (!unlocked) return;
   const viewEl = $("#view");
+  // The canopy belongs to the page, not to one tab: reset it here, because
+  // onChange() and unlockFlow() come through this function too, not only go().
+  document.body.dataset.view = currentView;
+  const slot = $("#canopy-slot");
+  if (slot) slot.innerHTML = "";
+  $("#canopy")?.classList.remove("is-negative");
+  const hello = $("#hello");
+  if (hello) hello.textContent = greeting();
   try {
     VIEWS[currentView].render(viewEl);
     if (currentView === "home") mountHomeBanners();
@@ -363,6 +368,7 @@ async function boot() {
     initOnlineState();
     registerSW();
     if ("scrollRestoration" in history) history.scrollRestoration = "manual";
+    initDock();
     history.replaceState({ view: "home" }, "");
 
     // Consumed once, and the query goes before the lock screen does — a reload

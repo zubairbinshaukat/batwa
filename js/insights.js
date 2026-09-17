@@ -2,7 +2,7 @@
 // No DOM, no ledger import — so it runs under plain Node and can be smoke-tested
 // on its own. The UI turns these facts into sentences; this file never does.
 
-import { isoDate, parseDay, shiftMonth } from "./util/format.js";
+import { isoDate, shiftMonth, weekdayIndex } from "./util/format.js";
 
 const TOP_N = 3;
 
@@ -12,7 +12,7 @@ export function spendDate(e) {
 }
 
 /** Spending = paid expenses. Transfers and income are not spending. */
-function isSpend(e) {
+export function isSpend(e) {
   return !!e && e.kind === "expense" && e.status === "paid";
 }
 
@@ -27,13 +27,6 @@ function monthOf(iso) {
 function daysInMonthOf(ym) {
   const [y, m] = String(ym).split("-").map(Number);
   return new Date(y, m, 0).getDate();
-}
-
-/** Monday = 0 … Sunday = 6. -1 when the date is unusable. */
-function weekdayIndex(iso) {
-  const d = parseDay(iso);
-  if (Number.isNaN(d.getTime())) return -1;
-  return (d.getDay() + 6) % 7;
 }
 
 function titleKey(title) {
@@ -79,6 +72,31 @@ function groupTitles(list) {
     g.avg = g.count ? g.total / g.count : 0;
   }
   return map;
+}
+
+/**
+ * One month, day by day. Same rule as everywhere else: a spend is a PAID
+ * expense, bucketed by spendDate() — never re-derived here.
+ * -> { days: Map<"YYYY-MM-DD", { total, list }>, total }
+ */
+export function dailySpend(entries, ym) {
+  const days = new Map();
+  let total = 0;
+  for (const e of Array.isArray(entries) ? entries : []) {
+    if (!isSpend(e)) continue;
+    const d = spendDate(e);
+    if (monthOf(d) !== ym) continue;
+    let b = days.get(d);
+    if (!b) { b = { total: 0, list: [] }; days.set(d, b); }
+    const v = amountOf(e);
+    b.total += v;
+    b.list.push(e);
+    total += v;
+  }
+  for (const b of days.values()) {
+    b.list.sort((a, c) => amountOf(c) - amountOf(a));
+  }
+  return { days, total };
 }
 
 /**

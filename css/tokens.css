@@ -111,6 +111,19 @@
   --ring-focus: 0 0 0 4px rgba(98, 72, 245, 0.16);
   --ring-error: 0 0 0 4px rgba(239, 70, 103, 0.14);
 
+  /* pastel clay: the balance card that overlaps the canopy. Pastel fill +
+     ink text is what makes clay read as clay — level 1 of max two. */
+  --c-pastel:      #E9E4FF;
+  --c-pastel-deep: #D9D1FF;
+  --clay-pastel:
+    inset 3px 3px 10px rgba(255, 255, 255, 0.95),
+    inset -4px -5px 12px rgba(98, 72, 245, 0.18),
+    0 18px 36px -14px rgba(98, 72, 245, 0.35);
+  --clay-pastel-press:
+    inset 3px 4px 12px rgba(98, 72, 245, 0.22),
+    inset -1px -1px 3px rgba(255, 255, 255, 0.5),
+    0 4px 10px -6px rgba(98, 72, 245, 0.25);
+
   /* ---- Radius ---- */
   --r-sm:   10px;
   --r-md:   16px;
@@ -142,12 +155,15 @@
   /* ---- Layout ---- */
   --max-w: 480px;
   --max-w-wide: 1080px;
-  --nav-h: 64px;
+  --nav-h: 68px;
+  --dock-gap: 12px;
   --safe-b: env(safe-area-inset-bottom, 0px);
   --safe-t: env(safe-area-inset-top, 0px);
-  /* Full height the fixed bottom nav occupies. Every page reserves at least
-     this much space so content is never trapped behind it — on ANY breakpoint. */
-  --nav-total: calc(var(--nav-h) + var(--safe-b));
+  /* Full height the floating dock occupies, including the gap it floats above.
+     Every page reserves at least this much space so content is never trapped
+     behind it — on ANY breakpoint. Collapsing the dock does not change this:
+     the space stays reserved for the expanded height. */
+  --nav-total: calc(var(--nav-h) + var(--dock-gap) + var(--safe-b));
 }
 
 /* ============================================================
@@ -245,4 +261,15 @@
     inset 0 -1px 0 rgba(155, 133, 255, 0.10);
   --ring-focus: 0 0 0 4px rgba(155, 133, 255, 0.22);
   --ring-error: 0 0 0 4px rgba(255, 112, 137, 0.20);
+
+  --c-pastel:      #2B2358;
+  --c-pastel-deep: #1F1946;
+  --clay-pastel:
+    inset 3px 3px 10px rgba(155, 133, 255, 0.16),
+    inset -4px -5px 12px rgba(0, 0, 0, 0.40),
+    0 18px 36px -14px rgba(0, 0, 0, 0.6);
+  --clay-pastel-press:
+    inset 3px 4px 12px rgba(0, 0, 0, 0.5),
+    inset -1px -1px 3px rgba(155, 133, 255, 0.12),
+    0 4px 10px -6px rgba(0, 0, 0, 0.5);
 }

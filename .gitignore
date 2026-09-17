@@ -1,0 +1,25 @@
+# Editor
+.vscode/
+.idea/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Internal planning docs and the original build spec (not part of the product)
+docs/
+batwa-app-spec.md
+
+# Tooling that must never land in the repo (Batwa has no npm dependencies)
+node_modules/
+package.json
+package-lock.json
+pnpm-lock.yaml
+yarn.lock
+
+# Local scratch
+*.log
+tmp/
+.tmp/

@@ -79,6 +79,33 @@ export function shortDate(iso) {
   return `${d.getDate()} ${MONTHS[d.getMonth()].slice(0, 3)}`;
 }
 
+/** Weekday headers, Monday first — the order the month grid uses. */
+export const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+
+/** Monday = 0 … Sunday = 6. -1 when the date is unusable. */
+export function weekdayIndex(iso) {
+  const d = parseDay(iso);
+  if (Number.isNaN(d.getTime())) return -1;
+  return (d.getDay() + 6) % 7;
+}
+
+/** "2026-09-17" -> "Thu 17 Sep" */
+export function dayLabel(iso) {
+  const i = weekdayIndex(iso);
+  if (i < 0) return "";
+  return `${DAYS[i]} ${shortDate(iso)}`;
+}
+
+/** "Today · Thu 17 Sep" / "Yesterday · …" / plain dayLabel */
+export function relDayLabel(iso) {
+  const d = daysUntil(iso);
+  const base = dayLabel(iso);
+  if (d === 0) return `Today · ${base}`;
+  if (d === -1) return `Yesterday · ${base}`;
+  if (d === 1) return `Tomorrow · ${base}`;
+  return base;
+}
+
 /** current "YYYY-MM" */
 export function thisMonth() {
   return isoDate().slice(0, 7);

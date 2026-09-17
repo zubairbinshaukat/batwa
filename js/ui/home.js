@@ -1,16 +1,16 @@
 // Home: hero balances (blur + count-up reveal), upcoming expenses, quick actions.
 
 import { $, el, esc, anim, animTo, motionOK, buzz } from "../util/dom.js";
-import { fmtMoney, fmtCompact, fmtNum, dueHint, shortDate, greeting, thisMonth, CURRENCY } from "../util/format.js";
-import { state, balances, pendingExpenses, markPaid, unmarkPaid, deleteEntry, deleteSeriesFuture, restoreEntries, limitStatus } from "../ledger.js";
+import { fmtMoney, fmtCompact, fmtNum, dueHint, shortDate, thisMonth, CURRENCY } from "../util/format.js";
+import { state, balances, pendingExpenses, markPaid, unmarkPaid, deleteEntry, deleteSeriesFuture, restoreEntries, limitStatus, monthSummary } from "../ledger.js";
 import { addMoneySheet, addExpenseSheet, confirmSheet, chooseSheet } from "./modals.js";
 import { toast } from "./toast.js";
 import { renderAccountsRow, accountName } from "./accounts.js";
 import { icon, catIcon } from "./icons.js";
 import { go } from "../app.js";
+import { isRevealed, setRevealed } from "./reveal.js";
+import { openMonthSheet } from "./monthsheet.js";
 
-// Session-only: every launch starts blurred. Never persisted.
-let revealed = false;
 let hasCountedUp = false;
 
 /* ---------- exact-amount tooltip (tap on mobile, hover on desktop) ---------- */
@@ -34,12 +34,12 @@ function showTip(target, text) {
 function wireTips(root) {
   root.addEventListener("click", (e) => {
     const t = e.target.closest("[data-tip]");
-    if (!t || !revealed) return;
+    if (!t || !isRevealed()) return;
     tipEl && tipEl.dataset.for === t.dataset.tipId ? hideTip() : showTip(t, t.dataset.tip);
     if (tipEl) tipEl.dataset.for = t.dataset.tipId || "";
   });
   root.addEventListener("mouseover", (e) => {
-    if (!matchMedia("(hover: hover)").matches || !revealed) return;
+    if (!matchMedia("(hover: hover)").matches || !isRevealed()) return;
     const t = e.target.closest("[data-tip]");
     if (t) showTip(t, t.dataset.tip);
   });
@@ -82,35 +82,49 @@ export function renderHome(view) {
   const b = balances();
   const pending = pendingExpenses();
   const negative = b.free < 0;
+  const revealed = isRevealed();
+  const blurred = revealed ? "" : "is-blurred";
+
+  // ---- canopy half: the label and the one big number, on the violet ----
+  const canopy = $("#canopy-slot");
+  if (canopy) {
+    canopy.innerHTML = `
+      <section class="hero ${blurred}" id="hero">
+        <div class="hero-label">Free to spend
+          <button class="hero-eye" id="eye-btn" aria-label="${revealed ? "Hide balances" : "Show balances"}" aria-pressed="${revealed}">
+            ${eyeSVG(revealed)}
+          </button>
+        </div>
+        <div class="hero-amount num"><span class="cur">${CURRENCY.symbol}</span>${moneySpan(b.free)}</div>
+        ${negative ? `<div class="hero-over-line">Over what you have by ${fmtMoney(-b.free)}.</div>` : ""}
+      </section>`;
+  }
+  $("#canopy")?.classList.toggle("is-negative", negative);
+
+  // ---- the money bar's two segments ----
+  const pctCommitted = b.total > 0 ? Math.min(100, (b.committed / b.total) * 100) : 100;
+  const pctFree = 100 - pctCommitted;
+  const spentThisMonth = monthSummary(thisMonth()).spent;
 
   view.innerHTML = `
     <div class="home-grid">
       <div class="home-left">
+        <button class="balance-card ${negative ? "is-negative" : ""} ${blurred}" id="balance-card"
+                aria-label="This month spending, day by day">
+          <div class="money-bar" role="img" aria-label="Free ${Math.round(pctFree)}%, committed ${Math.round(pctCommitted)}%">
+            ${negative
+              ? `<span class="money-bar-over" style="width:100%"></span>`
+              : `<span class="money-bar-free" style="width:${pctFree}%"></span>
+                 <span class="money-bar-committed" style="width:${pctCommitted}%"></span>`}
+          </div>
+          <div class="balance-legend">
+            <div><span class="dot dot-total"></span>Total balance <b class="num">${moneySpan(b.total)}</b></div>
+            <div><span class="dot dot-committed"></span>Committed <b class="num">${moneySpan(b.committed)}</b></div>
+          </div>
+          <div class="balance-foot">Spent so far this month <b class="num">${moneySpan(spentThisMonth)}</b> ${icon("chevron-right", 14)}</div>
+        </button>
         <div id="install-slot"></div>
         <div id="nudge-slot"></div>
-        <section class="hero-card ${negative ? "is-negative" : ""} ${revealed ? "" : "is-blurred"}" id="hero">
-          <div class="hero-label">
-            Free to spend
-            <button class="hero-eye" id="eye-btn" aria-label="${revealed ? "Hide balances" : "Show balances"}" aria-pressed="${revealed}">
-              ${eyeSVG(revealed)}
-            </button>
-          </div>
-          <div class="hero-amount num">
-            <span class="cur">${CURRENCY.symbol}</span>
-            ${moneySpan(b.free)}
-          </div>
-          ${negative ? `<div class="hero-over-line">You're ${fmtMoney(-b.free)} over what you have.</div>` : ""}
-          <div class="hero-sub">
-            <div>
-              <div class="sub-label"><span class="dot dot-total"></span> Total balance</div>
-              <div class="sub-amount num">${moneySpan(b.total)}</div>
-            </div>
-            <div>
-              <div class="sub-label"><span class="dot dot-committed"></span> Committed</div>
-              <div class="sub-amount num">${moneySpan(b.committed)}</div>
-            </div>
-          </div>
-        </section>
         <div id="acc-slot"></div>
       </div>
 
@@ -121,14 +135,13 @@ export function renderHome(view) {
           <h2>Upcoming</h2>
           ${pending.length ? `<span class="count">${pending.length}</span>` : ""}
         </div>
-        <div class="stack" id="upcoming"></div>
+        <div class="stack ${blurred}" id="upcoming"></div>
       </div>
     </div>
   `;
 
-  // greeting
-  const hello = $("#hello");
-  if (hello) hello.textContent = greeting();
+  // the card opens the day-by-day month view
+  $("#balance-card", view).addEventListener("click", () => { buzz(8); openMonthSheet(thisMonth()); });
 
   // accounts row
   renderAccountsRow($("#acc-slot", view), { revealed });
@@ -136,29 +149,29 @@ export function renderHome(view) {
   // monthly limits — nothing at all when no limit is set
   renderLimitsCard($("#limits-slot", view));
 
-  // eye toggle
-  $("#eye-btn", view).addEventListener("click", (e) => {
+  // eye toggle — one flag, every money surface on the page
+  $("#eye-btn")?.addEventListener("click", (e) => {
     e.stopPropagation();
-    revealed = !revealed;
+    setRevealed(!isRevealed());
+    const on = isRevealed();
     buzz(8);
-    const hero = $("#hero", view);
-    hero.classList.toggle("is-blurred", !revealed);
-    const accRow = $(".acc-row", view);
-    if (accRow) accRow.classList.toggle("is-blurred", !revealed);
-    const limits = $(".limits-card", view);
-    if (limits) limits.classList.toggle("is-blurred", !revealed);
-    const btn = $("#eye-btn", view);
-    btn.innerHTML = eyeSVG(revealed);
-    btn.setAttribute("aria-pressed", String(revealed));
-    btn.setAttribute("aria-label", revealed ? "Hide balances" : "Show balances");
-    if (revealed && !hasCountedUp) {
-      hasCountedUp = true;
-      countUp(view);
+    for (const sel of ["#hero", "#balance-card", ".acc-row", ".limits-card", "#upcoming", "#expected-income"]) {
+      document.querySelector(sel)?.classList.toggle("is-blurred", !on);
     }
-    if (!revealed) hideTip();
+    const btn = $("#eye-btn");
+    btn.innerHTML = eyeSVG(on);
+    btn.setAttribute("aria-pressed", String(on));
+    btn.setAttribute("aria-label", on ? "Hide balances" : "Show balances");
+    if (on && !hasCountedUp) {
+      hasCountedUp = true;
+      countUp(document.body);
+    }
+    if (!on) hideTip();
   });
 
   wireTips(view);
+  const canopyEl = $("#canopy");
+  if (canopyEl) wireTips(canopyEl);
 
   // expected income — pending income, actionable ("Mark received"), separate from the Upcoming
   // expense list so that component's recurrence/series logic stays untouched.
@@ -172,7 +185,7 @@ export function renderHome(view) {
         <h2>Expected income</h2>
         <span class="count">${pendingIncome.length}</span>
       </div>
-      <div class="stack" id="expected-income"></div>
+      <div class="stack ${blurred}" id="expected-income"></div>
     `;
     const eiList = $("#expected-income", view);
     for (const e of pendingIncome) eiList.append(incomeCard(e));
@@ -188,7 +201,8 @@ export function renderHome(view) {
   }
 
   // entrance animation
-  anim($("#hero", view), { y: 24, opacity: 0, scale: 0.97 }, { y: 0, opacity: 1, scale: 1, duration: 0.55, ease: "power3.out" });
+  anim($("#hero"), { y: 18, opacity: 0 }, { y: 0, opacity: 1, duration: 0.5, ease: "power3.out" });
+  anim($("#balance-card", view), { y: 22, opacity: 0, scale: 0.98 }, { y: 0, opacity: 1, scale: 1, duration: 0.55, delay: 0.06, ease: "power3.out" });
   anim([...($(".acc-row", view)?.children || $("#acc-slot", view).children)], { y: 18, opacity: 0 }, { y: 0, opacity: 1, duration: 0.4, stagger: 0.05, delay: 0.1, ease: "power2.out" });
   anim([...list.children], { y: 26, opacity: 0 }, { y: 0, opacity: 1, duration: 0.45, stagger: 0.07, delay: 0.12, ease: "power2.out" });
 }
@@ -204,7 +218,7 @@ function renderLimitsCard(slot) {
   if (!rows.length) return;
   const shown = rows.slice(0, 4);
 
-  const card = el("div", { class: `card limits-card ${revealed ? "" : "is-blurred"}` });
+  const card = el("div", { class: `card limits-card ${isRevealed() ? "" : "is-blurred"}` });
   card.append(el("div", { class: "limits-head", html: `${icon("scale", 15)}<span>Monthly limits</span>` }));
   for (const r of shown) {
     const tone = r.over > 0 ? "is-over" : r.ratio >= 0.8 ? "is-warn" : "is-ok";
@@ -238,7 +252,7 @@ function incomeCard(e) {
           ${e.dueDate ? `<span>· ${shortDate(e.dueDate)}</span>` : ""}
         </div>
       </div>
-      <div class="exp-amount num" style="color:var(--c-pos)">+${fmtMoney(e.amount)}</div>
+      <div class="exp-amount num blurable" style="color:var(--c-pos)">+${fmtMoney(e.amount)}</div>
     </div>
     <div class="exp-actions">
       <button class="chip-btn chip-paid" data-act="received">${icon("check", 15)} Mark received</button>
@@ -318,7 +332,7 @@ function expenseCard(e) {
           ${e.dueDate ? `<span>· ${shortDate(e.dueDate)}</span>` : ""}
         </div>
       </div>
-      <div class="exp-amount num">${fmtMoney(e.amount)}</div>
+      <div class="exp-amount num blurable">${fmtMoney(e.amount)}</div>
     </div>
     <div class="exp-meta" style="margin-top:8px">
       ${recBadge(e.recurrence)}

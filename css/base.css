@@ -79,9 +79,10 @@ ul { margin: 0; padding: 0; list-style: none; }
 .app-shell {
   max-width: var(--max-w);
   margin: 0 auto;
-  /* bottom padding clears the fixed nav + the iOS home bar, with breathing room */
-  padding: calc(var(--safe-t) + var(--s-4)) var(--s-4)
-           calc(var(--nav-total) + var(--s-9));
+  /* The canopy owns the top of the page (and the safe area with it), so the
+     shell starts flush under it. Bottom padding clears the floating dock +
+     the iOS home bar, with breathing room. */
+  padding: 0 var(--s-4) calc(var(--nav-total) + var(--s-9));
   min-height: 100dvh;
 }
 

@@ -6,6 +6,7 @@ import { state, addAccount, updateAccount, removeAccountWithEntries, restoreAcco
 import { openSheet, closeSheet, confirmSheet } from "./modals.js";
 import { toast } from "./toast.js";
 import { icon } from "./icons.js";
+import { isRevealed } from "./reveal.js";
 
 /* ============================================================
    Logo pack — real brand marks from branding/banks/ on clean white
@@ -118,7 +119,7 @@ function fillFraction({ balance, committed }) {
   return { pct, tone };
 }
 
-export function renderAccountsRow(container, { revealed }) {
+export function renderAccountsRow(container, { revealed = isRevealed() } = {}) {
   container.innerHTML = "";
   if (!state.accounts.length) {
     // opt-in feature: a quiet inline invite instead of an empty row

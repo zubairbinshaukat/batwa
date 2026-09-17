@@ -2,7 +2,7 @@
 // Filter changes re-render ONLY the list (with a brief loader), never the page.
 
 import { $, el, esc, anim, buzz } from "../util/dom.js";
-import { fmtCompact, monthLabel, thisMonth, shiftMonth, shortDate } from "../util/format.js";
+import { fmtCompact, monthLabel, thisMonth, shiftMonth, shortDate, relDayLabel } from "../util/format.js";
 import { state, entriesForMonth } from "../ledger.js";
 import { accountName } from "./accounts.js";
 import { icon, catIcon } from "./icons.js";
@@ -83,10 +83,35 @@ function applyFilters() {
   if (filters.account !== "all") {
     list = list.filter((e) => e.accountId === filters.account || e.fromAccountId === filters.account || e.toAccountId === filters.account);
   }
-  const dateKey = (e) => e.kind === "transfer" ? (e.paidAt || e.createdAt)
-    : e.kind === "income" ? (e.paidAt || e.dueDate || e.createdAt)
-    : (e.dueDate || e.createdAt);
   return list.sort((a, b) => (dateKey(a) < dateKey(b) ? 1 : -1)); // newest first
+}
+
+/** The one date a row belongs to — the same key entriesForMonth() buckets by. */
+function dateKey(e) {
+  const d = e.kind === "transfer" ? (e.paidAt || e.createdAt)
+    : e.kind === "income" ? (e.paidAt || e.dueDate || e.createdAt)
+    : (e.dueDate || e.paidAt || e.createdAt);
+  return String(d).slice(0, 10);
+}
+
+/** "−4.4k" / "−4.4k · +80k" / "+80k" for one day's rows. */
+function dayTotal(rows) {
+  let out = 0, inn = 0;
+  for (const e of rows) {
+    if (e.kind === "expense") out += Number(e.amount) || 0;
+    else if (e.kind === "income" && e.status === "paid") inn += Number(e.amount) || 0;
+  }
+  const parts = [];
+  if (out > 0 || inn === 0) parts.push(`\u2212${fmtCompact(out)}`);
+  if (inn > 0) parts.push(`<span style="color:var(--c-pos)">+${fmtCompact(inn)}</span>`);
+  return parts.join(" \u00b7 ");
+}
+
+function dayDivider(day, rows, first) {
+  return el("div", {
+    class: `hist-day ${first ? "is-first" : ""}`,
+    html: `<span>${relDayLabel(day)}</span><span class="hist-day-sum num">${dayTotal(rows)}</span>`,
+  });
 }
 
 function paintList(view, { loading = false } = {}) {
@@ -104,7 +129,22 @@ function paintList(view, { loading = false } = {}) {
         <p>Nothing matches these filters.</p></div>`;
       return;
     }
-    for (const e of list) root.append(historyRow(e));
+    // group the continuous list into days, each under its own divider
+    const groups = [];
+    for (const e of list) {
+      const day = dateKey(e);
+      const last = groups[groups.length - 1];
+      if (last && last.day === day) last.rows.push(e);
+      else groups.push({ day, rows: [e] });
+    }
+    groups.forEach((g, i) => {
+      root.append(dayDivider(g.day, g.rows, i === 0));
+      g.rows.forEach((e, j) => {
+        const row = historyRow(e);
+        if (j === 0) row.classList.add("is-day-first");
+        root.append(row);
+      });
+    });
     anim([...root.children], { opacity: 0, y: 10 }, { opacity: 1, y: 0, duration: 0.28, stagger: 0.02, ease: "power2.out" });
   };
 

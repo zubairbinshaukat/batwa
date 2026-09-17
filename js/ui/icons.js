@@ -44,6 +44,7 @@ const PATHS = {
   dot:          '<circle cx="12" cy="12" r="5" fill="currentColor" stroke="none"/>',
   "circle-dash": '<circle cx="12" cy="12" r="8.5" stroke-dasharray="4 4"/>',
   eye:          '<path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/>',
+  "eye-off":    '<path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><path d="M1 1l22 22"/>',
   settings:     '<circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1 7 17M17 7l2.1-2.1"/>',
   wallet:       '<path d="M20 7H5a2 2 0 0 1 0-4h13v4"/><path d="M22 7H4a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h18V7z" transform="scale(0.95) translate(0.6,0.6)"/><path d="M17.5 14h.01"/>',
   undo:         '<path d="M3 7v6h6"/><path d="M21 17a9 9 0 0 0-15-6.7L3 13"/>',
@@ -53,12 +54,19 @@ const PATHS = {
   list:         '<path d="M8 6h13M8 12h13M8 18h13M3.5 6h.01M3.5 12h.01M3.5 18h.01"/>',
   swap:         '<path d="m17 3 4 4-4 4"/><path d="M3 7h18"/><path d="m7 21-4-4 4-4"/><path d="M21 17H3"/>',
   grip:         '<circle cx="9" cy="5" r="1.4" fill="currentColor" stroke="none"/><circle cx="9" cy="12" r="1.4" fill="currentColor" stroke="none"/><circle cx="9" cy="19" r="1.4" fill="currentColor" stroke="none"/><circle cx="15" cy="5" r="1.4" fill="currentColor" stroke="none"/><circle cx="15" cy="12" r="1.4" fill="currentColor" stroke="none"/><circle cx="15" cy="19" r="1.4" fill="currentColor" stroke="none"/>',
+
+  /* ---- Filled nav variants: the active tab. Same silhouettes as the
+     outline set, so the swap reads as a weight change, not a new icon. ---- */
+  "home-fill":  '<path fill="currentColor" stroke="none" d="M12.65 2.76a1 1 0 0 0-1.3 0L2.6 10.4a1 1 0 0 0 .65 1.75H4.5V20a1.5 1.5 0 0 0 1.5 1.5h3.25V15.6a2.75 2.75 0 0 1 5.5 0v5.9H18a1.5 1.5 0 0 0 1.5-1.5v-7.85h1.25a1 1 0 0 0 .65-1.75Z"/>',
+  "bar-chart-fill": '<rect x="3.4" y="9.4" width="3.2" height="10.6" rx="1.6" fill="currentColor" stroke="none"/><rect x="9.4" y="3.4" width="3.2" height="16.6" rx="1.6" fill="currentColor" stroke="none"/><rect x="15.4" y="12.4" width="3.2" height="7.6" rx="1.6" fill="currentColor" stroke="none"/><rect x="2" y="19.1" width="20" height="1.9" rx=".95" fill="currentColor" stroke="none"/>',
+  "clock-fill": '<circle cx="12" cy="12" r="9" fill="currentColor" stroke="none"/><path d="M12 7.2v5l2.9 1.9" stroke="#fff" stroke-width="2" fill="none"/>',
+  "settings-fill": '<path fill="currentColor" fill-rule="evenodd" stroke="none" d="M12 4.4a7.6 7.6 0 1 0 0 15.2 7.6 7.6 0 0 0 0-15.2Zm0 4.6a3 3 0 1 1 0 6 3 3 0 0 1 0-6Z"/><path stroke="currentColor" stroke-width="2.8" d="M12 3.1v1.9M12 20.9v-1.9M3.1 12h1.9M20.9 12h-1.9M5.25 5.25l1.9 1.9M18.75 18.75l-1.9-1.9M5.25 18.75l1.9-1.9M18.75 5.25l-1.9 1.9"/>',
 };
 
 /** Returns an inline SVG string. Icons inherit currentColor. */
 export function icon(name, size = 18, cls = "") {
   const body = PATHS[name] || PATHS.box;
-  return `<svg class="ico ${cls}" width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${body}</svg>`;
+  return `<svg class="ico ${cls}" width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${body}</svg>`;
 }
 
 /** Category -> icon name (Others is the fallback). */

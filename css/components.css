@@ -2,16 +2,59 @@
    Batwa — components
    ============================================================ */
 
+/* =================== Canopy ===================
+   The one saturated surface on every screen: a full-width violet sheet that
+   starts behind the status bar and ends in 32px bottom corners. It carries the
+   header everywhere, and on Home the big free-to-spend number too. */
+.canopy {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  background: var(--grad-hero);
+  border-radius: 0 0 32px 32px;
+  padding: calc(var(--safe-t) + var(--s-4)) 0 var(--s-6);
+  color: #fff;
+}
+.canopy.is-negative { background: var(--grad-danger); }
+/* soft light blooms inside the gradient */
+.canopy::before,
+.canopy::after {
+  content: "";
+  position: absolute;
+  border-radius: 50%;
+  z-index: -1;
+  filter: blur(2px);
+}
+.canopy::before {
+  width: 240px; height: 240px;
+  right: -70px; top: -110px;
+  background: radial-gradient(circle, rgba(255,255,255,0.22), transparent 65%);
+}
+.canopy::after {
+  width: 200px; height: 200px;
+  left: -60px; bottom: -120px;
+  background: radial-gradient(circle, rgba(63,188,248,0.35), transparent 65%);
+}
+.canopy-inner { max-width: var(--max-w); margin: 0 auto; padding: 0 var(--s-4); }
+@media (min-width: 900px) { .canopy-inner { max-width: var(--max-w-wide); } }
+/* room for the balance card that overlaps the canopy's bottom edge */
+body[data-view="home"] .canopy { padding-bottom: calc(var(--s-6) + 28px); }
+/* desktop has no overlap (the left column is sticky and scrolls on its own),
+   so the canopy does not need to reserve the extra 28px either */
+@media (min-width: 900px) {
+  body[data-view="home"] .canopy { padding-bottom: var(--s-6); }
+}
+
 /* =================== Header =================== */
 .app-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: var(--s-3);
-  margin-bottom: var(--s-5);
+  margin-bottom: var(--s-4);
 }
-.greeting .hello { font-size: var(--fs-sm); color: var(--c-muted); font-weight: 500; }
-.greeting .title { font-size: var(--fs-lg); font-weight: 800; letter-spacing: -0.02em; }
+.greeting .hello { font-size: var(--fs-sm); color: rgba(255,255,255,0.72); font-weight: 500; }
+.greeting .title { font-size: var(--fs-lg); font-weight: 800; letter-spacing: -0.02em; color: #fff; }
 
 .icon-btn {
   width: 44px; height: 44px;
@@ -56,6 +99,32 @@
 .sync-pill.st-offline { color: var(--c-warn); background: var(--c-warn-soft); border-color: transparent; }
 .sync-pill .spin { display: inline-block; animation: pill-spin 0.9s linear infinite; }
 @keyframes pill-spin { to { transform: rotate(360deg); } }
+
+/* On the canopy both controls turn to glass — same recipe as .key. Literals on
+   purpose: the canopy is a violet gradient in BOTH themes, so these must not
+   follow the surface tokens. */
+.canopy .sync-pill,
+.canopy .theme-toggle {
+  background: rgba(255,255,255,0.16);
+  color: #fff;
+  border-color: rgba(255,255,255,0.22);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  box-shadow:
+    inset 2px 2px 6px rgba(255,255,255,0.22),
+    inset -2px -3px 6px rgba(12,4,60,0.22),
+    0 8px 18px -8px rgba(12,4,60,0.35);
+}
+:root[data-theme="dark"] .canopy .theme-toggle { color: #fff; }
+/* state tints keep their icon colour; the text stays legible white */
+.canopy .sync-pill.st-synced  { background: rgba(255,255,255,0.16); color: #fff; }
+.canopy .sync-pill.st-pending { background: rgba(255,255,255,0.16); color: #fff; }
+.canopy .sync-pill.st-syncing { background: rgba(255,255,255,0.16); color: #fff; }
+.canopy .sync-pill.st-offline { background: rgba(255,255,255,0.16); color: #fff; }
+.canopy .sync-pill.st-synced  svg.ico { color: #BFF5E2; }
+.canopy .sync-pill.st-pending svg.ico { color: #E4DCFF; }
+.canopy .sync-pill.st-syncing svg.ico { color: #C7EEFB; }
+.canopy .sync-pill.st-offline svg.ico { color: #FFE0AE; }
 
 /* =================== Accounts =================== */
 .acc-row {
@@ -347,59 +416,26 @@
 }
 .copy-box code::-webkit-scrollbar { display: none; }
 
-/* =================== Hero balance card =================== */
-.hero-card {
-  position: relative;
-  border-radius: var(--r-xl);
-  padding: var(--s-6) var(--s-6) var(--s-5);
-  background: var(--grad-hero);
-  color: var(--c-on-grad);
-  /* literals on purpose: the hero sits on the violet gradient in both themes */
-  box-shadow:
-    inset 0 1.5px 0 rgba(255, 255, 255, 0.28),
-    inset 0 -3px 0 rgba(12, 4, 60, 0.18),
-    var(--shadow-hero);
-  overflow: hidden;
-  isolation: isolate;
-}
-/* soft light blooms inside the gradient */
-.hero-card::before,
-.hero-card::after {
-  content: "";
-  position: absolute;
-  border-radius: 50%;
-  z-index: -1;
-  filter: blur(2px);
-}
-.hero-card::before {
-  width: 240px; height: 240px;
-  right: -70px; top: -110px;
-  background: radial-gradient(circle, rgba(255,255,255,0.22), transparent 65%);
-}
-.hero-card::after {
-  width: 200px; height: 200px;
-  left: -60px; bottom: -120px;
-  background: radial-gradient(circle, rgba(63,188,248,0.35), transparent 65%);
-}
-
+/* =================== Hero (on the canopy) =================== */
+.hero { position: relative; }
 .hero-label {
   display: flex; align-items: center; gap: var(--s-2);
-  font-size: var(--fs-sm);
+  font-size: 11px;
   font-weight: 600;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.12em;
   text-transform: uppercase;
-  color: var(--c-on-grad-dim);
+  color: rgba(255,255,255,0.72);
 }
 .hero-eye {
   margin-left: auto;
-  width: 40px; height: 40px;
+  width: 30px; height: 30px;
   display: grid; place-items: center;
   border-radius: var(--r-pill);
-  background: rgba(255,255,255,0.16);
+  background: rgba(255,255,255,0.14);
   color: #fff;
-  backdrop-filter: blur(6px);
   transition: transform var(--t-fast) var(--ease-out), background var(--t-fast);
 }
+.hero-eye svg { width: 16px; height: 16px; }
 .hero-eye:active { transform: scale(0.9); background: rgba(255,255,255,0.28); }
 
 .hero-amount {
@@ -407,23 +443,18 @@
   font-size: var(--fs-hero);
   font-weight: 800;
   letter-spacing: -0.03em;
-  line-height: 1.05;
-  display: inline-flex;
-  align-items: baseline;
+  line-height: 1;
+  display: flex;
+  align-items: flex-start;
   gap: 6px;
-  min-height: 1.1em;
+  min-height: 1.05em;
+  color: #fff;
 }
-.hero-amount .cur { font-size: 0.45em; font-weight: 700; color: var(--c-on-grad-dim); }
+/* the symbol sits at the cap height of the digits, not on their baseline */
+.hero-amount .cur { font-size: 0.4em; font-weight: 600; margin-top: 0.32em; opacity: 0.85; }
 
-.hero-card.is-negative {
-  background: var(--grad-danger);
-  box-shadow:
-    inset 0 1.5px 0 rgba(255, 255, 255, 0.28),
-    inset 0 -3px 0 rgba(12, 4, 60, 0.18),
-    0 14px 36px -10px rgba(226,58,95,0.5);
-}
 .hero-over-line {
-  margin-top: var(--s-1);
+  margin-top: var(--s-2);
   font-size: var(--fs-sm);
   font-weight: 600;
   color: #fff;
@@ -433,36 +464,79 @@
   border-radius: var(--r-pill);
 }
 
-.hero-sub {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: var(--s-3);
-  margin-top: var(--s-5);
-  padding-top: var(--s-4);
-  border-top: 1px solid rgba(255,255,255,0.22);
+/* =================== Balance card (pastel clay, overlaps the canopy) ======= */
+.balance-card {
+  display: block; width: 100%; text-align: left;
+  margin: -28px 0 var(--s-4);
+  position: relative; z-index: 2;
+  padding: var(--s-5) var(--s-5) var(--s-4);
+  border-radius: var(--r-xl);
+  background: var(--c-pastel);
+  color: var(--c-ink);
+  box-shadow: var(--clay-pastel);
+  transition: transform var(--t-fast) var(--ease-out);
 }
-.hero-sub .sub-label {
-  font-size: var(--fs-xs);
-  font-weight: 600;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--c-on-grad-dim);
-  display: flex; align-items: center; gap: 6px;
+.balance-card:active { transform: translateY(1px) scale(0.985); box-shadow: var(--clay-pastel-press); }
+@media (min-width: 900px) { .balance-card { margin-top: 0; } }
+
+/* sunken well with a raised two-segment fill — clay level 2, and the last one */
+.money-bar {
+  height: 14px;
+  border-radius: var(--r-pill);
+  background: var(--c-pastel-deep);
+  box-shadow: var(--clay-sunken);
+  display: flex;
+  overflow: hidden;
+  padding: 2px;
+  gap: 2px;
 }
-.hero-sub .sub-label .dot { width: 7px; height: 7px; border-radius: 50%; }
-.dot-total { background: #B9E8FF; }
-.dot-committed { background: #FFD48A; }
-.hero-sub .sub-amount {
-  font-size: var(--fs-lg);
+.money-bar > span {
+  height: 100%;
+  border-radius: var(--r-pill);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.35), 0 1px 3px rgba(12,4,60,0.25);
+  transition: width var(--t-med) var(--ease-out);
+}
+.money-bar-free { background: var(--grad-action); }
+.money-bar-committed { background: linear-gradient(135deg, #F2A93B, #FFC466); }
+.money-bar-over { background: var(--grad-danger); }
+
+.balance-legend {
+  display: grid; grid-template-columns: 1fr 1fr; gap: var(--s-3);
+  margin-top: var(--s-4);
+  font-size: var(--fs-sm);
+  color: var(--c-ink-soft);
+}
+.balance-legend .dot {
+  width: 7px; height: 7px; border-radius: 50%;
+  display: inline-block; margin-right: 6px;
+}
+.balance-legend b {
+  display: block;
+  font-size: var(--fs-md);
   font-weight: 700;
-  letter-spacing: -0.02em;
+  color: var(--c-ink);
   margin-top: 2px;
 }
+.dot-total { background: #6248F5; }
+.dot-committed { background: #F2A93B; }
+
+.balance-foot {
+  margin-top: var(--s-4);
+  padding-top: var(--s-3);
+  border-top: 1px solid rgba(98,72,245,0.12);
+  font-size: var(--fs-sm);
+  color: var(--c-muted);
+  display: flex; align-items: center; gap: 6px;
+}
+.balance-foot b { color: var(--c-ink); margin-left: auto; }
+.balance-foot svg.ico { color: var(--c-faint); }
+:root[data-theme="dark"] .balance-foot { border-top-color: rgba(155,133,255,0.16); }
 
 /* Blur state — number shape stays visible */
 .blurable { transition: filter 280ms var(--ease-out); cursor: pointer; }
 .is-blurred .blurable { filter: blur(11px); }
 .is-blurred .hero-amount .cur { filter: blur(8px); }
+.is-blurred .exp-amount.blurable { filter: blur(9px); }
 
 /* Exact-amount tooltip */
 .tip {
@@ -675,63 +749,165 @@
 }
 .list-loader svg { animation: pill-spin 0.8s linear infinite; }
 
-/* =================== Bottom nav =================== */
+/* =================== Floating dock ===================
+   Detached pill, inset from both sides, glass over whatever scrolls beneath.
+   Labels collapse on scroll-down (height + max-height only, never shadow). */
 .bottom-nav {
   position: fixed;
-  left: 0; right: 0; bottom: 0;
+  left: 50%;
+  bottom: calc(var(--safe-b) + var(--dock-gap));
+  transform: translateX(-50%);
+  width: min(calc(100% - 32px), 420px);
+  height: var(--nav-h);
+  border-radius: var(--r-pill);
   z-index: 50;
-  height: var(--nav-total);
-  padding-bottom: var(--safe-b);
-  background: rgba(255, 255, 255, 0.86);
-  backdrop-filter: blur(18px);
-  -webkit-backdrop-filter: blur(18px);
-  border-top: 1px solid var(--c-border);
-  display: flex;
-  justify-content: center;
+  padding: 0 var(--s-2);
+  background: rgba(255, 255, 255, 0.80);
+  backdrop-filter: blur(20px) saturate(1.4);
+  -webkit-backdrop-filter: blur(20px) saturate(1.4);
+  border: 1px solid rgba(255, 255, 255, 0.7);
+  box-shadow:
+    inset 0 1.5px 0 rgba(255, 255, 255, 0.95),
+    inset 0 -2px 0 rgba(98, 72, 245, 0.08),
+    0 10px 30px -10px rgba(23, 19, 58, 0.28);
+  transition: height var(--t-med) var(--ease-out);
 }
+.bottom-nav.is-compact { height: 56px; }
 .bottom-nav .nav-inner {
-  width: 100%;
-  max-width: var(--max-w);
+  height: 100%;
   display: grid;
   grid-auto-flow: column;
   grid-auto-columns: 1fr;   /* adapts to however many tabs exist */
+  align-items: center;
 }
 .nav-item {
+  position: relative;
   display: flex; flex-direction: column; align-items: center; justify-content: center;
-  gap: 3px;
-  font-size: var(--fs-xs);
-  font-weight: 600;
+  gap: 2px;
+  height: 100%;
+  min-height: 0;
   color: var(--c-muted);
   transition: color var(--t-fast);
-  min-height: var(--nav-h);
 }
-.nav-item svg { width: 23px; height: 23px; }
-.nav-item.is-active { color: var(--c-violet); }
-.nav-item.is-active .nav-ind {
-  width: 18px; height: 3px; border-radius: 2px;
-  background: var(--grad-action);
+.nav-item .lbl {
+  font-size: 11px; font-weight: 600;
+  max-height: 14px; opacity: 1; overflow: hidden;
+  transition: max-height var(--t-med) var(--ease-out), opacity var(--t-fast);
 }
-.nav-ind { width: 18px; height: 3px; border-radius: 2px; background: transparent; }
-
-/* Center FAB — its own grid cell in .nav-inner, button rises above the bar */
-.nav-fab-slot { position: relative; display: flex; align-items: center; justify-content: center; }
-.nav-fab {
+.is-compact .nav-item .lbl { max-height: 0; opacity: 0; }
+/* the pebble is a sibling of the icon, so it is centred on the icon's own box
+   in both states — nothing to recompute when the labels fold away */
+.nav-item .ico { position: relative; z-index: 1; width: 22px; height: 22px; }
+.nav-pebble {
   position: absolute;
-  top: -22px;
-  width: 56px; height: 56px;
-  border-radius: var(--r-pill);
+  left: 50%;
+  top: 50%;
+  width: 40px; height: 30px;
+  margin: -15px 0 0 -20px;
+  border-radius: 14px;
+  background: var(--c-violet-soft);
+  opacity: 0;
+  /* The label (14px + 2px gap) pushes the icon 8px above the item's centre,
+     so the pebble rides up by the same 8px — and slides back down with the
+     label, as a transform, when the dock collapses. */
+  transform: translateY(-8px) scale(0.7);
+  transition: opacity var(--t-fast), transform var(--t-med) var(--ease-out);
+}
+.is-compact .nav-pebble { transform: translateY(0) scale(0.7); }
+.nav-item.is-active { color: var(--c-violet); }
+.nav-item.is-active .nav-pebble { opacity: 1; transform: translateY(-8px) scale(1); }
+.is-compact .nav-item.is-active .nav-pebble { transform: translateY(0) scale(1); }
+
+/* Centre FAB — an ordinary grid cell, in flow, no ring, no absolute offset */
+.nav-fab {
+  width: 48px; height: 48px;
+  margin: 0 auto;
+  border-radius: 50%;
   background: var(--grad-action);
   color: #fff;
   display: grid; place-items: center;
   box-shadow: var(--clay-btn), var(--glow-violet);
-  border: 4px solid var(--c-surface);
   transition: transform var(--t-fast) var(--ease-out);
 }
 .nav-fab:active {
   transform: translateY(1px) scale(0.94);
   box-shadow: var(--clay-btn-press), var(--glow-press);
 }
-.nav-fab svg.ico { width: 24px; height: 24px; }
+.nav-fab svg.ico { width: 22px; height: 22px; }
+
+/* =================== Month sheet (day grid) =================== */
+.ms-head {
+  display: flex; align-items: center; gap: var(--s-2);
+  margin-bottom: var(--s-4);
+}
+.ms-head .icon-btn { width: 36px; height: 36px; flex: 0 0 auto; }
+.ms-head .icon-btn[disabled] { opacity: 0.3; pointer-events: none; }
+.ms-head-text { flex: 1 1 auto; min-width: 0; text-align: center; }
+.ms-range {
+  font-size: 11px; font-weight: 700; letter-spacing: 0.1em;
+  text-transform: uppercase; color: var(--c-muted);
+}
+.ms-total { font-size: var(--fs-xl); font-weight: 800; letter-spacing: -0.02em; line-height: 1.15; }
+.ms-avg { font-family: var(--font-hand); font-size: var(--fs-hand); color: var(--c-muted); line-height: 1.1; }
+
+.ms-dow {
+  display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px;
+  margin-bottom: 6px;
+  font-size: 10px; font-weight: 700; letter-spacing: 0.04em;
+  text-transform: uppercase; color: var(--c-faint); text-align: center;
+}
+.ms-dow .is-we { color: var(--c-violet); }
+
+.ms-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; }
+.ms-pad { aspect-ratio: 1 / 1.05; }
+.ms-cell {
+  position: relative;
+  aspect-ratio: 1 / 1.05;
+  border-radius: 12px;
+  padding: 4px 5px;
+  display: flex; flex-direction: column; justify-content: space-between;
+  align-items: flex-start;
+  color: var(--c-ink-soft);
+  background: var(--c-surface-2);
+  transition: transform var(--t-fast) var(--ease-out);
+}
+.ms-cell:active { transform: scale(0.92); }
+.ms-cell .ms-n { font-size: 12px; font-weight: 600; line-height: 1; }
+.ms-cell .ms-v { font-size: 10px; font-weight: 600; line-height: 1; align-self: flex-start; }
+.ms-cell.h0 { box-shadow: var(--clay-sunken); }
+.ms-cell.h0.is-we { background: var(--c-aqua-soft); }
+.ms-cell.h1 { background: rgba(98, 72, 245, 0.12); }
+.ms-cell.h2 { background: rgba(98, 72, 245, 0.24); }
+.ms-cell.h3 { background: rgba(98, 72, 245, 0.40); color: #fff; }
+.ms-cell.h4 { background: rgba(98, 72, 245, 0.60); color: #fff; }
+:root[data-theme="dark"] .ms-cell.h1 { background: rgba(155, 133, 255, 0.16); }
+:root[data-theme="dark"] .ms-cell.h2 { background: rgba(155, 133, 255, 0.30); }
+:root[data-theme="dark"] .ms-cell.h3 { background: rgba(124, 96, 240, 0.58); color: #fff; }
+:root[data-theme="dark"] .ms-cell.h4 { background: rgba(124, 96, 240, 0.85); color: #fff; }
+.ms-cell.is-today { outline: 2px solid var(--c-violet); outline-offset: 1px; }
+.ms-cell.is-sel { outline: 2px solid var(--c-ink); outline-offset: 1px; }
+.ms-cell.is-future { opacity: 0.35; pointer-events: none; }
+
+.ms-day { margin-top: var(--s-5); }
+.ms-day-head {
+  display: flex; align-items: baseline; justify-content: space-between; gap: var(--s-3);
+  font-size: var(--fs-sm); font-weight: 700; color: var(--c-ink);
+  padding-bottom: var(--s-2);
+  border-bottom: 1px solid var(--c-border);
+}
+.ms-empty { font-family: var(--font-hand); font-size: var(--fs-hand); color: var(--c-muted); padding: var(--s-3) 0; }
+.ms-row {
+  display: flex; align-items: center; gap: var(--s-3);
+  padding: 9px 0;
+}
+.ms-row + .ms-row { border-top: 1px solid var(--c-border); }
+.ms-row-ico {
+  width: 30px; height: 30px; flex: 0 0 auto;
+  border-radius: 10px;
+  display: grid; place-items: center;
+  background: var(--c-violet-soft); color: var(--c-violet);
+}
+.ms-row-amt { font-weight: 700; font-size: var(--fs-sm); white-space: nowrap; }
 
 /* =================== Sheets / modals =================== */
 .sheet-backdrop {
@@ -1325,6 +1501,28 @@ select.input {
   padding: var(--s-3) var(--s-4);
 }
 .hist-row + .hist-row { border-top: 1px solid var(--c-border); }
+.hist-row.is-day-first { border-top: none; }
+
+/* Day divider inside the transaction card */
+.hist-day {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: var(--s-3);
+  padding: 10px var(--s-4) 6px;
+  font-size: var(--fs-xs);
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--c-muted);
+  background: var(--c-surface-2);
+}
+.hist-day.is-first { border-radius: var(--r-lg) var(--r-lg) 0 0; }
+.hist-day-sum {
+  text-transform: none;
+  letter-spacing: 0;
+  font-size: var(--fs-sm);
+  color: var(--c-ink);
+  white-space: nowrap;
+}
 .hist-ico {
   width: 42px; height: 42px;
   border-radius: 14px;
@@ -1753,7 +1951,12 @@ svg.ico { display: inline-block; vertical-align: -0.16em; flex: 0 0 auto; }
    gradient (lock screen, onboarding, hero) already read as dark and are
    deliberately left alone. */
 :root[data-theme="dark"] .bottom-nav {
-  background: rgba(20, 16, 44, 0.82);
+  background: rgba(26, 22, 56, 0.82);
+  border-color: rgba(155, 133, 255, 0.14);
+  box-shadow:
+    inset 0 1px 0 rgba(155, 133, 255, 0.14),
+    inset 0 -2px 0 rgba(0, 0, 0, 0.35),
+    0 10px 30px -10px rgba(0, 0, 0, 0.7);
 }
 :root[data-theme="dark"] .badge-once {
   background: rgba(148, 160, 184, 0.16);

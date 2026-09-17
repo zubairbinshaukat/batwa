@@ -1,138 +1,177 @@
-# Batwa — Personal Budget PWA
+<p align="center">
+  <img src="branding/logo.svg" alt="Batwa logo" width="96" height="96">
+</p>
 
-A private, offline-first budget tracker. PIN-locked, AES-encrypted, installable to your phone's home screen. No build step, no framework, no server — your data lives in your phone's IndexedDB and never leaves it unencrypted.
+<h1 align="center">Batwa — budgeting that never leaves your phone</h1>
 
-## ⚠️ Important: it can't run from `file://`
+<p align="center">
+  A private, offline-first budget tracker you install from the browser.<br>
+  PIN-locked, encrypted on the device, no account, no server, no tracking.
+</p>
 
-Service workers (the thing that makes Batwa installable and offline-capable) **do not run when you double-click `index.html`**. The app must be served over `https://` or `localhost`.
+<p align="center">
+  <img alt="No build step" src="https://img.shields.io/badge/build-none-8257F6">
+  <img alt="Dependencies" src="https://img.shields.io/badge/runtime%20deps-0-8257F6">
+  <img alt="PWA" src="https://img.shields.io/badge/PWA-installable-8257F6">
+  <img alt="Encryption" src="https://img.shields.io/badge/AES--256--GCM-on%20device-8257F6">
+</p>
 
-### Option A — Local testing
+---
 
-From this folder, run either:
+**Batwa** (Urdu for *wallet*) is a personal money tracker built for people who want to know where their salary goes without handing that information to anyone. It runs entirely inside your phone's browser as an installable app: you set a PIN, add your accounts (JazzCash, Easypaisa, banks, cash), log what comes in and goes out, and Batwa shows you what is actually free to spend after the bills that are already committed.
+
+Everything is encrypted with a key derived from your PIN before it touches storage. There is no sign-up, no backend, and no analytics. Cloud sync is optional, and even then only the encrypted blob leaves the device.
+
+## Features
+
+- **Free to spend** at a glance: total balance minus committed bills, with a blur toggle for public places.
+- **Accounts** with live balances, a logo picker for Pakistani wallets and banks, and a "fix balance" that keeps an honest audit trail.
+- **Recurring bills** (weekly, monthly) with due dates, overdue tracking and one-tap mark-as-paid.
+- **Reports**: spending by category or title, weekday and month-phase patterns, daily pace, a six-month trend, fixed vs one-off, and "worth watching" callouts.
+- **Monthly category limits** that surface on Home and in Reports as you approach them.
+- **Quick math** in the amount field: `120+80`, `1,500/3`, `(300+200)*2`.
+- **Share a bank SMS** to Batwa on Android and the right sheet opens pre-filled.
+- **Bill reminders** via background sync, storing only due dates and counts outside the encrypted ledger.
+- **Fingerprint unlock** layered on top of the PIN using WebAuthn PRF. The PIN remains the only recovery path.
+- **Optional cloud sync** through a JSONBin bin you own, with conflict prompts and never a silent overwrite.
+- **Light and dark themes**, an installable home-screen icon, and full offline operation.
+
+## Tech stack
+
+| Layer | Choice | Why |
+|---|---|---|
+| Language | Vanilla JavaScript, native ES modules | Zero build step. Open the folder, serve it, it runs. |
+| Styling | Plain CSS with design tokens (`css/tokens.css`) | One file defines colour, type, spacing, radius and depth for both themes. |
+| Storage | IndexedDB | Large, structured, offline, per-origin. |
+| Crypto | Web Crypto API: PBKDF2 (150k iterations) + AES-256-GCM | Standard primitives, no custom crypto. |
+| Biometrics | WebAuthn with the PRF extension | The fingerprint unwraps the PIN-derived key. No PRF, no fallback, no weaker path. |
+| Offline | Service Worker, precached shell, cache-first | Works with no network after the first load. |
+| Integrations | Web Share Target, Periodic Background Sync, Notifications | Android SMS import and bill reminders. |
+| Motion | GSAP 3 (vendored, self-hosted) | Smooth count-ups and sheet transitions offline. |
+| Type | Outfit and Caveat (self-hosted variable fonts) | Outfit for UI, Caveat for tips and insights. |
+| Sync (optional) | JSONBin REST API | Any static host plus a free bin you control. |
+
+No framework, no bundler, no npm install, no runtime dependencies.
+
+## Our motto: you own your data, we know nothing
+
+Batwa is designed so that nobody, including the people who wrote it, can see your money.
+
+- **Your PIN is the key, literally.** The four-digit PIN derives the encryption key. Nothing is stored that can rebuild it. Forget the PIN and the data is gone, which is why Settings offers an export backup and Home nudges you to take one.
+- **Encrypted at rest, on your device.** The ledger lives in your browser's IndexedDB as AES-GCM ciphertext. The static host that serves the app files never receives a byte of it.
+- **Nothing phones home.** No analytics, no crash reporting, no fonts or scripts fetched from third parties at runtime.
+- **Sync is opt-in and blind.** If you enable JSONBin sync, only the encrypted blob is uploaded to a bin you created with your own key.
+- **Reminders leak the minimum.** To notify you while the app is closed, only due dates and counts are kept outside the encrypted store. Never titles, never amounts.
+- **Open source.** Every line that touches your data is in this repository for you to read.
+
+## Getting started
+
+### Use it
+
+Deploy the folder to any static host and open the URL on your phone.
+
+| Host | How |
+|---|---|
+| Netlify Drop | Drag the folder onto [app.netlify.com/drop](https://app.netlify.com/drop) |
+| GitHub Pages | Push to a repo, then Settings, Pages, deploy from branch |
+| Cloudflare Pages | Create a project, direct upload, drag the folder |
+| Vercel | Run `npx vercel` inside the folder |
+
+Then install it: on Android Chrome accept the install prompt or use *Add to Home screen*; on iPhone Safari use Share, then *Add to Home Screen*.
+
+> Batwa cannot run from `file://`. Service workers need `https://` or `localhost`.
+
+### Run it locally
 
 ```bash
-npx serve
-# or
-python3 -m http.server 8000
+git clone https://github.com/<you>/batwa.git
+cd batwa
+python -m http.server 8000     # or: npx serve
 ```
 
-Then open `http://localhost:3000` (serve) or `http://localhost:8000` (python) in your browser.
+Open `http://localhost:8000`. That is the entire setup.
 
-### Option B — Real use on your phone (recommended)
+## Developer guide
 
-Deploy the folder to any free static host — no account gymnastics needed:
+### How the app boots
 
-| Host                       | How                                                                                        |
-| -------------------------- | ------------------------------------------------------------------------------------------ |
-| **Netlify Drop**     | [app.netlify.com/drop](https://app.netlify.com/drop) — drag the folder onto the page, done |
-| **GitHub Pages**     | push this folder to a repo → Settings → Pages → deploy from branch                      |
-| **Cloudflare Pages** | create project → direct upload → drag the folder                                         |
-| **Vercel**           | `npx vercel` in this folder                                                              |
+1. `index.html` paints the theme before first render using a tiny inline script, then loads `js/app.js` as a module.
+2. `app.js` registers the service worker, mounts the lock screen from `js/auth.js`, and waits for a PIN (or a fingerprint via `js/biometric.js`).
+3. The PIN derives the key in `js/crypto.js`. `js/db.js` reads the encrypted ledger from IndexedDB and `js/ledger.js` decrypts it into memory.
+4. `app.js` renders the current view. Every ledger mutation fires an `onChange` that re-renders the active view, schedules a sync and refreshes the status pill.
 
-Open the deployed URL on your phone, then:
-
-- **Android (Chrome):** tap the "Install app" prompt, or the banner inside Batwa, or ⋮ → *Add to Home screen*
-- **iPhone (Safari):** Share button → *Add to Home Screen*
-
-It opens full-screen without browser chrome and works fully offline afterwards.
-
-**Privacy note:** deploying doesn't upload your data. Entries live in your phone's IndexedDB, encrypted with your PIN. The host only serves the app's files.
-
-## Your PIN is the key — literally
-
-The 4-digit PIN derives the AES-256 encryption key (PBKDF2, 150k iterations). **There is no recovery.** If you forget the PIN, the data is mathematically gone. Keep an export backup (Settings → Backup → Export).
-
-Fingerprint unlock is optional and sits on top of the PIN: your phone's fingerprint (via WebAuthn PRF) opens a sealed copy of the same key, so the PIN is still the only thing that can recover the data. Turn it off any time in Settings → Security; refreshing the page keeps Batwa unlocked, closing it does not.
-
-## Accounts (JazzCash, banks, cash…)
-
-Add your real accounts in Settings → Accounts (or straight from the home screen). Pick a logo (JazzCash, Easypaisa, NayaPay, SadaPay, Meezan, UBL, HBL, Bank Alfalah, MCB, cash…), optionally enter the current balance, and every Add Money / Add Expense sheet lets you pick which account the money moved through. Home shows a swipeable card per account with its live balance.
-
-**Fix balance:** forgot to log some spending? Open an account card → *Fix balance* → type what the account really has. The difference is saved as a visible "Balance fix" entry (flagged as an adjustment in History), so your records stay honest and undoable.
-
-## The four tabs
-
-| Tab                | What's there                                                                                                                                                           |
-| ------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Home**     | The three balances (blur toggle), your account cards, upcoming expenses, quick add                                                                                     |
-| **Reports**  | Month summary, spending breakdown by category or title, spending patterns (weekday, month phase, daily pace), worth-watching callouts, 6-month trend, fixed vs one-off |
-| **History**  | Every transaction for a month, filterable by kind / status / account / category. Tap a row to edit it                                                                  |
-| **Settings** | Accounts, cloud sync, backup, PIN, categories, install                                                                                                                 |
-
-Adding an expense or income offers **Recent** chips under the title field — tap one to refill the title, amount, and category from the last time you logged it.
-
-## Quick math in the amount field
-
-Type a sum instead of a total: `120+80`, `1,500/3`, `2*450-100`, `(300+200)*2`.
-A hint under the field shows the running result, and leaving the field replaces
-it with the number. On a phone a `+ − × ÷` row appears under the field, because
-Android's number keypad doesn't have one.
-
-## Share a bank SMS to Batwa
-
-Once Batwa is installed to your home screen, it shows up in Android's share
-sheet. Long-press a bank or wallet SMS in Messages → Share → Batwa, and after
-the usual unlock the right sheet opens already filled in: amount, who it was to
-or from, the date, a category guess, and the account if Batwa can tell which one
-(wallets name themselves in the message; most banks only do so in the sender ID,
-which Android doesn't pass on — then you pick once and it remembers). The full
-message is kept as the note so you can check the reading. Everything stays
-editable, OTP and reversal messages are ignored, and opening Batwa normally is
-completely unchanged. iOS Safari has no share targets, so this is Android only.
-
-## Bill reminders and backup nudges
-
-Settings → Reminders can post a daily "2 bills due today" notification, even
-when Batwa is closed. Only the **due dates and how many bills fall on each** are
-kept outside the encrypted ledger to make that possible — never titles or
-amounts. It needs the app installed to the home screen (Chrome only runs
-background sync for installed apps) and Android decides how often it actually
-runs.
-
-Home will also remind you to export a backup if you have no cloud sync and
-haven't taken one in a month — there is no PIN recovery, so a backup file is the
-only way back.
-
-## Monthly category limits
-
-Settings → Categories lets you set a monthly cap per category. Reports then
-shows how each one is tracking (`Rs 4,200 of 6,000`, `9 days left`), Home gets a
-compact **Monthly limits** card, and going over shows up in "Worth watching".
-Leave a limit blank and nothing changes anywhere.
-
-## Optional cloud sync (JSONBin)
-
-1. Create a free account at [jsonbin.io](https://jsonbin.io)
-2. Create a bin — bins can't be empty, so paste this starter JSON (also copyable inside the app's JSONBin setup sheet):
-
-```json
-{ "app": "batwa", "version": 1, "updatedAt": null, "salt": null, "cipher": null }
-```
-
-3. Copy the **Bin ID** and your **X-Master-Key**, then in Batwa: Settings → Cloud sync → JSONBin setup
-
-Sync is fully automatic once configured: on open, ~3s after any change, when connectivity returns, and when the app comes back to the foreground. The pill next to the greeting shows the live status (✓ synced / ● pending / ↻ syncing / ⚡ offline — tap it to sync now). Transient failures retry themselves; conflicts always ask you.
-
-Only the **encrypted blob** is uploaded — unreadable without your PIN. Conflicts (both devices changed) always ask you; nothing is silently overwritten. Note the keys are stored in the app's local storage, so don't share your deployed URL publicly if the bin is private.
-
-## Project layout
+### Where things live
 
 ```
-index.html            app shell
-manifest.webmanifest  PWA manifest (icons, shortcuts)
-sw.js                 service worker — precaches the shell, cache-first offline
-css/                  tokens (design system) / base / components
-js/                   app, db (IndexedDB), crypto (PBKDF2+AES-GCM), auth (PIN),
-                      ledger (balances + recurrence), sync (JSONBin),
-                      reminders (bill notifications), nudge (backup banner),
-                      smsparse (shared bank SMS), util/expr (quick math)
-js/ui/                home, reports, settings, modals, charts, toast
-js/vendor/gsap.min.js animations (self-hosted, works offline)
-fonts/                Outfit variable font (self-hosted)
-icons/                favicon + PWA icon set
-branding/             logo source + brand plate (not needed at runtime)
+index.html              app shell: header, view root, dock, sheet and toast roots
+manifest.webmanifest    PWA manifest: icons, shortcuts, share target
+sw.js                   service worker: precache list and cache version
+
+css/
+  tokens.css            design system: colours, type, spacing, radius, depth (light + dark)
+  base.css              reset, layout primitives, focus and reduced-motion rules
+  components.css        every component, grouped by section comments
+  onboarding.css        first-run screens
+
+js/
+  app.js                boot, routing, navigation, update flow
+  auth.js               PIN setup, verify, change; lock screen and onboarding
+  biometric.js          WebAuthn PRF enrol and unlock
+  session.js            keeps the app unlocked across a refresh, not across a close
+  crypto.js             PBKDF2 key derivation, AES-GCM seal and open
+  db.js                 IndexedDB wrapper
+  ledger.js             entries, accounts, balances, recurrence, month queries
+  insights.js           pure analysis functions used by Reports (Node-testable)
+  sync.js               JSONBin push, pull and conflict handling
+  reminders.js          due-date schedule and background notifications
+  nudge.js              backup reminder banner
+  smsparse.js           bank and wallet SMS parser for the share target
+  theme.js              light, dark and system theme handling
+  ui/                   one module per screen or widget: home, reports, history,
+                        settings, accounts, modals (sheets), charts, icons, toast
+  util/                 format (currency, dates), dom (helpers, animation), expr (quick math)
+  vendor/gsap.min.js    animation library, self-hosted
+
+fonts/                  Outfit and Caveat variable fonts
+icons/                  favicon and PWA icon set
+branding/               logo sources and bank logos
 ```
 
-## Updating a deployed version
+### Conventions that keep the project simple
 
-Bump the cache name in `sw.js` (`batwa-v1` → `batwa-v2`) when you change files. Users get a "New version ready · Reload" toast — nothing updates silently mid-session.
+- **Bump the cache when you ship.** Change `CACHE` in `sw.js` (`batwa-v22` to `batwa-v23`) whenever a file changes, and add new files to its precache list. Users get a "New version ready" toast instead of a stale app.
+- **Colours and depth come from tokens.** Add or change a colour in `css/tokens.css` for both themes. Components should never hard-code a colour, except on surfaces that sit on the violet gradient in both themes.
+- **Pure logic stays pure.** `insights.js`, `ledger.js` math, `smsparse.js` and `util/expr.js` have no DOM access, so you can test them directly with `node`.
+- **One module owns one screen.** Each `ui/*.js` file renders its own markup and wires its own events. Cross-module UI goes through `modals.js` sheets.
+- **No dependencies.** If a feature needs a library, vendor it into `js/vendor/` so the app keeps working offline and the supply chain stays auditable.
+- **Privacy is a design constraint.** Anything stored outside the encrypted ledger must be justified in a code comment, as `reminders.js` does for due dates.
+
+### Checking your work
+
+```bash
+# syntax check every module
+for f in js/*.js js/ui/*.js js/util/*.js; do node --check "$f"; done
+
+# exercise a pure module
+node -e "import('./js/util/expr.js').then(m => console.log(m.evalAmountExpr('120+80')))"
+```
+
+For UI changes, serve the folder and test on a real phone or a 390 x 844 viewport in devtools, in both themes.
+
+### Enabling cloud sync during development
+
+1. Create a free bin at [jsonbin.io](https://jsonbin.io) with this starter content:
+   ```json
+   { "app": "batwa", "version": 1, "updatedAt": null, "salt": null, "cipher": null }
+   ```
+2. Copy the bin ID and your master key into Settings, Cloud sync, JSONBin setup.
+
+Sync runs on open, a few seconds after each change, when connectivity returns and when the app returns to the foreground. The pill beside the greeting shows the live state and taps to sync now.
+
+## Contributing
+
+Issues and pull requests are welcome. Keep changes small and focused, follow the conventions above, bump the service worker cache, and include screenshots for anything visual. If a change touches storage or crypto, explain the privacy impact in the pull request.
+
+## Acknowledgements
+
+Built with the Web Platform and nothing else: IndexedDB, Web Crypto, WebAuthn, Service Workers, Web Share Target. Animations by [GSAP](https://gsap.com). Typefaces [Outfit](https://fonts.google.com/specimen/Outfit) and [Caveat](https://fonts.google.com/specimen/Caveat).

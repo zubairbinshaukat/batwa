@@ -26,7 +26,7 @@
         }
         document.documentElement.setAttribute("data-theme", m);
         var meta = document.querySelector('meta[name="theme-color"]');
-        if (meta && m === "dark") meta.setAttribute("content", "#100D28");
+        if (meta && m === "dark") meta.setAttribute("content", "#3A22C2");
       } catch (e) {}
     })();
   </script>
@@ -38,18 +38,23 @@
 </head>
 <body>
 
-  <div class="app-shell">
-    <header class="app-header">
-      <div class="greeting">
-        <div class="hello" id="hello">Welcome back</div>
-        <div class="title">Batwa</div>
-      </div>
-      <div class="row">
-        <button class="sync-pill hidden" id="sync-pill" role="status" aria-label="Sync status"></button>
-        <button class="icon-btn theme-toggle" id="theme-toggle" aria-label="Switch to dark theme" title="Theme"></button>
-      </div>
-    </header>
+  <div class="canopy" id="canopy">
+    <div class="canopy-inner">
+      <header class="app-header">
+        <div class="greeting">
+          <div class="hello" id="hello">Welcome back</div>
+          <div class="title">Batwa</div>
+        </div>
+        <div class="row">
+          <button class="sync-pill hidden" id="sync-pill" role="status" aria-label="Sync status"></button>
+          <button class="icon-btn theme-toggle" id="theme-toggle" aria-label="Switch to dark theme" title="Theme"></button>
+        </div>
+      </header>
+      <div id="canopy-slot"></div>
+    </div>
+  </div>
 
+  <div class="app-shell">
     <div id="update-slot"></div>
 
     <main id="view" aria-live="polite"></main>

@@ -7,7 +7,9 @@
 
 const KEY = "batwa.theme";
 const MODES = ["system", "light", "dark"];
-const BAR = { light: "#4F33E8", dark: "#100D28" };
+// The canopy is the top of every page now, so the status bar sits on its
+// gradient in both themes — these are the canopy gradient's top stops.
+const BAR = { light: "#4F33E8", dark: "#3A22C2" };
 
 const listeners = new Set();
 let mq = null;
