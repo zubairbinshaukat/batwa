@@ -141,4 +141,6 @@ ul { margin: 0; padding: 0; list-style: none; }
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
   }
+  /* the clay shadow state still swaps instantly; only the squish is removed */
+  .btn:active, .nav-fab:active, .icon-btn:active, .chip-btn:active, .key:active { transform: none; }
 }

@@ -22,12 +22,12 @@ Then open `http://localhost:3000` (serve) or `http://localhost:8000` (python) in
 
 Deploy the folder to any free static host — no account gymnastics needed:
 
-| Host | How |
-|---|---|
-| **Netlify Drop** | [app.netlify.com/drop](https://app.netlify.com/drop) — drag the folder onto the page, done |
-| **GitHub Pages** | push this folder to a repo → Settings → Pages → deploy from branch |
-| **Cloudflare Pages** | create project → direct upload → drag the folder |
-| **Vercel** | `npx vercel` in this folder |
+| Host                       | How                                                                                        |
+| -------------------------- | ------------------------------------------------------------------------------------------ |
+| **Netlify Drop**     | [app.netlify.com/drop](https://app.netlify.com/drop) — drag the folder onto the page, done |
+| **GitHub Pages**     | push this folder to a repo → Settings → Pages → deploy from branch                      |
+| **Cloudflare Pages** | create project → direct upload → drag the folder                                         |
+| **Vercel**           | `npx vercel` in this folder                                                              |
 
 Open the deployed URL on your phone, then:
 
@@ -52,12 +52,12 @@ Add your real accounts in Settings → Accounts (or straight from the home scree
 
 ## The four tabs
 
-| Tab | What's there |
-|---|---|
-| **Home** | The three balances (blur toggle), your account cards, upcoming expenses, quick add |
-| **Reports** | Month summary, spending breakdown by category or title, spending patterns (weekday, month phase, daily pace), worth-watching callouts, 6-month trend, fixed vs one-off |
-| **History** | Every transaction for a month, filterable by kind / status / account / category. Tap a row to edit it |
-| **Settings** | Accounts, cloud sync, backup, PIN, categories, install |
+| Tab                | What's there                                                                                                                                                           |
+| ------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Home**     | The three balances (blur toggle), your account cards, upcoming expenses, quick add                                                                                     |
+| **Reports**  | Month summary, spending breakdown by category or title, spending patterns (weekday, month phase, daily pace), worth-watching callouts, 6-month trend, fixed vs one-off |
+| **History**  | Every transaction for a month, filterable by kind / status / account / category. Tap a row to edit it                                                                  |
+| **Settings** | Accounts, cloud sync, backup, PIN, categories, install                                                                                                                 |
 
 Adding an expense or income offers **Recent** chips under the title field — tap one to refill the title, amount, and category from the last time you logged it.
 

@@ -111,10 +111,18 @@ body.is-onboarding { overflow: hidden; }
   font-weight: 800;
   letter-spacing: -0.01em;
   display: grid; place-items: center;
-  box-shadow: 0 14px 30px -12px rgba(9, 5, 40, 0.6);
+  box-shadow:
+    inset 3px 3px 8px rgba(255, 255, 255, 0.9),
+    inset -3px -4px 8px rgba(70, 48, 201, 0.18),
+    0 14px 30px -12px rgba(9, 5, 40, 0.6);
   transition: transform var(--t-fast) var(--ease-out), background var(--t-fast);
 }
-.onb-btn:active { transform: scale(0.97); }
+.onb-btn:active {
+  transform: scale(0.97);
+  box-shadow:
+    inset 3px 4px 10px rgba(70, 48, 201, 0.22),
+    0 4px 10px -6px rgba(9, 5, 40, 0.5);
+}
 .onb-btn[disabled] { opacity: 0.6; }
 .onb-btn-ghost {
   background: transparent;

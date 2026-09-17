@@ -64,6 +64,53 @@
   --shadow-btn:   0 8px 20px -6px rgba(91, 61, 240, 0.45);
   --shadow-sheet: 0 -14px 56px rgba(23, 19, 58, 0.20);
 
+  /* ---- Clay (light) ----
+     hi = inner highlight (top-left), lo = inner shade (bottom-right).
+     Interactive = full stack. Surface = quiet raise. Sunken = wells/tracks. */
+  --clay-hi:  rgba(255, 255, 255, 0.85);
+  --clay-lo:  rgba(98, 72, 245, 0.10);
+  --clay-drop: 0 12px 28px -12px rgba(98, 72, 245, 0.22);
+
+  /* static cards / tiles — quiet */
+  --clay-surface:
+    inset 0 1.5px 0 var(--clay-hi),
+    inset 0 -2px 0 var(--clay-lo),
+    0 1px 2px rgba(23, 19, 58, 0.04),
+    var(--clay-drop);
+
+  /* neutral pressables on a surface: ghost btn, icon-btn, chips, segmented thumb */
+  --clay-soft:
+    inset 2px 2px 6px rgba(255, 255, 255, 0.95),
+    inset -2px -3px 6px rgba(98, 72, 245, 0.10),
+    0 6px 14px -6px rgba(98, 72, 245, 0.25);
+  --clay-soft-press:
+    inset 2px 3px 8px rgba(98, 72, 245, 0.16),
+    inset -1px -1px 3px rgba(255, 255, 255, 0.6),
+    0 1px 3px -1px rgba(98, 72, 245, 0.15);
+
+  /* coloured gradient pressables: primary / mint / danger / FAB.
+     Insets are neutral white/ink alpha so one token works on any gradient;
+     the coloured glow is a separate per-variant token. */
+  --clay-ink-hi: rgba(255, 255, 255, 0.34);
+  --clay-ink-lo: rgba(12, 4, 60, 0.26);
+  --clay-btn:
+    inset 3px 3px 8px var(--clay-ink-hi),
+    inset -3px -4px 8px var(--clay-ink-lo);
+  --clay-btn-press:
+    inset 3px 4px 10px var(--clay-ink-lo),
+    inset -1px -1px 3px rgba(255, 255, 255, 0.14);
+  --glow-violet: 0 12px 26px -8px rgba(91, 61, 240, 0.55);
+  --glow-mint:   0 12px 26px -8px rgba(18, 183, 127, 0.50);
+  --glow-danger: 0 12px 26px -8px rgba(226, 58, 95, 0.50);
+  --glow-press:  0 3px 8px -4px rgba(23, 19, 58, 0.30);
+
+  /* wells: inputs, segmented track, switch track, limit track */
+  --clay-sunken:
+    inset 0 2px 6px rgba(23, 19, 58, 0.08),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.9);
+  --ring-focus: 0 0 0 4px rgba(98, 72, 245, 0.16);
+  --ring-error: 0 0 0 4px rgba(239, 70, 103, 0.14);
+
   /* ---- Radius ---- */
   --r-sm:   10px;
   --r-md:   16px;
@@ -169,4 +216,33 @@
   --shadow-hero:  0 14px 36px -10px rgba(0, 0, 0, 0.7);
   --shadow-btn:   0 8px 20px -6px rgba(46, 25, 160, 0.7);
   --shadow-sheet: 0 -14px 56px rgba(0, 0, 0, 0.6);
+
+  /* ---- Clay (dark) — recalibrated, not inverted ---- */
+  --clay-hi:  rgba(155, 133, 255, 0.16);
+  --clay-lo:  rgba(0, 0, 0, 0.30);
+  --clay-drop: 0 12px 28px -12px rgba(0, 0, 0, 0.55);
+  --clay-surface:
+    inset 0 1px 0 var(--clay-hi),
+    inset 0 -2px 0 var(--clay-lo),
+    0 1px 2px rgba(0, 0, 0, 0.35),
+    var(--clay-drop);
+  --clay-soft:
+    inset 2px 2px 6px rgba(155, 133, 255, 0.14),
+    inset -2px -3px 6px rgba(0, 0, 0, 0.35),
+    0 6px 14px -6px rgba(0, 0, 0, 0.5);
+  --clay-soft-press:
+    inset 2px 3px 8px rgba(0, 0, 0, 0.45),
+    inset -1px -1px 3px rgba(155, 133, 255, 0.10),
+    0 1px 3px -1px rgba(0, 0, 0, 0.4);
+  --clay-ink-hi: rgba(255, 255, 255, 0.22);
+  --clay-ink-lo: rgba(0, 0, 0, 0.34);
+  --glow-violet: 0 12px 26px -8px rgba(46, 25, 160, 0.75);
+  --glow-mint:   0 12px 26px -8px rgba(11, 139, 96, 0.6);
+  --glow-danger: 0 12px 26px -8px rgba(196, 46, 79, 0.6);
+  --glow-press:  0 3px 8px -4px rgba(0, 0, 0, 0.6);
+  --clay-sunken:
+    inset 0 2px 6px rgba(0, 0, 0, 0.45),
+    inset 0 -1px 0 rgba(155, 133, 255, 0.10);
+  --ring-focus: 0 0 0 4px rgba(155, 133, 255, 0.22);
+  --ring-error: 0 0 0 4px rgba(255, 112, 137, 0.20);
 }
