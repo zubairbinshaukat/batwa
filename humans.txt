@@ -1,0 +1,19 @@
+/* TEAM */
+  Developer: Zubair bin Shaukat (ZUBYR)
+  Role: design, code, relay, everything
+  Site: https://zubyr.dev
+  GitHub: https://github.com/zubairbinshaukat
+  Location: Lahore, Punjab, Pakistan
+
+/* SITE */
+  Name: Batwa — free private budget app for Pakistan
+  URL: https://batwa.zubyr.dev
+  Launched: September 2026
+  Language: English
+  Standards: HTML5, CSS3, ES modules, Web Crypto, Service Worker, Web App Manifest
+  Components: GSAP 3 (self-hosted), Outfit, Caveat, Fraunces (self-hosted variable fonts)
+  Backend: none. The ledger never leaves the device. Optional zero-knowledge relay on Cloudflare Workers.
+  Source: https://github.com/zubairbinshaukat/batwa
+
+/* THANKS */
+  Everyone in Lahore who asked "but where does my money actually go?"

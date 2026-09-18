@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" prefix="og: https://ogp.me/ns# article: https://ogp.me/ns/article#">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
@@ -9,9 +9,13 @@
   <link rel="canonical" href="https://batwa.zubyr.dev/about.html">
   <link rel="author" href="https://zubyr.dev">
   <meta name="robots" content="index,follow,max-image-preview:large">
+  <meta name="keywords" content="Batwa, Batwa app, Batwa budget app, Batwa by ZUBYR, ZUBYR, Zubair bin Shaukat, budget app Pakistan, expense tracker Pakistan, JazzCash budget, Easypaisa expense tracker, offline budget app, private budget tracker, PIN locked money app, free budget app, PWA budget tracker, Lahore developer">
+  <link rel="alternate" type="text/plain" href="https://batwa.zubyr.dev/llms.txt" title="Batwa for AI assistants (llms.txt)">
 
   <meta property="og:type" content="website">
+  <meta property="og:locale" content="en_PK">
   <meta property="og:site_name" content="Batwa">
+  <meta property="og:image:type" content="image/png">
   <meta property="og:title" content="Batwa by ZUBYR – Free Private Budget App for Pakistan">
   <meta property="og:description" content="Free, offline, PIN-locked budget app for Pakistan. Your money never leaves your phone unencrypted.">
   <meta property="og:url" content="https://batwa.zubyr.dev/about.html">
@@ -25,6 +29,8 @@
   <meta name="twitter:image" content="https://batwa.zubyr.dev/screenshots/og-batwa.png">
 
   <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="/favicon.ico" sizes="48x48">
+  <link rel="icon" href="icons/favicon-96.png" type="image/png" sizes="96x96">
   <link rel="icon" href="icons/favicon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="icons/apple-touch-icon-180-v2.png">
 
@@ -60,10 +66,24 @@
     "@graph": [
       {
         "@type": "SoftwareApplication",
+        "@id": "https://batwa.zubyr.dev/#app",
         "name": "Batwa",
-        "alternateName": ["Batwa by ZUBYR", "ZUBYR Batwa"],
+        "alternateName": ["Batwa app", "Batwa budget app", "Batwa by ZUBYR", "ZUBYR Batwa", "Batwa wallet app", "Batwa expense tracker"],
         "url": "https://batwa.zubyr.dev/",
-        "description": "Private, offline-first personal budget tracker. PIN-locked, encrypted on the device, no account, no server, no tracking.",
+        "description": "Private, offline-first personal budget tracker for Pakistan. PIN-locked, encrypted on the device, no account, no server, no tracking. Tracks JazzCash, Easypaisa, bank and cash accounts in rupees.",
+        "keywords": "budget app Pakistan, expense tracker Pakistan, JazzCash, Easypaisa, offline budget app, private budget tracker, PWA",
+        "inLanguage": "en",
+        "countriesSupported": "PK",
+        "datePublished": "2026-09-18",
+        "featureList": [
+          "PIN-locked, AES-256-GCM encrypted ledger stored only on the device",
+          "Works fully offline as an installable web app",
+          "JazzCash, Easypaisa, bank and cash accounts side by side",
+          "Share a bank SMS on Android to fill an expense",
+          "Monthly limits per category and spending reports",
+          "Shared spaces to split bills through a zero-knowledge relay",
+          "No sign-up, no analytics, no third-party requests"
+        ],
         "applicationCategory": "FinanceApplication",
         "operatingSystem": "Android, iOS, Windows, macOS, Linux (web browser)",
         "browserRequirements": "Requires JavaScript and a modern browser",
@@ -76,13 +96,36 @@
         "softwareVersion": "32",
         "isAccessibleForFree": true,
         "codeRepository": "https://github.com/zubairbinshaukat/batwa",
-        "author": {
-          "@type": "Person",
-          "name": "Zubair bin Shaukat",
-          "alternateName": "ZUBYR",
-          "url": "https://zubyr.dev",
-          "sameAs": ["https://github.com/zubairbinshaukat"]
-        }
+        "author": { "@id": "https://zubyr.dev/#person" },
+        "creator": { "@id": "https://zubyr.dev/#person" },
+        "publisher": { "@id": "https://zubyr.dev/#person" }
+      },
+      {
+        "@type": "Person",
+        "@id": "https://zubyr.dev/#person",
+        "name": "Zubair bin Shaukat",
+        "alternateName": ["ZUBYR", "Zubair Bin Shaukat", "Zubair Shaukat"],
+        "givenName": "Zubair",
+        "familyName": "bin Shaukat",
+        "jobTitle": "Software Engineer",
+        "description": "Software engineer and developer from Lahore, Pakistan, building private, offline-first tools. Creator of Batwa, the free budget app for Pakistan.",
+        "url": "https://zubyr.dev",
+        "image": "https://batwa.zubyr.dev/icons/author-384.webp",
+        "address": { "@type": "PostalAddress", "addressLocality": "Lahore", "addressRegion": "Punjab", "addressCountry": "PK" },
+        "homeLocation": { "@type": "Place", "name": "Lahore, Pakistan" },
+        "nationality": { "@type": "Country", "name": "Pakistan" },
+        "knowsAbout": ["Progressive web apps", "JavaScript", "Web Crypto", "Offline-first software", "Personal finance apps", "Cloudflare Workers"],
+        "sameAs": ["https://github.com/zubairbinshaukat", "https://zubyr.dev"],
+        "mainEntityOfPage": "https://batwa.zubyr.dev/about.html"
+      },
+      {
+        "@type": "WebSite",
+        "@id": "https://batwa.zubyr.dev/#website",
+        "url": "https://batwa.zubyr.dev/",
+        "name": "Batwa",
+        "alternateName": "Batwa budget app",
+        "publisher": { "@id": "https://zubyr.dev/#person" },
+        "inLanguage": "en"
       },
       {
         "@type": "FAQPage",
@@ -125,7 +168,7 @@
           {
             "@type": "Question",
             "name": "Who made Batwa?",
-            "acceptedAnswer": { "@type": "Answer", "text": "Batwa is built by Zubair bin Shaukat, a software engineer from Pakistan who works as ZUBYR. His portfolio is at zubyr.dev." }
+            "acceptedAnswer": { "@type": "Answer", "text": "Batwa is built by Zubair bin Shaukat, a software engineer and developer from Lahore, Pakistan, who works as ZUBYR. His portfolio is at zubyr.dev and the code is on GitHub." }
           }
         ]
       },
@@ -151,7 +194,7 @@
 <header class="ab-top">
   <div class="ab-wrap">
     <a class="ab-brand" href="./" aria-label="Batwa home">
-      <img src="icons/icon-192-v2.png" alt="" width="34" height="34" decoding="async">
+      <img src="icons/icon-192-v2.png" alt="" title="Batwa" width="34" height="34" decoding="async">
       <span>Batwa</span>
     </a>
     <nav aria-label="Page">
@@ -167,7 +210,7 @@
       <div>
         <p class="ab-eyebrow"><b>Free</b> <b>Open source</b> <b>Works offline</b></p>
         <h1>Batwa by ZUBYR <em>Your money, tracked privately.</em></h1>
-        <p class="ab-lead">Batwa is a free budget tracker for Pakistan that runs on your phone and never sends your data anywhere. You set a PIN, add your JazzCash, Easypaisa, bank and cash accounts, and Batwa shows what is actually free to spend.</p>
+        <p class="ab-lead">Batwa is a free budget app for Pakistan that runs on your phone and never sends your data anywhere. You set a PIN, add your JazzCash, Easypaisa, bank and cash accounts, and Batwa shows what is actually free to spend.</p>
         <p class="ab-hand">batwa means wallet in Urdu</p>
         <div class="ab-actions">
           <a class="btn btn-primary" href="./">Open Batwa</a>
@@ -181,7 +224,7 @@
              srcset="screenshots/hero-home-sm.webp 713w, screenshots/hero-home.webp 1184w"
              sizes="(min-width: 900px) 48vw, 80vw"
              width="1184" height="1328" fetchpriority="high" decoding="async"
-             alt="The Batwa home screen floating between clay tiles for free-to-spend and bills paid">
+             alt="The Batwa home screen floating between clay tiles for free-to-spend and bills paid" title="Batwa budget app home screen">
       </div>
     </div>
   </section>
@@ -189,7 +232,7 @@
   </div><!-- /.ab-shell -->
 
   <!-- 2. What Batwa is -->
-  <section class="ab-sec ab-alt rise">
+  <section class="ab-sec rise">
     <div class="ab-wrap">
       <h2>A budget app that lives only on your phone</h2>
       <p class="ab-lead">Batwa is a personal money tracker you install from the browser. Everything it knows is encrypted on your device before it is written down.</p>
@@ -214,7 +257,7 @@
   </section>
 
   <!-- 3. Made for money in Pakistan -->
-  <section class="ab-sec rise">
+  <section class="ab-sec ab-alt rise">
     <div class="ab-wrap">
       <h2>Made for money in Pakistan</h2>
       <p class="ab-lead">Wallets, banks and cash sit side by side, and the app speaks rupees.</p>
@@ -224,10 +267,10 @@
           <h3>JazzCash, Easypaisa, banks, cash</h3>
           <p>Pick a logo, set a balance, and every account shows its own number on Home.</p>
           <div class="ab-logos">
-            <img src="branding/banks/jazzcash.svg" alt="JazzCash" width="34" height="34" loading="lazy" decoding="async">
-            <img src="branding/banks/easypaisa.svg" alt="Easypaisa" width="34" height="34" loading="lazy" decoding="async">
-            <img src="branding/banks/meezan.svg" alt="Meezan Bank" width="34" height="34" loading="lazy" decoding="async">
-            <img src="branding/banks/hbl.svg" alt="HBL" width="34" height="34" loading="lazy" decoding="async">
+            <img src="branding/banks/jazzcash.svg" alt="JazzCash" title="JazzCash" width="34" height="34" loading="lazy" decoding="async">
+            <img src="branding/banks/easypaisa.svg" alt="Easypaisa" title="Easypaisa" width="34" height="34" loading="lazy" decoding="async">
+            <img src="branding/banks/meezan.svg" alt="Meezan Bank" title="Meezan Bank" width="34" height="34" loading="lazy" decoding="async">
+            <img src="branding/banks/hbl.svg" alt="HBL" title="HBL" width="34" height="34" loading="lazy" decoding="async">
           </div>
         </div>
         <div class="card">
@@ -252,7 +295,7 @@
              srcset="screenshots/hero-spaces-sm.webp 711w, screenshots/hero-spaces.webp 1182w"
              sizes="(min-width: 900px) 46vw, 80vw"
              width="1182" height="1330" loading="lazy" decoding="async"
-             alt="A shared space in Batwa with split-a-bill and settle-up tiles and member avatars">
+             alt="A shared space in Batwa with split-a-bill and settle-up tiles and member avatars" title="Shared spaces in Batwa: split bills and settle up">
       </div>
       <div>
         <h2>Split bills with the people you actually split with</h2>
@@ -261,7 +304,7 @@
           <li><span class="ab-ico" aria-hidden="true"><svg class="ico" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></span><span><b>Everyone approves</b> their own share and picks their own account.</span></li>
           <li><span class="ab-ico" aria-hidden="true"><svg class="ico" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="m17 3 4 4-4 4"/><path d="M3 7h18"/><path d="m7 21-4-4 4-4"/><path d="M21 17H3"/></svg></span><span><b>Settle up</b> when you meet, in one tap.</span></li>
         </ul>
-        <p class="ab-note">The relay only ever stores encrypted text. It cannot read names, amounts or who is in a space. <a href="https://github.com/zubairbinshaukat/batwa/blob/main/SETUP.md" target="_blank" rel="noopener">How the relay works</a></p>
+        <p class="ab-note">The relay only ever stores encrypted text. It cannot read names, amounts or who is in a space. <a href="https://github.com/zubairbinshaukat/batwa/blob/develop/SETUP.md" target="_blank" rel="noopener">How the relay works</a></p>
       </div>
     </div>
   </section>
@@ -300,19 +343,31 @@
       <h2>What it looks like</h2>
       <div class="ab-shots">
         <figure>
-          <img src="screenshots/01-home.png" width="780" height="1688" loading="lazy" decoding="async" alt="Batwa home screen with free to spend and account balances">
+          <picture>
+            <source srcset="screenshots/01-home.webp" type="image/webp">
+            <img src="screenshots/01-home.png" width="780" height="1688" loading="lazy" decoding="async" alt="Batwa home screen with free to spend and account balances" title="Batwa home screen: free to spend, account balances and upcoming bills">
+          </picture>
           <figcaption>Free to spend, account balances and what's due next</figcaption>
         </figure>
         <figure>
-          <img src="screenshots/02-reports.png" width="780" height="1688" loading="lazy" decoding="async" alt="Batwa reports screen with spending by category">
+          <picture>
+            <source srcset="screenshots/02-reports.webp" type="image/webp">
+            <img src="screenshots/02-reports.png" width="780" height="1688" loading="lazy" decoding="async" alt="Batwa reports screen with spending by category" title="Batwa reports: spending by category with monthly limits">
+          </picture>
           <figcaption>Where the month went, by category, with your limits</figcaption>
         </figure>
         <figure>
-          <img src="screenshots/03-history.png" width="780" height="1688" loading="lazy" decoding="async" alt="Batwa history screen listing transactions">
+          <picture>
+            <source srcset="screenshots/03-history.webp" type="image/webp">
+            <img src="screenshots/03-history.png" width="780" height="1688" loading="lazy" decoding="async" alt="Batwa history screen listing transactions" title="Batwa history: every transaction, filterable by account and category">
+          </picture>
           <figcaption>Every transaction, filterable by account and category</figcaption>
         </figure>
         <figure>
-          <img src="screenshots/04-add.png" width="780" height="1688" loading="lazy" decoding="async" alt="Batwa add-expense sheet">
+          <picture>
+            <source srcset="screenshots/04-add.webp" type="image/webp">
+            <img src="screenshots/04-add.png" width="780" height="1688" loading="lazy" decoding="async" alt="Batwa add-expense sheet" title="Batwa add expense sheet">
+          </picture>
           <figcaption>Logging an expense takes a few seconds</figcaption>
         </figure>
       </div>
@@ -348,54 +403,69 @@
   </section>
 
   <!-- 9. FAQ -->
-  <section class="ab-sec rise">
+  <section class="ab-sec ab-faq-sec rise" id="faq">
     <div class="ab-wrap">
       <h2>Questions people ask</h2>
       <div class="ab-faq">
         <details>
-          <summary>Is Batwa free?</summary>
-          <p>Yes. Batwa is free to use and there is nothing to buy inside it. There is no account, no subscription and no paid tier.</p>
+          <summary><span>Is Batwa free?</span><i aria-hidden="true"></i></summary>
+          <div class="ab-faq-body">
+            <p>Yes. Batwa is free to use and there is nothing to buy inside it. There is no account, no subscription and no paid tier.</p>
+          </div>
         </details>
         <details>
-          <summary>Where is my data stored?</summary>
-          <p>Only in your own browser, on your own device. The ledger sits in IndexedDB as AES-256-GCM ciphertext. The static host that serves the app never receives a byte of it.</p>
+          <summary><span>Where is my data stored?</span><i aria-hidden="true"></i></summary>
+          <div class="ab-faq-body">
+            <p>Only in your own browser, on your own device. The ledger sits in IndexedDB as AES-256-GCM ciphertext. The static host that serves the app never receives a byte of it.</p>
+          </div>
         </details>
         <details>
-          <summary>What happens if I forget my PIN?</summary>
-          <p>The data is gone. Your PIN derives the encryption key and nothing is stored that can rebuild it. That is why Batwa keeps offering you an export backup.</p>
+          <summary><span>What happens if I forget my PIN?</span><i aria-hidden="true"></i></summary>
+          <div class="ab-faq-body">
+            <p>The data is gone. Your PIN derives the encryption key and nothing is stored that can rebuild it. That is why Batwa keeps offering you an export backup.</p>
+          </div>
         </details>
         <details>
-          <summary>Does it work without internet?</summary>
-          <p>Yes. Batwa installs as a web app and runs fully offline after the first load. Cloud sync and shared spaces are the only optional parts that need a connection.</p>
+          <summary><span>Does it work without internet?</span><i aria-hidden="true"></i></summary>
+          <div class="ab-faq-body">
+            <p>Yes. Batwa installs as a web app and runs fully offline after the first load. Cloud sync and shared spaces are the only optional parts that need a connection.</p>
+          </div>
         </details>
         <details>
-          <summary>Does it work on iPhone?</summary>
-          <p>Yes. Open batwa.zubyr.dev in Safari, tap Share, then Add to Home Screen. Fingerprint unlock and background bill reminders are Android-only for now.</p>
+          <summary><span>Does it work on iPhone?</span><i aria-hidden="true"></i></summary>
+          <div class="ab-faq-body">
+            <p>Yes. Open batwa.zubyr.dev in Safari, tap Share, then Add to Home Screen. Fingerprint unlock and background bill reminders are Android-only for now.</p>
+          </div>
         </details>
         <details>
-          <summary>Can Batwa read my bank SMS?</summary>
-          <p>No. Batwa never reads your messages. On Android you can share a single bank SMS to Batwa, and only that one message is parsed to fill the form.</p>
+          <summary><span>Can Batwa read my bank SMS?</span><i aria-hidden="true"></i></summary>
+          <div class="ab-faq-body">
+            <p>No. Batwa never reads your messages. On Android you can share a single bank SMS to Batwa, and only that one message is parsed to fill the form.</p>
+          </div>
         </details>
         <details>
-          <summary>Is it open source?</summary>
-          <p>Yes. The whole app is on GitHub, including the relay that shared spaces use. There is no build step, so the code you read is the code that runs.</p>
+          <summary><span>Is it open source?</span><i aria-hidden="true"></i></summary>
+          <div class="ab-faq-body">
+            <p>Yes. The whole app is on GitHub, including the relay that shared spaces use. There is no build step, so the code you read is the code that runs.</p>
+          </div>
         </details>
         <details>
-          <summary>Who made Batwa?</summary>
-          <p>Batwa is built by Zubair bin Shaukat, a software engineer from Pakistan who works as ZUBYR. His portfolio is at zubyr.dev.</p>
+          <summary><span>Who made Batwa?</span><i aria-hidden="true"></i></summary>
+          <div class="ab-faq-body">
+            <p>Batwa is built by <a href="https://zubyr.dev" target="_blank" rel="noopener">Zubair bin Shaukat</a>, a software engineer and developer from Lahore, Pakistan, who works as ZUBYR. His portfolio is at zubyr.dev and the code is on GitHub.</p>
+          </div>
         </details>
       </div>
     </div>
   </section>
 
   <!-- 10. Author -->
-  <section class="ab-sec ab-alt ab-author rise">
+  <section class="ab-sec ab-author rise">
     <div class="ab-wrap">
       <img class="ab-avatar" src="icons/author-192.webp" srcset="icons/author-384.webp 2x"
-           width="112" height="112" loading="lazy" decoding="async" alt="Zubair bin Shaukat">
+           width="112" height="112" loading="lazy" decoding="async" alt="Zubair bin Shaukat" title="Zubair bin Shaukat (ZUBYR), developer from Lahore">
       <h2>A project by <a href="https://zubyr.dev" target="_blank" rel="noopener">Zubair bin Shaukat</a></h2>
-      <!-- TODO bio -->
-      <p>Software engineer from Pakistan building private, offline-first tools.</p>
+      <p>Software engineer and developer from Lahore, Pakistan, building private, offline-first tools. Batwa is the budget app he wanted for his own JazzCash, bank and cash money, so he built it and gave it away.</p>
       <div class="ab-actions">
         <a class="btn btn-primary btn-sm" href="https://zubyr.dev" target="_blank" rel="noopener">Portfolio</a>
         <a class="btn btn-ghost btn-sm" href="https://github.com/zubairbinshaukat" target="_blank" rel="noopener">
@@ -409,16 +479,31 @@
 </main>
 
 <footer class="ab-foot">
-  <div class="ab-wrap">
-    <img src="icons/icon-192-v2.png" alt="" width="44" height="44" loading="lazy" decoding="async">
-    <p>Batwa is a private, offline budget tracker by ZUBYR.</p>
-    <nav aria-label="Footer">
-      <a href="./">Open Batwa</a>
-      <a href="https://github.com/zubairbinshaukat/batwa" target="_blank" rel="noopener">GitHub</a>
-      <a href="https://zubyr.dev" target="_blank" rel="noopener">zubyr.dev</a>
-      <a href="#privacy">Privacy</a>
-    </nav>
-    <p class="xsmall">&copy; 2026 Zubair bin Shaukat. Batwa is open source.</p>
+  <div class="ab-foot-shell">
+    <div class="ab-foot-row">
+      <a class="ab-brand" href="./" aria-label="Batwa home">
+        <img src="icons/icon-192-v2.png" alt="" title="Batwa" width="30" height="30" loading="lazy" decoding="async">
+        <span>Batwa</span>
+      </a>
+      <nav aria-label="Footer">
+        <a href="./">Open Batwa</a>
+        <a href="https://github.com/zubairbinshaukat/batwa" target="_blank" rel="noopener">GitHub</a>
+        <a href="https://zubyr.dev" target="_blank" rel="noopener">zubyr.dev</a>
+        <a href="#privacy">Privacy</a>
+        <a href="#faq">FAQ</a>
+      </nav>
+      <p class="ab-foot-by">
+        <span class="ab-foot-dot" aria-hidden="true"></span>
+        Built in Lahore by <a href="https://zubyr.dev" target="_blank" rel="noopener">Zubair bin Shaukat</a>
+      </p>
+    </div>
+    <p class="ab-foot-meta">
+      <span>&copy; 2026 ZUBYR</span>
+      <span>Open source, free forever</span>
+      <span>No account, no tracking</span>
+      <span class="ab-hand">batwa = wallet in Urdu</span>
+    </p>
+    <div class="ab-foot-mark" aria-hidden="true">Batwa</div>
   </div>
 </footer>
 
@@ -464,6 +549,38 @@
     deferred = null;
   });
   window.addEventListener("appinstalled", () => { installBtn.hidden = true; deferred = null; });
+
+  // FAQ: <details> snaps open by default. Animate the answer's height with the
+  // Web Animations API so it slides, and keep one question open at a time.
+  const faqs = [...document.querySelectorAll(".ab-faq details")];
+  const still = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const ease = { duration: 280, easing: "cubic-bezier(0.22, 1, 0.36, 1)" };
+  function closeFaq(d) {
+    const body = d.querySelector(".ab-faq-body");
+    d.classList.remove("is-open");
+    if (still) { d.open = false; return; }
+    d.classList.add("is-anim");
+    const a = body.animate({ height: [body.offsetHeight + "px", "0px"], opacity: [1, 0] }, ease);
+    a.onfinish = () => { d.open = false; d.classList.remove("is-anim"); };
+  }
+  function openFaq(d) {
+    const body = d.querySelector(".ab-faq-body");
+    d.open = true;
+    d.classList.add("is-open");
+    if (still) return;
+    d.classList.add("is-anim");
+    const a = body.animate({ height: ["0px", body.scrollHeight + "px"], opacity: [0, 1] }, ease);
+    a.onfinish = () => d.classList.remove("is-anim");
+  }
+  for (const d of faqs) {
+    d.querySelector("summary").addEventListener("click", (e) => {
+      e.preventDefault();
+      if (d.classList.contains("is-anim")) return;
+      if (d.open) { closeFaq(d); return; }
+      for (const o of faqs) if (o !== d && o.open && !o.classList.contains("is-anim")) closeFaq(o);
+      openFaq(d);
+    });
+  }
 
   // Reveal on scroll.
   const io = new IntersectionObserver((entries) => {

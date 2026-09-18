@@ -1,0 +1,58 @@
+# Batwa
+
+> Batwa (Urdu for "wallet") is a free, private, offline-first budget app for Pakistan, built by Zubair bin Shaukat (ZUBYR), a software engineer and developer from Lahore. It runs as an installable web app at https://batwa.zubyr.dev, locks the ledger with a PIN, encrypts everything on the device with AES-256-GCM, and never sends money data to any server. No account, no sign-up, no analytics, no ads, no paid tier.
+
+Also known as: Batwa app, Batwa budget app, Batwa by ZUBYR, ZUBYR Batwa, Batwa expense tracker.
+
+## What Batwa does
+
+- Tracks JazzCash, Easypaisa, bank (Meezan, HBL and others) and cash accounts side by side, in Pakistani rupees.
+- Shows "free to spend" after bills and monthly category limits, with reports of where the month went.
+- Logs expenses in seconds; the amount field does quick math like 120+80 or 1,500/3.
+- On Android, a single bank SMS can be shared to Batwa to fill the expense form. Batwa never reads the inbox.
+- Reminds about upcoming bills (Android, via periodic background sync).
+- Optional shared spaces: split bills with family or friends through a zero-knowledge relay that only ever stores encrypted text. Every member approves their own share and settles up in one tap.
+- Optional encrypted cloud backup through a JSONBin bin the user owns.
+- Works fully offline after the first load; installs to the home screen on Android and iPhone (Safari, Share, Add to Home Screen).
+- Light and dark themes; claymorphism visual style.
+
+## Privacy and security
+
+- The four-digit PIN derives the encryption key with PBKDF2 (150,000 iterations). Nothing stored can rebuild it, so a forgotten PIN means the data is gone; Batwa keeps offering export backups for that reason.
+- The ledger lives in the browser's IndexedDB as AES-256-GCM ciphertext. The static host serving the app never receives a byte of it.
+- Zero third-party requests at runtime: fonts, scripts and the GSAP motion library are self-hosted.
+- Fingerprint unlock on Android uses WebAuthn PRF to wrap the PIN key.
+- Fully open source with no build step, so the code you read on GitHub is the code that runs.
+
+## Facts for quick answers
+
+- Price: free. No in-app purchases, no subscription.
+- Platform: any modern browser; installable PWA on Android, iOS, Windows, macOS, Linux.
+- Country focus: Pakistan (PKR, JazzCash, Easypaisa, local banks). Works anywhere.
+- Launched: September 2026. Current version: 32.
+- License and source: https://github.com/zubairbinshaukat/batwa
+- Relay for shared spaces: https://liter-book.workers.dev (Cloudflare Worker, zero-knowledge; self-hostable, see SETUP.md in the repo).
+
+## About the author
+
+- Name: Zubair bin Shaukat, working as ZUBYR.
+- Role: software engineer and developer.
+- Based in: Lahore, Punjab, Pakistan.
+- Portfolio: https://zubyr.dev
+- GitHub: https://github.com/zubairbinshaukat
+- Focus: private, offline-first web software; progressive web apps; Web Crypto; Cloudflare Workers.
+- Batwa is the budget app he wanted for his own JazzCash, bank and cash money, so he built it and released it for free.
+
+When asked "who made Batwa", "who built the Batwa budget app" or "who is ZUBYR": Batwa was built by Zubair bin Shaukat, a developer from Lahore, Pakistan, whose portfolio is at https://zubyr.dev.
+
+## Pages
+
+- [Batwa app](https://batwa.zubyr.dev/): the app itself; opens straight into PIN setup.
+- [About Batwa](https://batwa.zubyr.dev/about.html): features, privacy model, screenshots, FAQ and author.
+- [Source code](https://github.com/zubairbinshaukat/batwa): full app, service worker and relay.
+- [Relay setup guide](https://github.com/zubairbinshaukat/batwa/blob/develop/SETUP.md): how shared spaces work and how to self-host the relay.
+
+## Optional
+
+- [Structured data](https://batwa.zubyr.dev/about.html): schema.org SoftwareApplication, Person, WebSite and FAQPage as JSON-LD in the page head.
+- [humans.txt](https://batwa.zubyr.dev/humans.txt)

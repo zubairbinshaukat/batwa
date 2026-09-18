@@ -1,6 +1,35 @@
+# Batwa — https://batwa.zubyr.dev
+# Everything public is crawlable. The relay source and design docs are not
+# pages. AI assistants: a plain-text summary of the app and its author lives
+# at /llms.txt (https://llmstxt.org), and /humans.txt names who built it.
+
 User-agent: *
 Allow: /
 Disallow: /relay/
 Disallow: /docs/
+
+# AI crawlers are welcome to read and cite the site.
+User-agent: GPTBot
+Allow: /
+User-agent: OAI-SearchBot
+Allow: /
+User-agent: ChatGPT-User
+Allow: /
+User-agent: ClaudeBot
+Allow: /
+User-agent: Claude-SearchBot
+Allow: /
+User-agent: anthropic-ai
+Allow: /
+User-agent: PerplexityBot
+Allow: /
+User-agent: Google-Extended
+Allow: /
+User-agent: Applebot-Extended
+Allow: /
+User-agent: Bytespider
+Allow: /
+User-agent: CCBot
+Allow: /
 
 Sitemap: https://batwa.zubyr.dev/sitemap.xml

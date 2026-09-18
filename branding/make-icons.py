@@ -67,6 +67,17 @@ def main():
         img.save(os.path.join(out, name), optimize=True)
         print("wrote icons/%s  %dx%d" % (name, size, size))
 
+    # Search-result favicon. Google fetches the icon it finds on the home page
+    # and wants a raster that is a multiple of 48px; it also tries /favicon.ico
+    # at the site root on its own. The SVG stays for browser tabs. Both use the
+    # lavender plate so the wallet reads at 16px instead of dissolving.
+    fav = render(subject, 96, 0.84, PLATE).convert("RGB")
+    fav.save(os.path.join(out, "favicon-96.png"), optimize=True)
+    print("wrote icons/favicon-96.png  96x96")
+    ico = render(subject, 256, 0.84, PLATE).convert("RGB")
+    ico.save(os.path.join(ROOT, "favicon.ico"), sizes=[(16, 16), (32, 32), (48, 48)])
+    print("wrote favicon.ico  16/32/48")
+
 
 if __name__ == "__main__":
     main()

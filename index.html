@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" prefix="og: https://ogp.me/ns#">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
@@ -9,9 +9,13 @@
   <link rel="canonical" href="https://batwa.zubyr.dev/">
   <link rel="author" href="https://zubyr.dev">
   <meta name="robots" content="index,follow,max-image-preview:large">
+  <meta name="keywords" content="Batwa, Batwa app, Batwa budget app, Batwa by ZUBYR, ZUBYR, Zubair bin Shaukat, budget app Pakistan, expense tracker Pakistan, JazzCash budget, Easypaisa expense tracker, offline budget app, private budget tracker, free budget app, PWA">
+  <link rel="alternate" type="text/plain" href="https://batwa.zubyr.dev/llms.txt" title="Batwa for AI assistants (llms.txt)">
 
   <meta property="og:type" content="website">
+  <meta property="og:locale" content="en_PK">
   <meta property="og:site_name" content="Batwa">
+  <meta property="og:image:type" content="image/png">
   <meta property="og:title" content="Batwa by ZUBYR – Private Offline Budget Tracker">
   <meta property="og:description" content="Free, offline, PIN-locked budget app for Pakistan. Your money never leaves your phone unencrypted.">
   <meta property="og:url" content="https://batwa.zubyr.dev/">
@@ -25,6 +29,8 @@
   <meta name="twitter:image" content="https://batwa.zubyr.dev/screenshots/og-batwa.png">
 
   <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="/favicon.ico" sizes="48x48">
+  <link rel="icon" href="icons/favicon-96.png" type="image/png" sizes="96x96">
   <link rel="icon" href="icons/favicon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="icons/apple-touch-icon-180-v2.png">
   <meta name="apple-mobile-web-app-capable" content="yes">
@@ -60,10 +66,14 @@
   {
     "@context": "https://schema.org",
     "@type": "SoftwareApplication",
+    "@id": "https://batwa.zubyr.dev/#app",
     "name": "Batwa",
-    "alternateName": ["Batwa by ZUBYR", "ZUBYR Batwa"],
+    "alternateName": ["Batwa app", "Batwa budget app", "Batwa by ZUBYR", "ZUBYR Batwa", "Batwa wallet app", "Batwa expense tracker"],
     "url": "https://batwa.zubyr.dev/",
-    "description": "Private, offline-first personal budget tracker. PIN-locked, encrypted on the device, no account, no server, no tracking.",
+    "description": "Private, offline-first personal budget tracker for Pakistan. PIN-locked, encrypted on the device, no account, no server, no tracking. Tracks JazzCash, Easypaisa, bank and cash accounts in rupees.",
+    "keywords": "budget app Pakistan, expense tracker Pakistan, JazzCash, Easypaisa, offline budget app, private budget tracker, PWA",
+    "inLanguage": "en",
+    "countriesSupported": "PK",
     "applicationCategory": "FinanceApplication",
     "operatingSystem": "Android, iOS, Windows, macOS, Linux (web browser)",
     "browserRequirements": "Requires JavaScript and a modern browser",
@@ -78,10 +88,14 @@
     "codeRepository": "https://github.com/zubairbinshaukat/batwa",
     "author": {
       "@type": "Person",
+      "@id": "https://zubyr.dev/#person",
       "name": "Zubair bin Shaukat",
       "alternateName": "ZUBYR",
+      "jobTitle": "Software Engineer",
+      "description": "Software engineer and developer from Lahore, Pakistan. Creator of Batwa.",
       "url": "https://zubyr.dev",
-      "sameAs": ["https://github.com/zubairbinshaukat"]
+      "address": { "@type": "PostalAddress", "addressLocality": "Lahore", "addressCountry": "PK" },
+      "sameAs": ["https://github.com/zubairbinshaukat", "https://batwa.zubyr.dev/about.html"]
     }
   }
   </script>

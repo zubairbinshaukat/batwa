@@ -4,7 +4,7 @@ const CACHE = "batwa-v32";
 /* Marketing / SEO files. They are never precached, never runtime-cached, and
    the navigate branch below lets /about.html reach the network. The app's
    cache stays the app's cache; these change on their own schedule. */
-const NO_CACHE = /\/(about\.html|css\/about\.css|robots\.txt|sitemap\.xml|fonts\/fraunces-var\.woff2|screenshots\/(og-batwa\.png|hero-[a-z-]+\.webp))$/;
+const NO_CACHE = /\/(about\.html|css\/about\.css|robots\.txt|sitemap\.xml|llms\.txt|humans\.txt|fonts\/fraunces-var\.woff2|screenshots\/(og-batwa\.png|hero-[a-z-]+\.webp|0[1-4]-[a-z]+\.webp))$/;
 
 const SHELL = [
   "./",
