@@ -5,7 +5,8 @@
 
 import { $, el, esc, anim, buzz, segmented } from "../util/dom.js";
 import { fmtMoney, fmtCompact, fmtNum, monthLabel, thisMonth, shiftMonth, shortDate } from "../util/format.js";
-import { state, monthSummary, limitStatus } from "../ledger.js";
+import { state, monthSummary, limitStatus, sharedTotals } from "../ledger.js";
+import { hasSpaces } from "../spaces.js";
 import { analyzeMonth, spendDate } from "../insights.js";
 import { donut, trendBars, splitBar, weekdayBars, phaseBar, animateCharts, CHART_COLORS } from "./charts.js";
 import { icon, catIcon } from "./icons.js";
@@ -47,6 +48,8 @@ export function renderReports(view) {
             <div class="tile-value num ${sum.net >= 0 ? "pos" : "neg"}">${sum.net >= 0 ? "+" : ""}${fmtCompact(sum.net)}</div></div>
         </div>
 
+        <div id="shared-slot"></div>
+
         <div id="insights" class="stack" style="margin-top:16px"></div>
 
         <div class="section-head"><h2>Spending breakdown</h2></div>
@@ -76,6 +79,7 @@ export function renderReports(view) {
     if (currentMonth < thisMonth()) goMonth(view, 1);
   });
 
+  renderShared($("#shared-slot", view), ym);
   renderInsights($("#insights", view), insights);
   renderBreakdown($("#breakdown", view), sum, analysis);
   renderPatterns($("#patterns", view), analysis, insights);
@@ -250,6 +254,32 @@ function buildInsights(a, sum, prev) {
 
 const byWeight = (a, b) => b.weight - a.weight;
 const insightById = (list, id) => list.find((i) => i.id === id) || null;
+
+/**
+ * The "Shared" card (plan §5.4): three figures that exist only because of
+ * spaces, kept well away from the spending breakdown — lent money and
+ * settlements are not spending and must never move a category total.
+ * Nothing at all when this phone holds no spaces.
+ */
+function renderShared(root, ym) {
+  if (!root || !hasSpaces()) return;
+  const t = sharedTotals(ym);
+  if (!t.lentOut && !t.owed && !t.settled) return;
+  const card = el("div", { class: "card shared-report" });
+  const rows = [
+    ["Lent out", t.lentOut, "is-out"],
+    ["You owe", t.owed, "is-owe"],
+    ["Settled this month", t.settled, ""],
+  ];
+  const grid = el("div", { class: "shared-report-grid" });
+  for (const [label, value, cls] of rows) {
+    grid.append(el("div", { class: `shared-stat ${cls}` },
+      el("span", { class: "shared-stat-label" }, label),
+      el("span", { class: "shared-stat-value num" }, fmtMoney(value))));
+  }
+  card.append(grid);
+  root.append(el("div", { class: "section-head" }, el("h2", {}, "Shared")), card);
+}
 
 function renderInsights(root, insights) {
   const top = insights.filter((i) => i.tone !== "caution").sort(byWeight).slice(0, 2);

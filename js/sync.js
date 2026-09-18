@@ -2,6 +2,7 @@
 // Sync is an enhancement — every failure degrades gracefully, never blocks.
 
 import { dbGet, dbPut, getMeta, setMeta } from "./db.js";
+import { JSONBIN_API } from "./config.js";
 import { getKey } from "./auth.js";
 import { decrypt, deriveKey, unb64 } from "./crypto.js";
 import { state, replaceAll, mergeData } from "./ledger.js";
@@ -10,8 +11,6 @@ import { toast } from "./ui/toast.js";
 import { chooseSheet, confirmSheet, sheetOpen, openSheet, closeSheet } from "./ui/modals.js";
 import { el } from "./util/dom.js";
 import { icon } from "./ui/icons.js";
-
-const API = "https://api.jsonbin.io/v3/b";
 
 /** Paste this into a fresh JSONBin bin — the app treats it as "empty, push mine". */
 export const STARTER_JSON = '{ "app": "batwa", "version": 1, "updatedAt": null, "salt": null, "cipher": null }';
@@ -68,7 +67,7 @@ export function scheduleSync() {
 window.addEventListener("online", () => scheduleSync());
 
 async function remoteGet(binId, masterKey) {
-  const res = await fetch(`${API}/${binId}/latest`, {
+  const res = await fetch(`${JSONBIN_API}/${binId}/latest`, {
     headers: { "X-Master-Key": masterKey },
   });
   if (res.status === 401 || res.status === 403) throw new Error("bad-key");
@@ -80,7 +79,7 @@ async function remoteGet(binId, masterKey) {
 }
 
 async function remotePut(binId, masterKey, payload) {
-  const res = await fetch(`${API}/${binId}`, {
+  const res = await fetch(`${JSONBIN_API}/${binId}`, {
     method: "PUT",
     headers: { "Content-Type": "application/json", "X-Master-Key": masterKey },
     body: JSON.stringify(payload),
@@ -191,6 +190,14 @@ async function pullRemote(remote) {
     const data = await decrypt(key, remote.cipher);
     await replaceAll(data);
     await setMeta("updatedAt", remote.updatedAt);
+    // The bundles just changed underneath the space cache, so every space is
+    // re-read and re-pulled before anything reads a stale blob (plan §9.7).
+    // Imported lazily: sync.js must not drag the whole spaces module into the
+    // boot path for a phone that has never made a space.
+    try {
+      const m = await import("./spaces.js");
+      await m.reloadSpacesAfterSync();
+    } catch (err) { console.warn("space re-pull after sync failed", err); }
     return true;
   } catch {
     toast(
@@ -329,6 +336,12 @@ export async function exportPlain() {
     exportedAt: new Date().toISOString(),
     entries: state.entries,
     accounts: state.accounts,
+    // Shared-space bundles carry the write token and data key for each space in
+    // clear in a PLAIN export — that is the whole point of a plain export, and
+    // the warning next to the button already says so.
+    spaces: state.spaces,
+    contacts: state.contacts,
+    profile: state.profile,
     categories: state.categories,
     catIcons: state.catIcons, // travels with `categories` — same meta, same rules
   }, `batwa-plain-${new Date().toISOString().slice(0, 10)}.json`);
@@ -363,7 +376,13 @@ export async function importBackup(data, mode, pin = null) {
       throw new Error(data.deviceKey ? "Couldn't decrypt this backup" : "Wrong PIN for this backup");
     }
   } else {
-    payload = { entries: data.entries || [], accounts: data.accounts || [] };
+    payload = {
+      entries: data.entries || [],
+      accounts: data.accounts || [],
+      spaces: data.spaces || [],
+      contacts: data.contacts || {},
+      profile: data.profile || null,
+    };
   }
   if (mode === "replace") await replaceAll(payload);
   else return mergeData(payload);

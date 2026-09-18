@@ -1,0 +1,27 @@
+# Batwa relay — a zero-knowledge store-and-forward for shared spaces.
+#
+# It holds ciphertext keyed by a random 22-char space id and fans out Web Push.
+# It never sees names, amounts, titles, accounts, or who is who.
+
+name = "batwa-relay"
+main = "src/index.js"
+compatibility_date = "2026-09-15"
+
+[vars]
+# The app origin allowed to call this relay. Installed PWAs may send Origin: null,
+# which is accepted as well (see ALLOW_NULL_ORIGIN below).
+ALLOWED_ORIGIN = "https://batwa.zubyr.dev"
+ALLOW_NULL_ORIGIN = "1"
+# Public half of the VAPID pair (`npx web-push generate-vapid-keys`).
+# The private half is a secret: `wrangler secret put VAPID_PRIVATE_KEY`
+# and `wrangler secret put VAPID_SUBJECT` (mailto:you@example.com).
+VAPID_PUBLIC_KEY = "BD15vxCPRqUUfyzO6h8dvFhRZafCh3P1TC4Md9K-ec83FFDEWQ_sUL4qI3DHlJrq558a7lvMVZ4L4kRfGjAtR6U"
+
+# One Durable Object per space gives atomic version checks.
+[[durable_objects.bindings]]
+name = "SPACES"
+class_name = "Space"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["Space"]

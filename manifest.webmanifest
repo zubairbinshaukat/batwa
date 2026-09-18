@@ -9,11 +9,17 @@
   "background_color": "#F5F4FC",
   "theme_color": "#4F33E8",
   "categories": ["finance", "productivity"],
+  "screenshots": [
+    { "src": "screenshots/01-home.png", "sizes": "780x1688", "type": "image/png", "form_factor": "narrow", "label": "Free to spend, account balances and what's due next" },
+    { "src": "screenshots/02-reports.png", "sizes": "780x1688", "type": "image/png", "form_factor": "narrow", "label": "Where the month went, by category, with your limits" },
+    { "src": "screenshots/03-history.png", "sizes": "780x1688", "type": "image/png", "form_factor": "narrow", "label": "Every transaction, filterable by account and category" },
+    { "src": "screenshots/04-add.png", "sizes": "780x1688", "type": "image/png", "form_factor": "narrow", "label": "Logging an expense takes a few seconds" }
+  ],
   "icons": [
-    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
-    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
-    { "src": "icons/icon-maskable-192.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable" },
-    { "src": "icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+    { "src": "icons/icon-192-v2.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512-v2.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-maskable-192-v2.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable" },
+    { "src": "icons/icon-maskable-512-v2.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
   ],
   "share_target": {
     "action": "./?share=1",

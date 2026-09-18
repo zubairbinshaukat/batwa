@@ -19,6 +19,12 @@ package-lock.json
 pnpm-lock.yaml
 yarn.lock
 
+# ...except the relay Worker, which is a separate deployable with its own
+# toolchain (wrangler as a devDependency). Its node_modules stays ignored.
+!relay/package.json
+!relay/package-lock.json
+relay/.wrangler/
+
 # Local scratch
 *.log
 tmp/

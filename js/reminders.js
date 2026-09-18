@@ -100,8 +100,8 @@ export async function sendTestReminder() {
     await reg.showNotification("Batwa", {
       body: text || "Nothing due today — this is what a reminder looks like.",
       tag: DUE_TAG,
-      icon: "icons/icon-192.png",
-      badge: "icons/icon-maskable-192.png",
+      icon: "icons/icon-192-v2.png",
+      badge: "icons/icon-maskable-192-v2.png",
       data: { url: "./" },
     });
   } catch {

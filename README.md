@@ -1,5 +1,6 @@
 <p align="center">
-  <img src="branding/logo.svg" alt="Batwa logo" width="96" height="96">
+  <img src="branding/
+relay/                  the zero-knowledge Cloudflare Worker for shared spaces, with its own testslogo.png" alt="Batwa logo" width="96" height="96">
 </p>
 
 <h1 align="center">Batwa — budgeting that never leaves your phone</h1>
@@ -14,6 +15,12 @@
   <img alt="Dependencies" src="https://img.shields.io/badge/runtime%20deps-0-8257F6">
   <img alt="PWA" src="https://img.shields.io/badge/PWA-installable-8257F6">
   <img alt="Encryption" src="https://img.shields.io/badge/AES--256--GCM-on%20device-8257F6">
+</p>
+
+<p align="center">
+  <img src="screenshots/01-home.png" alt="Home" width="200">
+  <img src="screenshots/02-reports.png" alt="Reports" width="200">
+  <img src="screenshots/03-history.png" alt="History" width="200">
 </p>
 
 ---
@@ -34,6 +41,7 @@ Everything is encrypted with a key derived from your PIN before it touches stora
 - **Bill reminders** via background sync, storing only due dates and counts outside the encrypted ledger.
 - **Fingerprint unlock** layered on top of the PIN using WebAuthn PRF. The PIN remains the only recovery path.
 - **Optional cloud sync** through a JSONBin bin you own, with conflict prompts and never a silent overwrite.
+- **Shared spaces** (optional): split expenses and settle up with family or friends through a zero-knowledge relay you host. Every member approves their own share and picks their own account. See [SETUP.md](SETUP.md).
 - **Light and dark themes**, an installable home-screen icon, and full offline operation.
 
 ## Tech stack
@@ -50,6 +58,7 @@ Everything is encrypted with a key derived from your PIN before it touches stora
 | Motion | GSAP 3 (vendored, self-hosted) | Smooth count-ups and sheet transitions offline. |
 | Type | Outfit and Caveat (self-hosted variable fonts) | Outfit for UI, Caveat for tips and insights. |
 | Sync (optional) | JSONBin REST API | Any static host plus a free bin you control. |
+| Shared spaces (optional) | Cloudflare Worker + Durable Objects, Web Push (VAPID) | Stores only ciphertext keyed by random ids and forwards encrypted notifications. Code in [relay/](relay/). |
 
 No framework, no bundler, no npm install, no runtime dependencies.
 
@@ -62,8 +71,19 @@ Batwa is designed so that nobody, including the people who wrote it, can see you
 - **Nothing phones home.** No analytics, no crash reporting, no fonts or scripts fetched from third parties at runtime.
 - **Sync is opt-in and blind.** If you enable JSONBin sync, only the encrypted blob is uploaded to a bin you created with your own key.
 - **Reminders leak the minimum.** To notify you while the app is closed, only due dates and counts are kept outside the encrypted store. Never titles, never amounts.
+- **Shared spaces are blind too.** A space is a random id, a write token and a key that live inside your encrypted ledger. The relay stores ciphertext and never learns names, amounts or who is in a space. Notification text is encrypted on the sender's phone.
 - **Open source.** Every line that touches your data is in this repository for you to read.
 
+## Shared spaces
+
+Batwa can keep a joint ledger with the people you actually split money with, without a server that can read it.
+
+- **One space per group.** Create a space, invite by QR or code in person, and each member picks a display name and colour. Nothing shared appears in the app until you hold at least one space.
+- **Propose, approve, settle.** Anyone can add a shared expense with an equal or custom split. Each named member accepts it for themselves, choosing their own category and account, or rejects it with a reason. Settlements live in the transfer sheet under People, with a list of what you owe that person.
+- **Sync without a database.** Every space is one encrypted document in a Cloudflare Worker. Phones merge per entry with revision counters, so three people editing offline still converge.
+- **Notifications with context, still private.** "Faraz split Dinner · Rs 3,000" is encrypted with a per-space key before it leaves the sender's phone. Turn details off per space to get only "New activity".
+
+Hosting the relay takes about 20 minutes on Cloudflare's free plan. The steps are in [SETUP.md](SETUP.md) and the relay's own README explains exactly what it can and cannot see.
 ## Getting started
 
 ### Use it
@@ -123,6 +143,9 @@ js/
   ledger.js             entries, accounts, balances, recurrence, month queries
   insights.js           pure analysis functions used by Reports (Node-testable)
   sync.js               JSONBin push, pull and conflict handling
+  relay.js              client for the shared-spaces relay
+  spaces.js             shared spaces: bundles, sync loop, proposals, settlements, push
+  spaces/               merge (pure), crypto (keys, invite codec), notify (encrypted summaries)
   reminders.js          due-date schedule and background notifications
   nudge.js              backup reminder banner
   smsparse.js           bank and wallet SMS parser for the share target
@@ -133,13 +156,19 @@ js/
   vendor/gsap.min.js    animation library, self-hosted
 
 fonts/                  Outfit and Caveat variable fonts
-icons/                  favicon and PWA icon set
-branding/               logo sources and bank logos
+icons/                  favicon and PWA icon set, generated from branding/logo-source.png
+screenshots/            store screenshots listed in the manifest (Chrome's rich install sheet)
+branding/
+  logo-source.png       master logo render; the one file to replace to rebrand
+  logo.png              trimmed logo for the README and docs
+  make-icons.py         regenerates every icon in icons/ from the source render
+  banks/                bank and wallet logos for the account picker
 ```
 
 ### Conventions that keep the project simple
 
-- **Bump the cache when you ship.** Change `CACHE` in `sw.js` (`batwa-v22` to `batwa-v23`) whenever a file changes, and add new files to its precache list. Users get a "New version ready" toast instead of a stale app.
+- **Bump the cache when you ship.** Change `CACHE` in `sw.js` (`batwa-v29` to `batwa-v30`) whenever a file changes, and add new files to its precache list. Users get a "New version ready" toast instead of a stale app.
+- **Version the icon filenames when the logo changes.** Chrome decides an installed PWA needs re-packaging by diffing the manifest, so new artwork behind an old filename can sit stale on a phone for days. Bump `SUFFIX` in `branding/make-icons.py` and the references in `manifest.webmanifest`, `sw.js`, `index.html` and `js/auth.js`.
 - **Colours and depth come from tokens.** Add or change a colour in `css/tokens.css` for both themes. Components should never hard-code a colour, except on surfaces that sit on the violet gradient in both themes.
 - **Pure logic stays pure.** `insights.js`, `ledger.js` math, `smsparse.js` and `util/expr.js` have no DOM access, so you can test them directly with `node`.
 - **One module owns one screen.** Each `ui/*.js` file renders its own markup and wires its own events. Cross-module UI goes through `modals.js` sheets.

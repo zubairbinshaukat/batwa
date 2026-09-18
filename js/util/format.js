@@ -65,6 +65,26 @@ export function dueHint(iso) {
   return { text: `In ${d} days`, tone: "ok" };
 }
 
+/**
+ * The one date an entry belongs to — the key History groups by, Reports bucket
+ * by, and entriesForMonth() filters on. One rule per kind, in one place, so the
+ * three callers can never drift:
+ *   transfer — paidAt (always set on a transfer) else createdAt
+ *   income   — paidAt else dueDate (the expected date of pending income) else createdAt
+ *   lent     — paidAt else createdAt (money left the account the day it was lent)
+ *   settlement — paidAt else createdAt (same: it moved, or it didn't happen)
+ *   anything else (expense) — dueDate else paidAt else createdAt
+ * Always sliced to "YYYY-MM-DD".
+ */
+export function entryDate(e) {
+  const k = e?.kind;
+  const d = k === "transfer" ? (e.paidAt || e.createdAt)
+    : k === "income" ? (e.paidAt || e.dueDate || e.createdAt)
+    : k === "lent" || k === "settlement" ? (e.paidAt || e.createdAt)
+    : (e?.dueDate || e?.paidAt || e?.createdAt);
+  return String(d).slice(0, 10);
+}
+
 const MONTHS = ["January","February","March","April","May","June","July","August","September","October","November","December"];
 
 /** "2026-08" -> "August 2026" */
@@ -126,6 +146,17 @@ export function timeAgo(ts) {
   if (s < 3600) return `Synced ${Math.floor(s / 60)} min ago`;
   if (s < 86400) return `Synced ${Math.floor(s / 3600)} hr ago`;
   return `Synced ${Math.floor(s / 86400)} day${s < 172800 ? "" : "s"} ago`;
+}
+
+/** "just now" / "4 min ago" / "2 hr ago" / "3 days ago" — no "Synced" prefix. */
+export function agoLabel(ts) {
+  if (!ts) return "";
+  const s = Math.max(0, (Date.now() - new Date(ts).getTime()) / 1000);
+  if (s < 60) return "just now";
+  if (s < 3600) return `${Math.floor(s / 60)} min ago`;
+  if (s < 86400) return `${Math.floor(s / 3600)} hr ago`;
+  const d = Math.floor(s / 86400);
+  return `${d} day${d === 1 ? "" : "s"} ago`;
 }
 
 /** time-of-day greeting */

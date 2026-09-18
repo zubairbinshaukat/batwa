@@ -2,11 +2,15 @@
 // Filter changes re-render ONLY the list (with a brief loader), never the page.
 
 import { $, el, esc, anim, buzz } from "../util/dom.js";
-import { fmtCompact, monthLabel, thisMonth, shiftMonth, dayLabel, daysUntil } from "../util/format.js";
-import { state, entriesForMonth } from "../ledger.js";
+import { fmtCompact, monthLabel, thisMonth, shiftMonth, dayLabel, daysUntil, entryDate } from "../util/format.js";
+import { state, entriesForMonth, partialOf } from "../ledger.js";
 import { accountName } from "./accounts.js";
 import { icon, catIcon } from "./icons.js";
-import { addExpenseSheet, addMoneySheet, transferDetailSheet } from "./modals.js";
+import { addExpenseSheet, addMoneySheet, transferDetailSheet, sharedDetailSheet } from "./modals.js";
+import {
+  hasSpaces, getSpace, colorHex, memberNameIn, rowSettlementStatus, nudgeSettlement,
+  settlementIdOf,
+} from "../spaces.js";
 
 let currentMonth = thisMonth();
 let filters = { kind: "all", category: "all", status: "all", account: "all" };
@@ -47,8 +51,12 @@ export function renderHistory(view) {
 }
 
 function renderFilters(root, view) {
+  // Shared and Settlements only exist once this phone holds a space — with no
+  // spaces, History looks exactly as it always did (plan §0).
+  const kinds = [["all", "All"], ["expense", "Expenses"], ["income", "Income"], ["transfer", "Transfers"]];
+  if (hasSpaces()) kinds.push(["shared", "Shared"], ["settlement", "Settlements"]);
   const groups = [
-    { key: "kind", opts: [["all", "All"], ["expense", "Expenses"], ["income", "Income"], ["transfer", "Transfers"]] },
+    { key: "kind", opts: kinds },
     { key: "status", opts: [["all", "Any status"], ["paid", "Paid"], ["pending", "Pending"]] },
   ];
   if (state.accounts.length) {
@@ -90,7 +98,10 @@ function pruneFilters() {
 function applyFilters() {
   pruneFilters();
   let list = entriesForMonth(currentMonth);
-  if (filters.kind !== "all") list = list.filter((e) => e.kind === filters.kind);
+  // "Shared" is not a kind but a provenance: every row that came out of a
+  // space, whatever shape it took here (my share, what I fronted, a settlement).
+  if (filters.kind === "shared") list = list.filter((e) => !!e.spaceId);
+  else if (filters.kind !== "all") list = list.filter((e) => e.kind === filters.kind);
   if (filters.status !== "all") list = list.filter((e) => e.status === filters.status);
   if (filters.category !== "all") list = list.filter((e) => e.category === filters.category);
   if (filters.account !== "all") {
@@ -99,22 +110,27 @@ function applyFilters() {
   return list.sort((a, b) => (dateKey(a) < dateKey(b) ? 1 : -1)); // newest first
 }
 
-/** The one date a row belongs to — the same key entriesForMonth() buckets by. */
-function dateKey(e) {
-  const d = e.kind === "transfer" ? (e.paidAt || e.createdAt)
-    : e.kind === "income" ? (e.paidAt || e.dueDate || e.createdAt)
-    : (e.dueDate || e.paidAt || e.createdAt);
-  return String(d).slice(0, 10);
-}
+/** The one date a row belongs to — the same key entriesForMonth() buckets by.
+ * One shared rule now (util/format.js entryDate) so History, the ledger and
+ * insights can never drift apart. */
+const dateKey = entryDate;
 
 /** Amount chips for one day: out (ink), in (green), transfers only when nothing else moved. */
 function dayTotal(rows) {
   let out = 0, inn = 0, tr = 0;
   for (const e of rows) {
     const a = Number(e.amount) || 0;
-    if (e.kind === "expense") out += a;
-    else if (e.kind === "income") inn += a;
-    else if (e.kind === "transfer") tr += a;
+    switch (e.kind) {
+      case "expense": out += a; break;
+      case "income": inn += a; break;
+      case "transfer": tr += a; break;
+      // Money I fronted left the account that day exactly like a payment did.
+      case "lent": out += a; break;
+      // A settlement is real money moving one way or the other.
+      // A write-off moved no money on the day it was recorded.
+      case "settlement": if (e.writeoff) break; if (e.direction === "in") inn += a; else out += a; break;
+      default: break; // unknown kind: counted in no chip
+    }
   }
   const chips = [];
   if (out > 0) chips.push(`<span class="sum out num">−${fmtCompact(out)}</span>`);
@@ -171,6 +187,7 @@ function paintList(view, { loading = false } = {}) {
       root.append(dayDivider(g.day, g.rows, i === 0));
       g.rows.forEach((e, j) => {
         const row = historyRow(e);
+        if (!row) return; // unknown kind: nothing this build knows how to draw
         if (j === 0) row.classList.add("is-day-first");
         root.append(row);
       });
@@ -185,25 +202,128 @@ function paintList(view, { loading = false } = {}) {
   setTimeout(draw, 180);
 }
 
+/** Row dispatch by kind. Unknown kinds draw nothing rather than a wrong row. */
 function historyRow(e) {
-  if (e.kind === "transfer") return transferHistoryRow(e);
+  switch (e.kind) {
+    case "transfer": return transferHistoryRow(e);
+    case "income": return moneyHistoryRow(e, true);
+    case "expense": return moneyHistoryRow(e, false);
+    case "lent": return lentHistoryRow(e);
+    case "settlement": return settlementHistoryRow(e);
+    default: return null;
+  }
+}
 
-  const inn = e.kind === "income";
+/** The space's colour as a 7px dot, or "" for a row that came from nowhere. */
+function spaceDot(e) {
+  const space = e.spaceId ? getSpace(e.spaceId) : null;
+  if (!space) return "";
+  return `<i class="hist-space-dot" style="background:${colorHex(space.color)}" title="${esc(space.name)}"></i>`;
+}
+/**
+ * The space a row came from. A space I have LEFT has no bundle any more, so
+ * the name was written onto the row itself on the way out (plan §8) and the
+ * label says so rather than going blank.
+ */
+const spaceName = (e) => {
+  if (!e.spaceId) return null;
+  const live = getSpace(e.spaceId);
+  if (live) return live.name;
+  return e.spaceLeft ? `Left ${e.spaceLeft}` : null;
+};
+
+/** "Lent · Home · Rs 2,000 (Rs 1,000 back)" */
+function lentHistoryRow(e) {
+  const back = Number(e.repaid) || 0;
   const row = el("div", { class: "hist-row" });
+  row.innerHTML = `
+    <span class="hist-ico" style="background:var(--c-warn-soft, var(--c-violet-soft));color:var(--c-warn)">${icon("user-plus", 18)}</span>
+    <span class="grow">
+      <span class="strong small truncate" style="display:block">${spaceDot(e)}Lent · ${esc(e.title || "Shared")}</span>
+      <span class="xsmall muted">${esc(spaceName(e) || "Shared")}
+        ${back ? `· ${fmtCompact(back)} back` : ""}
+        ${e.accountId && accountName(e.accountId) ? `· ${esc(accountName(e.accountId))}` : ""}</span>
+    </span>
+    <span class="hist-amt num">−${fmtCompact(e.amount)}</span>`;
+  row.addEventListener("click", () => { buzz(8); sharedDetailSheet(e); });
+  row.style.cursor = "pointer";
+  return row;
+}
+
+/**
+ * The marker a settlement carries until the other side answers: pending while
+ * it is in the air, confirmed when they said it landed, unconfirmed when they
+ * said it never did. An unconfirmed row keeps its money — I did send it — and
+ * offers the only useful reply, which is to ask again (plan §6).
+ */
+const SETTLE_MARK = {
+  pending: '<b style="color:var(--c-warn)">pending</b>',
+  confirmed: '<b style="color:var(--c-pos)">confirmed</b>',
+  unconfirmed: '<b style="color:var(--c-neg)">unconfirmed</b>',
+};
+
+/** "Sent to Faraz · Home" / "From Faraz · Home" */
+function settlementHistoryRow(e) {
+  const inn = e.direction === "in";
+  const who = e.spaceId && e.counterpart ? memberNameIn(e.spaceId, e.counterpart) : null;
+  const title = e.writeoff
+    ? `Written off${who ? ` · ${who}` : ""}`
+    : who ? `${inn ? "From" : "Sent to"} ${who}` : (e.title || (inn ? "Money received" : "Money sent"));
+  const st = rowSettlementStatus(e);
+  const row = el("div", { class: `hist-row ${st ? `is-${st}` : ""}` });
+  row.innerHTML = `
+    <span class="hist-ico" style="background:var(--c-aqua-soft);color:var(--c-aqua)">${icon(e.writeoff ? "scale" : "swap", 18)}</span>
+    <span class="grow">
+      <span class="strong small truncate" style="display:block">${spaceDot(e)}${esc(title)}${spaceName(e) ? ` · ${esc(spaceName(e))}` : ""}</span>
+      <span class="xsmall muted">${e.writeoff ? "written off" : "settlement"}
+        ${st ? `· ${SETTLE_MARK[st]}` : ""}
+        ${e.accountId && accountName(e.accountId) ? `· ${esc(accountName(e.accountId))}` : ""}</span>
+    </span>
+    <span class="hist-amt num ${inn && !e.writeoff ? "in" : ""}">${e.writeoff ? "" : inn ? "+" : "−"}${fmtCompact(e.amount)}</span>`;
+  if (st === "unconfirmed") row.append(nudgeButton(e));
+  row.addEventListener("click", () => { buzz(8); sharedDetailSheet(e); });
+  row.style.cursor = "pointer";
+  return row;
+}
+
+/** "Nudge again", on the row itself — the action belongs where the problem is. */
+function nudgeButton(e) {
+  const btn = el("button", { class: "chip-btn hist-nudge", type: "button" }, "Nudge again");
+  btn.addEventListener("click", (ev) => {
+    ev.stopPropagation();
+    buzz(10);
+    nudgeSettlement(e.spaceId, settlementIdOf(e));
+    btn.disabled = true;
+    btn.textContent = "Nudged";
+  });
+  return btn;
+}
+
+/** Expense and income share one row; `inn` picks the colour, icon and sign. */
+function moneyHistoryRow(e, inn) {
+  // A share a settlement of mine paid off carries that settlement's fate: if
+  // the other side says it never arrived, this row says so too (§6).
+  const st = e.settledBy ? rowSettlementStatus(e) : null;
+  const part = partialOf(e);
+  const row = el("div", { class: `hist-row ${st ? `is-${st}` : ""}` });
   row.innerHTML = `
     <span class="hist-ico" style="background:${inn ? "var(--c-pos-soft)" : "var(--c-violet-soft)"};color:${inn ? "var(--c-pos)" : "var(--c-violet)"}">
       ${inn ? icon("banknote", 18) : catIcon(e.category, 18)}
     </span>
     <span class="grow">
-      <span class="strong small truncate" style="display:block">${esc(e.title)}</span>
+      <span class="strong small truncate" style="display:block">${spaceDot(e)}${esc(e.title)}</span>
       <span class="xsmall muted">${esc(e.category)}
+        ${e.spaceId ? `· your share · ${esc(spaceName(e) || "shared")}` : ""}
         ${e.accountId && accountName(e.accountId) ? `· ${esc(accountName(e.accountId))}` : ""}
         ${e.isAdjustment ? `· <b style="color:var(--c-violet)">${icon("scale", 10)} adjustment</b>` : ""}
-        ${e.status === "pending" ? '· <b style="color:var(--c-warn)">pending</b>' : ""}
+        ${part > 0 ? `· <b style="color:var(--c-warn)">${fmtCompact(part)} of ${fmtCompact(e.amount)} paid</b>`
+          : e.status === "pending" ? '· <b style="color:var(--c-warn)">pending</b>' : ""}
+        ${st && st !== "confirmed" ? `· ${SETTLE_MARK[st]}` : ""}
         ${e.recurrence !== "one-time" ? `· ${icon("repeat", 10)} ${e.recurrence}` : ""}</span>
     </span>
     <span class="hist-amt num ${inn ? "in" : ""}">${inn ? "+" : "−"}${fmtCompact(e.amount)}</span>
   `;
+  if (st === "unconfirmed") row.append(nudgeButton(e));
   row.addEventListener("click", () => {
     buzz(8);
     inn ? addMoneySheet(e) : addExpenseSheet(e);

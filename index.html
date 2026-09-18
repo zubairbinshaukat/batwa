@@ -9,7 +9,7 @@
 
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" href="icons/favicon.svg" type="image/svg+xml">
-  <link rel="apple-touch-icon" href="icons/apple-touch-icon-180.png">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon-180-v2.png">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -48,6 +48,9 @@
         <div class="row">
           <button class="sync-pill hidden" id="sync-pill" role="status" aria-label="Sync status"></button>
           <button class="icon-btn theme-toggle" id="theme-toggle" aria-label="Switch to dark theme" title="Theme"></button>
+          <!-- Shared spaces. Hidden until this phone holds at least one space,
+               and hidden again the moment the last one is left (plan §0). -->
+          <button class="icon-btn spaces-btn hidden" id="spaces-btn" aria-label="Shared spaces" title="Shared spaces"></button>
         </div>
       </header>
       <div id="canopy-slot"></div>

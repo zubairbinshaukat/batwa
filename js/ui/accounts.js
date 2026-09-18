@@ -97,6 +97,11 @@ export function accountName(id) {
   return state.accounts.find((a) => a.id === id)?.name || null;
 }
 
+/** The logo kind for an account, falling back to the generic bank tile. */
+export function accountKind(id) {
+  return state.accounts.find((a) => a.id === id)?.kind || "bank";
+}
+
 /* ============================================================
    Home row: swipeable account cards
    ============================================================ */

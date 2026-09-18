@@ -2,14 +2,13 @@
 // No DOM, no ledger import — so it runs under plain Node and can be smoke-tested
 // on its own. The UI turns these facts into sentences; this file never does.
 
-import { isoDate, shiftMonth, weekdayIndex } from "./util/format.js";
+import { isoDate, shiftMonth, weekdayIndex, entryDate } from "./util/format.js";
 
 const TOP_N = 3;
 
-/** The one date a spend belongs to — the same key entriesForMonth() buckets by. */
-export function spendDate(e) {
-  return String(e.dueDate || e.paidAt || e.createdAt || "").slice(0, 10);
-}
+/** The one date a spend belongs to — literally entryDate(), re-exported under
+ * the name Reports already imports. The rule lives in util/format.js. */
+export const spendDate = entryDate;
 
 /** Spending = paid expenses. Transfers and income are not spending. */
 export function isSpend(e) {

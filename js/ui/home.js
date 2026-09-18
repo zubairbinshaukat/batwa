@@ -5,11 +5,13 @@ import { fmtMoney, fmtCompact, fmtNum, dueHint, shortDate, thisMonth, CURRENCY }
 import { state, balances, pendingExpenses, markPaid, unmarkPaid, deleteEntry, deleteSeriesFuture, restoreEntries, limitStatus, monthSummary } from "../ledger.js";
 import { addMoneySheet, addExpenseSheet, confirmSheet, chooseSheet } from "./modals.js";
 import { toast } from "./toast.js";
-import { renderAccountsRow, accountName } from "./accounts.js";
+import { renderAccountsRow, accountName, accountKind, logoTile } from "./accounts.js";
 import { icon, catIcon } from "./icons.js";
 import { go } from "../app.js";
 import { isRevealed, setRevealed } from "./reveal.js";
 import { openMonthSheet } from "./monthsheet.js";
+import { allPending, myShareOf, colorHex, MEMBER_COLORS, initialsOf, membersOf } from "../spaces.js";
+import { pendingSheet } from "./pendingcard.js";
 
 let hasCountedUp = false;
 
@@ -125,6 +127,7 @@ export function renderHome(view) {
         </button>
         <div id="install-slot"></div>
         <div id="nudge-slot"></div>
+        <div id="spaces-slot"></div>
         <div id="acc-slot"></div>
       </div>
 
@@ -142,6 +145,9 @@ export function renderHome(view) {
 
   // the card opens the day-by-day month view
   $("#balance-card", view).addEventListener("click", () => { buzz(8); openMonthSheet(thisMonth()); });
+
+  // shared requests — nothing at all until a space asks something of me
+  paintSpacesSlot();
 
   // accounts row
   renderAccountsRow($("#acc-slot", view), { revealed });
@@ -245,6 +251,7 @@ function incomeCard(e) {
   const card = el("div", { class: `card exp-card is-income ${overdue ? "is-overdue" : ""}`, "data-id": e.id });
   card.innerHTML = `
     <div class="spread">
+      ${accountMark(e.accountId)}
       <div class="grow">
         <div class="exp-title truncate">${esc(e.title)}</div>
         <div class="exp-meta">
@@ -315,6 +322,16 @@ function recBadge(rec) {
   return '<span class="badge badge-once">One-time</span>';
 }
 
+/* The account's mark, leading an expense card. A bank logo is recognised far
+   faster than its name in a list, so it takes the place the name used to hold
+   as a chip. The tile is aria-hidden, so the name rides along for screen
+   readers. */
+function accountMark(id) {
+  const name = id ? accountName(id) : null;
+  if (!name) return "";
+  return `${logoTile(accountKind(id), 34)}<span class="sr-only">${esc(name)}</span>`;
+}
+
 function expenseCard(e) {
   const hint = e.dueDate ? dueHint(e.dueDate) : { text: "No due date", tone: "ok" };
   const overdue = hint.tone === "overdue";
@@ -325,6 +342,7 @@ function expenseCard(e) {
   });
   card.innerHTML = `
     <div class="spread">
+      ${accountMark(e.accountId)}
       <div class="grow">
         <div class="exp-title truncate">${esc(e.title)}</div>
         <div class="exp-meta">
@@ -337,7 +355,6 @@ function expenseCard(e) {
     <div class="exp-meta" style="margin-top:8px">
       ${recBadge(e.recurrence)}
       <span class="badge badge-cat">${catIcon(e.category, 12)} ${esc(e.category)}</span>
-      ${e.accountId && accountName(e.accountId) ? `<span class="badge badge-cat">${esc(accountName(e.accountId))}</span>` : ""}
     </div>
     <div class="exp-actions">
       <button class="chip-btn chip-paid" data-act="paid">${icon("check", 15)} Mark paid</button>
@@ -424,4 +441,55 @@ function celebratePaid(card) {
       .fromTo(check.querySelector("svg"), { scale: 0.7 }, { scale: 1, duration: 0.35, ease: "back.out(2.5)" }, "<")
       .to(card, { height: 0, marginBottom: -16, opacity: 0, paddingTop: 0, paddingBottom: 0, duration: 0.35, ease: "power2.in", delay: 0.35 });
   });
+}
+
+/* ============================================================
+   Shared requests (plan §5.3)
+   ============================================================
+
+   One clay card between the nudge and the accounts row, holding the two newest
+   things a space is waiting on me for. It is repainted in place — never
+   through renderView() — so a proposal landing in the background while a sheet
+   is open updates this card and touches nothing else (§9.29).
+
+   Zero pending, or zero spaces: the slot is emptied and the card is gone. */
+
+export function paintSpacesSlot() {
+  const slot = $("#spaces-slot");
+  if (!slot) return;
+  const items = allPending();
+  if (!items.length) { slot.replaceChildren(); return; }
+
+  const card = el("div", { class: "shared-card" });
+  const head = el("div", { class: "shared-head" });
+  head.append(el("span", { class: "shared-ico", html: icon("users", 18) }));
+  head.append(el("span", { class: "grow strong small" }, "Shared requests"));
+  head.append(el("span", { class: "count" }, String(items.length)));
+  card.append(head);
+
+  for (const { space, entry } of items.slice(0, 2)) {
+    const share = myShareOf(entry, space);
+    const who = membersOf(space.id).find((m) => m.memberId === entry.proposedBy);
+    const row = el("button", {
+      class: "shared-row",
+      onclick: () => { buzz(8); pendingSheet(); },
+    });
+    row.innerHTML = `
+      <span class="sp-av" style="width:26px;height:26px;background:${colorHex(who?.color, MEMBER_COLORS)}">${esc(initialsOf(who?.name || "?"))}</span>
+      <span class="grow">
+        <span class="strong small truncate" style="display:block">${esc(entry.title || "Untitled")}</span>
+        <span class="xsmall muted">${esc(who?.name || "Someone")} · ${esc(space.name)}</span>
+      </span>
+      <span class="shared-amt num">${fmtMoney(share)}</span>`;
+    card.append(row);
+  }
+
+  card.append(el("button", {
+    class: "shared-all",
+    onclick: () => { buzz(8); pendingSheet(); },
+    html: `See all ${icon("chevron-right", 14)}`,
+  }));
+
+  slot.replaceChildren(card);
+  anim(card, { y: -10, opacity: 0 }, { y: 0, opacity: 1, duration: 0.35, ease: "power2.out" });
 }

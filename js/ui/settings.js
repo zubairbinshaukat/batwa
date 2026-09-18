@@ -17,6 +17,7 @@ import { icon, catIcon } from "./icons.js";
 import { categoryEditorPanel } from "./catedit.js";
 import { getInstallState, promptInstall } from "../app.js";
 import { getThemeMode, setThemeMode, themeLabel, resolvedTheme, onThemeChange } from "../theme.js";
+import { renderSpacesSettings } from "./spaces.js";
 
 const ICONS = {
   sync:    ["cloud",       "var(--c-aqua-soft)",   "#0B87B8"],
@@ -62,6 +63,11 @@ export function renderSettings(view) {
   accG.append(el("div", { class: "card set-card" },
     row("acc", "Manage accounts", `${state.accounts.length}`, manageAccountsSheet)));
   view.append(accG);
+
+  // ---- Shared spaces ----
+  // The one shared surface that exists with zero spaces: it is where the first
+  // one is made. It shows no space data until there is a space (plan §0).
+  renderSpacesSettings(view, { refresh });
 
   // ---- Cloud sync ----
   const syncGroup = el("div", { class: "set-group" });

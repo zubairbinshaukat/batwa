@@ -717,7 +717,7 @@ export function showOnboarding() {
     function welcome() {
       const screen = onbScreen("Welcome to Batwa");
       const card = onbCard(screen, `
-        <div class="onb-logo"><img src="branding/logo.svg" alt="" width="46" height="46"></div>
+        <div class="onb-logo"><img src="icons/icon-192-v2.png" alt="" width="46" height="46"></div>
         <div class="onb-brand">Batwa</div>
         <p class="onb-lead">Every rupee in, every rupee out — and exactly what's left to spend.</p>
         <ul class="onb-points">

@@ -1,6 +1,23 @@
 // IndexedDB wrapper — hand-rolled, promise-based, two stores.
 // `entries` holds ONE encrypted blob (key "blob"). `meta` is key/value.
 
+/* ============================================================
+   THE RULE: DB_VERSION stays at 1. Do not add object stores.
+
+   sw.js opens this same database with `indexedDB.open("batwa", 1)` and
+   rejects on `onblocked` — a classic worker cannot run an upgrade and must
+   never be the thing that triggers one. Bumping DB_VERSION here would make
+   every service-worker read (bill reminders today, shared-space versions and
+   notification keys later) fail on any device where a page still holds the
+   old connection open.
+
+   So: new persistent data goes into the `meta` store as a new key. It is a
+   plain key/value store, there is no schema to migrate, and both the page and
+   the worker can already read and write it. Only data that is safe outside the
+   PIN-encrypted blob belongs there — dates, counts, hostnames, flags; never
+   titles, amounts or anything that names a person.
+   ============================================================ */
+
 const DB_NAME = "batwa";
 const DB_VERSION = 1;
 export const SCHEMA_VERSION = 1;
