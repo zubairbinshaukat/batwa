@@ -18,6 +18,10 @@ import { categoryEditorPanel } from "./catedit.js";
 import { getInstallState, promptInstall } from "../app.js";
 import { getThemeMode, setThemeMode, themeLabel, resolvedTheme, onThemeChange } from "../theme.js";
 import { renderSpacesSettings } from "./spaces.js";
+import { APP_VERSION } from "../config.js";
+
+const REPO_URL = "https://github.com/zubairbinshaukat/batwa";
+const AUTHOR_URL = "https://zubyr.dev";
 
 const ICONS = {
   sync:    ["cloud",       "var(--c-aqua-soft)",   "#0B87B8"],
@@ -33,6 +37,7 @@ const ICONS = {
   rem:     ["clock",       "var(--c-warn-soft)",   "var(--c-warn)"],
   remtest: ["sparkles",    "var(--c-violet-soft)", "var(--c-violet)"],
   theme:   ["moon",        "var(--c-violet-soft)", "var(--c-violet)"],
+  info:    ["info",        "var(--c-aqua-soft)",   "#0B87B8"],
 };
 
 function row(key, label, value, onClick) {
@@ -57,64 +62,27 @@ export function renderSettings(view) {
   const pinOn = getKeyMode() === "pin";
   view.innerHTML = "";
 
-  // ---- Accounts ----
-  const accG = el("div", { class: "set-group" });
-  accG.append(el("h2", {}, "Accounts"));
-  accG.append(el("div", { class: "card set-card" },
-    row("acc", "Manage accounts", `${state.accounts.length}`, manageAccountsSheet)));
-  view.append(accG);
+  // Every group goes into this wrapper, never straight into `view`: on desktop
+  // it becomes a two-column grid, and the stagger animates its children.
+  const grid = el("div", { class: "set-grid" });
+  view.append(grid);
 
-  // ---- Shared spaces ----
+  // ---- 1. Money ----
+  const money = el("div", { class: "set-group" });
+  money.append(el("h2", {}, "Money"));
+  money.append(el("div", { class: "card set-card" },
+    row("acc", "Manage accounts", `${state.accounts.length}`, manageAccountsSheet),
+    row("cat", "Edit categories", `${state.categories.length}`, categoriesSheet)));
+  grid.append(money);
+
+  // ---- 2. Shared spaces ----
   // The one shared surface that exists with zero spaces: it is where the first
   // one is made. It shows no space data until there is a space (plan §0).
-  renderSpacesSettings(view, { refresh });
+  renderSpacesSettings(grid, { refresh });
 
-  // ---- Cloud sync ----
-  const syncGroup = el("div", { class: "set-group" });
-  syncGroup.append(el("h2", {}, "Cloud sync"));
-  const syncCard = el("div", { class: "card set-card" });
-  const statusLine = el("div", { class: "sync-status", style: "padding:12px 16px 4px" });
-  statusLine.innerHTML = '<span class="sync-dot"></span><span>…</span>';
-  refreshStatus(statusLine);
-  onSyncState(() => refreshStatus(statusLine));
-  syncCard.append(
-    statusLine,
-    row("now", "Sync now", "", () => syncNow()),
-    row("sync", "JSONBin setup", "", syncSetupSheet),
-  );
-  syncGroup.append(syncCard, el("p", { class: "xsmall muted", style: "margin-top:8px;padding:0 4px" },
-    pinOn
-      ? "Only the encrypted blob is uploaded — another device needs this PIN to restore it. Your JSONBin keys live in this app's storage, so don't share your deployed URL publicly if the bin is private."
-      : "Only the encrypted blob is uploaded, with its key inside — any device with your Bin ID and master key can restore it, so treat those credentials like a password (or set up a PIN for stronger protection)."));
-  view.append(syncGroup);
-
-  // ---- Backup ----
-  const bk = el("div", { class: "set-group" });
-  bk.append(el("h2", {}, "Backup"));
-  const expRow = row("exp", "Export data", "…", exportSheet);
-  bk.append(el("div", { class: "card set-card" }, expRow, row("imp", "Import from file", "", importSheet)));
-  view.append(bk);
-  paintExportValue(expRow);
-
-  // ---- Reminders ----
-  const rem = el("div", { class: "set-group" });
-  rem.append(el("h2", {}, "Reminders"));
-  const remCard = el("div", { class: "card set-card" });
-  const remSlot = row("rem", "Bill reminders", "…", () => {});
-  const testRow = row("remtest", "Send a test reminder", "", async () => {
-    const res = await sendTestReminder();
-    toast(res.ok ? "Sent — check your notification shade" : res.reason,
-      { icon: icon(res.ok ? "check-circle" : "alert", 18) });
-  });
-  remCard.append(remSlot, testRow);
-  rem.append(remCard, el("p", { class: "xsmall muted", style: "margin-top:8px;padding:0 4px" },
-    "Reminders run in the background even when Batwa is closed. To do that, only the due dates and how many bills fall on each are kept outside the encrypted ledger — never titles or amounts. Android decides how often it runs (usually once or twice a day) and only for apps you actually use."));
-  view.append(rem);
-  paintRemindersRow(remSlot, testRow);
-
-  // ---- Security ----
+  // ---- 3. Security & privacy ----
   const sec = el("div", { class: "set-group" });
-  sec.append(el("h2", {}, "Security"));
+  sec.append(el("h2", {}, "Security & privacy"));
   const secCard = el("div", { class: "card set-card" });
   // placeholder: the real row needs IndexedDB + the platform authenticator,
   // and it has to sit in the card's sibling order for the dividers to work
@@ -137,15 +105,70 @@ export function renderSettings(view) {
       : `${icon("alert", 15)} Batwa opens without asking for anything. Your data is still encrypted on disk with a device key, but anyone who can unlock this phone can read every amount.`,
   });
   sec.append(warn);
-  view.append(sec);
+  grid.append(sec);
   if (pinOn) paintBioRow(bioSlot, bioNote, warn);
 
-  // ---- Appearance ----
+  // ---- 4. Backup & sync ----
+  // Cloud sync and file backup are the same job to a user: getting the ledger
+  // off this phone. The two long grey paragraphs that used to sit under here
+  // now live in one sheet behind "How your data is protected".
+  const bk = el("div", { class: "set-group" });
+  bk.append(el("h2", {}, "Backup & sync"));
+  const bkCard = el("div", { class: "card set-card" });
+  const statusLine = el("div", { class: "sync-status", style: "padding:12px 16px 4px" });
+  statusLine.innerHTML = '<span class="sync-dot"></span><span>…</span>';
+  refreshStatus(statusLine);
+  onSyncState(() => refreshStatus(statusLine));
+  const expRow = row("exp", "Export data", "…", exportSheet);
+  bkCard.append(
+    statusLine,
+    row("now", "Sync now", "", () => syncNow()),
+    row("sync", "Cloud sync setup", "", syncSetupSheet),
+    expRow,
+    row("imp", "Import from file", "", importSheet),
+    row("info", "How your data is protected", "", () => privacySheet(getKeyMode() === "pin")),
+  );
+  bk.append(bkCard);
+  grid.append(bk);
+  paintExportValue(expRow);
+
+  // ---- 5. Notifications ----
+  const rem = el("div", { class: "set-group" });
+  rem.append(el("h2", {}, "Notifications"));
+  const remCard = el("div", { class: "card set-card" });
+  const remSlot = row("rem", "Bill reminders", "…", () => {});
+  const testRow = row("remtest", "Send a test reminder", "", async () => {
+    const res = await sendTestReminder();
+    toast(res.ok ? "Sent — check your notification shade" : res.reason,
+      { icon: icon(res.ok ? "check-circle" : "alert", 18) });
+  });
+  remCard.append(remSlot, testRow);
+  rem.append(remCard);
+  grid.append(rem);
+  paintRemindersRow(remSlot, testRow);
+
+  // ---- 6. App (theme + install) ----
   const appg = el("div", { class: "set-group" });
-  appg.append(el("h2", {}, "Appearance"));
+  appg.append(el("h2", {}, "App"));
+  const appCard = el("div", { class: "card set-card" });
   const themeRow = row("theme", "Theme", themeLabel(), themeSheet);
-  appg.append(el("div", { class: "card set-card" }, themeRow));
-  view.append(appg);
+  appCard.append(themeRow);
+  const inst = getInstallState();
+  if (inst === "installable") {
+    appCard.append(row("install", "Install app", "", promptInstall));
+  } else if (inst === "ios") {
+    appCard.append(el("div", { style: "padding:14px 16px" },
+      el("div", { class: "strong small", html: `${icon("smartphone", 14)} Install on iPhone` }),
+      el("p", { class: "xsmall muted", style: "margin-top:4px" },
+        "Open the Share menu in Safari, then tap “Add to Home Screen”. Batwa will open full-screen and work offline."),
+    ));
+  } else if (inst !== "standalone") {
+    appCard.append(el("div", { style: "padding:14px 16px" },
+      el("p", { class: "xsmall muted" }, "Open this page in your phone's browser to install Batwa to the home screen."),
+    ));
+  }
+  appg.append(appCard);
+  grid.append(appg);
   // the header toggle can flip the theme while this screen is open
   const offTheme = onThemeChange(() => {
     if (!themeRow.isConnected) { offTheme(); return; }
@@ -153,40 +176,73 @@ export function renderSettings(view) {
     if (val) val.textContent = themeLabel();
   });
 
-  // ---- Categories ----
-  const cats = el("div", { class: "set-group" });
-  cats.append(el("h2", {}, "Categories"));
-  cats.append(el("div", { class: "card set-card" },
-    row("cat", "Edit categories", `${state.categories.length}`, categoriesSheet)));
-  view.append(cats);
+  // ---- 7. About footer ----
+  grid.append(aboutFooter());
 
-  // ---- Install ----
-  const inst = getInstallState();
-  if (inst !== "standalone") {
-    const g = el("div", { class: "set-group" });
-    g.append(el("h2", {}, "App"));
-    const card = el("div", { class: "card set-card" });
-    if (inst === "installable") {
-      card.append(row("install", "Install app", "", promptInstall));
-    } else if (inst === "ios") {
-      card.append(el("div", { style: "padding:14px 16px" },
-        el("div", { class: "strong small", html: `${icon("smartphone", 14)} Install on iPhone` }),
-        el("p", { class: "xsmall muted", style: "margin-top:4px" },
-          "Open the Share menu in Safari, then tap “Add to Home Screen”. Batwa will open full-screen and work offline."),
-      ));
-    } else {
-      card.append(el("div", { style: "padding:14px 16px" },
-        el("p", { class: "xsmall muted" }, "Open this page in your phone's browser to install Batwa to the home screen."),
-      ));
-    }
-    g.append(card);
-    view.append(g);
-  }
+  anim(grid.children, { y: 18, opacity: 0 }, { y: 0, opacity: 1, duration: 0.35, stagger: 0.06, ease: "power2.out" });
+}
 
-  view.append(el("p", { class: "xsmall muted", style: "text-align:center;padding:12px 0 4px" },
-    "Batwa · your money never leaves your device unencrypted"));
+/**
+ * Who made this, where the code is, and where to read more. The avatar is a
+ * transparent cut-out, so the lavender plate behind it comes from CSS and
+ * follows the theme. Both links open outside the installed window — navigating
+ * the PWA itself away to GitHub has no back button.
+ */
+function aboutFooter() {
+  const about = el("div", { class: "set-about" });
 
-  anim(view.children, { y: 18, opacity: 0 }, { y: 0, opacity: 1, duration: 0.35, stagger: 0.06, ease: "power2.out" });
+  const avatar = el("img", {
+    class: "set-avatar", src: "icons/author-192.webp",
+    srcset: "icons/author-384.webp 2x",
+    width: "72", height: "72", alt: "Zubair bin Shaukat",
+    loading: "lazy", decoding: "async",
+  });
+  // The asset may not exist yet (or may fail on a stale cache): fall back to a
+  // plain initials chip rather than a broken-image icon.
+  avatar.addEventListener("error", () => {
+    avatar.replaceWith(el("div", {
+      class: "set-avatar set-avatar-fb", role: "img", "aria-label": "Zubair bin Shaukat",
+    }, "ZS"));
+  });
+
+  const link = (label, href, iconName) => el("a", {
+    class: "btn btn-ghost btn-sm", href, target: "_blank", rel: "noopener",
+    html: `${icon(iconName, 16)}<span>${label}</span>`,
+  });
+
+  about.append(
+    avatar,
+    el("p", { class: "xsmall muted" }, "A project by"),
+    el("a", { class: "set-author", href: AUTHOR_URL, target: "_blank", rel: "noopener" }, "Zubair bin Shaukat"),
+    el("div", { class: "row" }, link("GitHub", REPO_URL, "github"), link("About Batwa", "about.html", "info")),
+    el("p", { class: "xsmall muted", style: "margin-top:4px" },
+      `Batwa v${APP_VERSION} · your money never leaves your device unencrypted`),
+  );
+  return about;
+}
+
+/**
+ * The three "where does my data actually go" paragraphs, in one place instead
+ * of strung down the settings screen as grey walls of text.
+ */
+function privacySheet(pinOn) {
+  openSheet("How Batwa protects your data", (body) => {
+    const block = (title, text) => el("div", { style: "margin-bottom:14px" },
+      el("div", { class: "strong small", style: "margin-bottom:4px" }, title),
+      el("p", { class: "xsmall muted" }, text));
+    body.append(
+      block("Cloud sync", pinOn
+        ? "Only the encrypted blob is uploaded — another device needs this PIN to restore it. Your JSONBin keys live in this app's storage, so don't share your deployed URL publicly if the bin is private."
+        : "Only the encrypted blob is uploaded, with its key inside — any device with your Bin ID and master key can restore it, so treat those credentials like a password (or set up a PIN for stronger protection)."),
+      block("Bill reminders",
+        "Reminders run in the background even when Batwa is closed. To do that, only the due dates and how many bills fall on each are kept outside the encrypted ledger — never titles or amounts. Android decides how often it runs (usually once or twice a day) and only for apps you actually use."),
+      block("Shared spaces",
+        "A space is a random id, a write token and a key that live inside your encrypted ledger. The relay stores ciphertext only."),
+      el("div", { class: "form-actions" },
+        el("button", { class: "btn btn-primary", onclick: () => closeSheet() }, "Got it"),
+      ),
+    );
+  });
 }
 
 /* ---- backup + reminders rows (both resolve asynchronously) ---- */

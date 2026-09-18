@@ -1728,6 +1728,46 @@ select.input {
 .set-row .chev { margin-left: auto; color: var(--c-faint); flex: 0 0 auto; }
 .set-row .set-val { margin-left: auto; color: var(--c-muted); font-size: var(--fs-sm); }
 
+/* ---- Settings > About footer ---- */
+.set-about {
+  display: flex; flex-direction: column; align-items: center;
+  gap: var(--s-2);
+  padding: var(--s-7) 0 var(--s-4);
+  text-align: center;
+}
+/* The avatar image is a transparent cut-out, so the lavender plate is CSS and
+   follows the theme. .set-avatar-fb is the initials chip when it fails to load. */
+.set-avatar {
+  width: 72px; height: 72px;
+  border-radius: 50%;
+  object-fit: cover;
+  background: var(--c-violet-soft);
+  border: 3px solid var(--c-surface);
+  box-shadow: var(--shadow-card);
+}
+.set-avatar-fb {
+  display: grid; place-items: center;
+  font-size: var(--fs-lg); font-weight: 700; letter-spacing: 0.04em;
+  color: var(--c-violet);
+}
+.set-about p { margin: 0; }
+.set-about .set-author {
+  font-size: var(--fs-base); font-weight: 600;
+  color: var(--c-violet); text-decoration: none;
+}
+.set-about .row { gap: var(--s-2); margin-top: var(--s-2); }
+.set-about .btn { text-decoration: none; }
+
+/* Settings on a wide shell: two columns, the About footer across both. */
+.set-grid { display: block; }
+@media (min-width: 900px) {
+  /* Multi-column rather than grid: the two columns balance by height, so a
+     short Security group never leaves a hole beside a tall Backup card. */
+  .set-grid { columns: 2; column-gap: var(--s-6); }
+  .set-grid > .set-group { break-inside: avoid; }
+  .set-about { column-span: all; }
+}
+
 /* Manage-accounts drag-to-reorder list */
 .acc-reorder-list { gap: var(--s-2); }
 .acc-reorder-row {

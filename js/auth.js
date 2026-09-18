@@ -338,6 +338,28 @@ function keypadSVG() {
   </svg>`;
 }
 
+/**
+ * The one crawlable link out of the app. Googlebot renders index.html and only
+ * ever sees the lock or onboarding screen, so the marketing page needs a real
+ * link from here (honest content the user sees too — not cloaking).
+ * Installed app: open it in the browser, never inside the PWA window.
+ * Styles are inline because both hosts are the white-on-gradient lock canvas
+ * and nothing else in the app uses this link.
+ */
+function aboutLink() {
+  const standalone = (() => {
+    try { return matchMedia("(display-mode: standalone)").matches; } catch { return false; }
+  })();
+  return el("a", {
+    class: "about-link",
+    href: "about.html",
+    target: standalone ? "_blank" : false,
+    rel: standalone ? "noopener" : false,
+    style: "font-size:var(--fs-xs);color:rgba(255,255,255,0.72);text-align:center;"
+      + "font-weight:500;text-decoration:none;align-self:center",
+  }, "About Batwa");
+}
+
 function renderLockScreen({ title, sub, back = null, variant = "pin", bioKey = false }) {
   const root = $("#lock-root");
   root.innerHTML = "";
@@ -385,6 +407,7 @@ function renderLockScreen({ title, sub, back = null, variant = "pin", bioKey = f
       : k;
     pad.append(btn);
   }
+  screen.append(aboutLink());
   if (variant === "bio") showBioHalf(screen);
   if (back) {
     screen.prepend(el("button", {
@@ -728,6 +751,9 @@ export function showOnboarding() {
       `);
       card.append(el("div", { class: "onb-actions" },
         el("button", { class: "onb-btn", onclick: () => { buzz(8); choice(); } }, "Get started")));
+      card.append(el("div", {
+        style: "display:flex;justify-content:center;margin-top:var(--s-3)",
+      }, aboutLink()));
       anim([...card.querySelectorAll(".onb-actions")], { y: 14, opacity: 0 },
         { y: 0, opacity: 1, duration: 0.4, delay: 0.28, ease: "power2.out" });
       focusFirst(card);

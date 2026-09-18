@@ -1,5 +1,10 @@
 /* Batwa service worker — app shell cache only. Never touches user data. */
-const CACHE = "batwa-v31";
+const CACHE = "batwa-v32";
+
+/* Marketing / SEO files. They are never precached, never runtime-cached, and
+   the navigate branch below lets /about.html reach the network. The app's
+   cache stays the app's cache; these change on their own schedule. */
+const NO_CACHE = /\/(about\.html|css\/about\.css|robots\.txt|sitemap\.xml|fonts\/fraunces-var\.woff2|screenshots\/(og-batwa\.png|hero-[a-z-]+\.webp))$/;
 
 const SHELL = [
   "./",
@@ -101,9 +106,21 @@ self.addEventListener("fetch", (e) => {
 
   // Navigations: cache-first shell so cold offline launches are instant.
   if (e.request.mode === "navigate") {
+    // Marketing/SEO pages are network-first and never served from the app
+    // shell. Offline, fall back to the shell so the user still gets the app.
+    if (/\/about\.html$/.test(url.pathname)) {
+      e.respondWith(fetch(e.request).catch(() => caches.match("./index.html")));
+      return;
+    }
     e.respondWith(
       caches.match("./index.html").then((hit) => hit || fetch(e.request))
     );
+    return;
+  }
+
+  // Subresources of the about page: straight to the network, never stored.
+  if (NO_CACHE.test(url.pathname)) {
+    e.respondWith(fetch(e.request));
     return;
   }
 

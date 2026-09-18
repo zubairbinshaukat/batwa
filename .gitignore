@@ -29,3 +29,6 @@ relay/.wrangler/
 *.log
 tmp/
 .tmp/
+
+# Portfolio intake output — copied into the zubyr.dev repo by hand.
+zubyr-export/

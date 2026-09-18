@@ -1,0 +1,6 @@
+User-agent: *
+Allow: /
+Disallow: /relay/
+Disallow: /docs/
+
+Sitemap: https://batwa.zubyr.dev/sitemap.xml

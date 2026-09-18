@@ -36,3 +36,10 @@ export function relayHost() {
   if (!url) return null;
   try { return new URL(url).hostname || null; } catch { return null; }
 }
+
+/**
+ * App version, shown in Settings and in the about page's JSON-LD.
+ * MUST match the `CACHE` number in sw.js (`batwa-v<APP_VERSION>`): sw.js is a
+ * classic worker and cannot import this file, so the two are bumped together.
+ */
+export const APP_VERSION = "32";

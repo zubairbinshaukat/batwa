@@ -3,9 +3,26 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <title>Batwa — Budget</title>
-  <meta name="description" content="Private, offline-first personal budget tracker. Your money, your phone, encrypted.">
+  <title>Batwa by ZUBYR – Private Offline Budget Tracker</title>
+  <meta name="description" content="Batwa is a free, private, offline-first budget app by ZUBYR (Zubair bin Shaukat). Track JazzCash, Easypaisa, bank and cash accounts with a PIN-locked, encrypted ledger that never leaves your phone.">
   <meta name="theme-color" content="#4F33E8">
+  <link rel="canonical" href="https://batwa.zubyr.dev/">
+  <link rel="author" href="https://zubyr.dev">
+  <meta name="robots" content="index,follow,max-image-preview:large">
+
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="Batwa">
+  <meta property="og:title" content="Batwa by ZUBYR – Private Offline Budget Tracker">
+  <meta property="og:description" content="Free, offline, PIN-locked budget app for Pakistan. Your money never leaves your phone unencrypted.">
+  <meta property="og:url" content="https://batwa.zubyr.dev/">
+  <meta property="og:image" content="https://batwa.zubyr.dev/screenshots/og-batwa.png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="Batwa app home screen showing free-to-spend balance">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Batwa by ZUBYR – Private Offline Budget Tracker">
+  <meta name="twitter:description" content="Free, offline, PIN-locked budget app for Pakistan.">
+  <meta name="twitter:image" content="https://batwa.zubyr.dev/screenshots/og-batwa.png">
 
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" href="icons/favicon.svg" type="image/svg+xml">
@@ -35,6 +52,39 @@
   <link rel="stylesheet" href="css/base.css">
   <link rel="stylesheet" href="css/components.css">
   <link rel="stylesheet" href="css/onboarding.css">
+
+  <!-- Structured data. `softwareVersion` mirrors the sw.js cache number and
+       APP_VERSION in js/config.js — bump all three together. No LICENSE file
+       in the repo, so no `license` key (a 404 there is worse than nothing). -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "SoftwareApplication",
+    "name": "Batwa",
+    "alternateName": ["Batwa by ZUBYR", "ZUBYR Batwa"],
+    "url": "https://batwa.zubyr.dev/",
+    "description": "Private, offline-first personal budget tracker. PIN-locked, encrypted on the device, no account, no server, no tracking.",
+    "applicationCategory": "FinanceApplication",
+    "operatingSystem": "Android, iOS, Windows, macOS, Linux (web browser)",
+    "browserRequirements": "Requires JavaScript and a modern browser",
+    "offers": { "@type": "Offer", "price": "0", "priceCurrency": "PKR" },
+    "image": "https://batwa.zubyr.dev/icons/icon-512-v2.png",
+    "screenshot": [
+      "https://batwa.zubyr.dev/screenshots/01-home.png",
+      "https://batwa.zubyr.dev/screenshots/02-reports.png"
+    ],
+    "softwareVersion": "32",
+    "isAccessibleForFree": true,
+    "codeRepository": "https://github.com/zubairbinshaukat/batwa",
+    "author": {
+      "@type": "Person",
+      "name": "Zubair bin Shaukat",
+      "alternateName": "ZUBYR",
+      "url": "https://zubyr.dev",
+      "sameAs": ["https://github.com/zubairbinshaukat"]
+    }
+  }
+  </script>
 </head>
 <body>
 

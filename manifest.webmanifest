@@ -1,4 +1,6 @@
 {
+  "id": "./",
+  "lang": "en",
   "name": "Batwa — Personal Budget",
   "short_name": "Batwa",
   "description": "Private, offline-first budget tracker. PIN-locked, encrypted, and yours alone.",

@@ -1,6 +1,5 @@
 <p align="center">
-  <img src="branding/
-relay/                  the zero-knowledge Cloudflare Worker for shared spaces, with its own testslogo.png" alt="Batwa logo" width="96" height="96">
+  <img src="branding/logo.png" alt="Batwa logo" width="96" height="96">
 </p>
 
 <h1 align="center">Batwa — budgeting that never leaves your phone</h1>
@@ -8,6 +7,11 @@ relay/                  the zero-knowledge Cloudflare Worker for shared spaces, 
 <p align="center">
   A private, offline-first budget tracker you install from the browser.<br>
   PIN-locked, encrypted on the device, no account, no server, no tracking.
+</p>
+
+<p align="center">
+  Live app: <a href="https://batwa.zubyr.dev">https://batwa.zubyr.dev</a> &middot;
+  About: <a href="https://batwa.zubyr.dev/about.html">https://batwa.zubyr.dev/about.html</a>
 </p>
 
 <p align="center">
@@ -104,7 +108,7 @@ Then install it: on Android Chrome accept the install prompt or use *Add to Home
 ### Run it locally
 
 ```bash
-git clone https://github.com/<you>/batwa.git
+git clone https://github.com/zubairbinshaukat/batwa.git
 cd batwa
 python -m http.server 8000     # or: npx serve
 ```
