@@ -21,7 +21,22 @@
 }
 @media (min-width: 900px) { :root { --ab-pad: 96px; --ab-topbar: 68px; } }
 
-body { overflow-x: hidden; }
+body { overflow-x: hidden; background: var(--c-surface); }
+:root[data-theme="dark"] body { background: var(--c-bg); }
+
+/* Detached hero shell: the soft lavender canvas floats inside a white page,
+   the way most soft-UI landing pages frame their first screen. */
+.ab-shell {
+  width: min(1440px, 100% - 24px); margin: 12px auto 0;
+  border-radius: var(--r-xl); background: var(--c-bg);
+  box-shadow: var(--shadow-xs); overflow: hidden; position: relative;
+}
+:root[data-theme="dark"] .ab-shell { background: var(--c-surface); }
+@media (min-width: 900px) {
+  .ab-shell { width: min(1440px, 100% - 32px); margin-top: 16px; border-radius: 36px; }
+}
+.ab-shell .ab-wrap { width: min(1200px, 100% - 32px); }
+@media (min-width: 900px) { .ab-shell .ab-wrap { width: min(1200px, 100% - 96px); } }
 
 .ab-wrap { width: min(1080px, 100% - 32px); margin-inline: auto; }
 
@@ -36,11 +51,8 @@ h1, h2, h3 { text-wrap: balance; }
 
 /* =================== Top bar =================== */
 .ab-top {
-  position: sticky; top: 0; z-index: 40;
-  background: color-mix(in srgb, var(--c-bg) 80%, transparent);
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
-  border-bottom: 1px solid var(--c-border);
+  position: relative; z-index: 2; background: transparent;
+  border-bottom: 0;
 }
 .ab-top .ab-wrap {
   display: flex; align-items: center; justify-content: space-between;
@@ -90,7 +102,8 @@ h1, h2, h3 { text-wrap: balance; }
 .ab-actions { display: flex; flex-wrap: wrap; gap: var(--s-3); margin-top: var(--s-6); }
 
 /* =================== Hero =================== */
-.ab-hero { padding-top: var(--s-8); position: relative; }
+.ab-hero { padding-top: var(--s-6); padding-bottom: var(--s-8); position: relative; z-index: 1; }
+@media (min-width: 900px) { .ab-hero { padding-top: var(--s-7); padding-bottom: var(--s-9); } }
 .ab-hero h1 {
   font-family: var(--font-display);
   font-size: clamp(2.5rem, 9vw, 4.25rem);
