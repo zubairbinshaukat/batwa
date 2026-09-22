@@ -1,6 +1,6 @@
 // Home: hero balances (blur + count-up reveal), upcoming expenses, quick actions.
 
-import { $, el, esc, anim, animTo, motionOK, buzz } from "../util/dom.js";
+import { $, el, esc, anim, animTo, motionOK, buzz, tune } from "../util/dom.js";
 import { fmtMoney, fmtCompact, fmtNum, dueHint, shortDate, thisMonth, CURRENCY } from "../util/format.js";
 import { state, balances, pendingExpenses, markPaid, unmarkPaid, deleteEntry, deleteSeriesFuture, restoreEntries, limitStatus, monthSummary } from "../ledger.js";
 import { addMoneySheet, addExpenseSheet, confirmSheet, chooseSheet } from "./modals.js";
@@ -70,11 +70,11 @@ function countUp(root) {
     const target = Number(s.dataset.value);
     if (!motionOK()) { s.textContent = fmtCompact(target); continue; }
     const o = { v: 0 };
-    gsap.to(o, {
+    gsap.to(o, tune({
       v: target, duration: 1.1, ease: "power3.out",
       onUpdate: () => { s.textContent = fmtCompact(o.v); },
       onComplete: () => { s.textContent = fmtCompact(target); },
-    });
+    }));
   }
 }
 
@@ -281,6 +281,7 @@ function incomeCard(e) {
     if (act === "received") {
       await celebratePaid(card);
       await markPaid(e.id);
+      buzz(14);
       toast(`${e.title} received · ${fmtMoney(e.amount)}`, {
         icon: icon("check-circle", 18),
         undo: async () => { await unmarkPaid(e.id); toast("Marked pending again"); },
@@ -376,6 +377,7 @@ function expenseCard(e) {
     if (act === "paid") {
       await celebratePaid(card);
       await markPaid(e.id);
+      buzz(14);
       toast(`${e.title} paid · ${fmtMoney(e.amount)}`, {
         icon: icon("check-circle", 18),
         undo: async () => { await unmarkPaid(e.id); toast("Marked unpaid again"); },
@@ -435,11 +437,13 @@ function celebratePaid(card) {
     const len = path.getTotalLength();
     path.style.strokeDasharray = len;
     path.style.strokeDashoffset = len;
+    // Medium: same steps, tune()'d timing only (destinations — the check
+    // drawing to 0, the fold to height:0 — stay exactly where they are).
     const tl = gsap.timeline({ onComplete: resolve });
-    tl.fromTo(check, { opacity: 0 }, { opacity: 1, duration: 0.18 })
-      .to(path, { strokeDashoffset: 0, duration: 0.35, ease: "power2.out" })
-      .fromTo(check.querySelector("svg"), { scale: 0.7 }, { scale: 1, duration: 0.35, ease: "back.out(2.5)" }, "<")
-      .to(card, { height: 0, marginBottom: -16, opacity: 0, paddingTop: 0, paddingBottom: 0, duration: 0.35, ease: "power2.in", delay: 0.35 });
+    tl.fromTo(check, tune({ opacity: 0 }), tune({ opacity: 1, duration: 0.18 }))
+      .to(path, tune({ strokeDashoffset: 0, duration: 0.35, ease: "power2.out" }))
+      .fromTo(check.querySelector("svg"), tune({ scale: 0.7 }), tune({ scale: 1, duration: 0.35, ease: "back.out(2.5)" }), "<")
+      .to(card, tune({ height: 0, marginBottom: -16, opacity: 0, paddingTop: 0, paddingBottom: 0, duration: 0.35, ease: "power2.in", delay: 0.35 }));
   });
 }
 

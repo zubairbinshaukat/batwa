@@ -1,6 +1,6 @@
 // Accounts: logo pack, home account cards, add/manage sheets, Fix balance flow.
 
-import { $, el, esc, anim, motionOK, buzz } from "../util/dom.js";
+import { $, el, esc, anim, motionOK, buzz, tune } from "../util/dom.js";
 import { fmtMoney, fmtCompact, dueHint, shortDate } from "../util/format.js";
 import { state, addAccount, updateAccount, removeAccountWithEntries, restoreAccountWithEntries, accountBalance, accountBreakdown, pendingExpenses, reconcileAccount, deleteEntry, reorderAccounts } from "../ledger.js";
 import { openSheet, closeSheet, confirmSheet } from "./modals.js";
@@ -309,10 +309,10 @@ export function accountSheet(acc) {
     if (pct > 0) {
       if (motionOK()) {
         const p = { v: 0 };
-        gsap.to(p, {
+        gsap.to(p, tune({
           v: pct * 100, duration: 0.5, ease: "power2.out",
           onUpdate: () => sheetEl.style.setProperty("--fill-pct", `${p.v.toFixed(2)}%`),
-        });
+        }));
       } else {
         sheetEl.style.setProperty("--fill-pct", `${(pct * 100).toFixed(2)}%`);
       }
@@ -557,7 +557,7 @@ function wireAccountDrag(handle, row, list) {
     dragging = false;
     try { handle.releasePointerCapture(pointerId); } catch {}
     row.classList.remove("is-dragging");
-    if (motionOK()) gsap.to(row, { y: 0, duration: 0.25, ease: "power2.out" });
+    if (motionOK()) gsap.to(row, tune({ y: 0, duration: 0.25, ease: "power2.out" }));
     else setY(0);
     reorderAccounts([...list.children].map((r) => r.dataset.id));
   }

@@ -54,10 +54,144 @@
     })();
   </script>
 
+  <script>
+    // Boot shell: paint the lock screen's own gradient before any JS has
+    // rendered anything, closing the gap between the splash handing over and
+    // the real first frame. Gated on js/auth.js's "batwa.hasLock" flag, which
+    // is only ever "1" while a PIN exists — first run and no-PIN mode must
+    // never see this, or onboarding/home would flash under a fake lock.
+    // css/components.css paints html[data-boot="lock"] body::after; js/auth.js
+    // removes the attribute the moment the real lock screen mounts (or right
+    // after unlock when none was needed). The 8s timeout below is a failsafe
+    // only — normal boots clear it long before this ever fires.
+    (function () {
+      try {
+        if (localStorage.getItem("batwa.hasLock") === "1") {
+          document.documentElement.setAttribute("data-boot", "lock");
+        }
+      } catch (e) {}
+    })();
+    setTimeout(function () {
+      try { document.documentElement.removeAttribute("data-boot"); } catch (e) {}
+    }, 8000);
+  </script>
+
+  <script>
+    // Performance tier, before the first paint — so a weak phone never even
+    // starts a heavy effect. Mirrors js/perf.js; keep the key, values and
+    // heuristic in step. (This copy can't check APP_VERSION — no import in a
+    // plain <script> — so a saved batwa.perfAuto only gets the 30-day age
+    // check here; js/perf.js re-validates the version once it boots and
+    // clears the entry if it's from a different build.)
+    (function () {
+      try {
+        var tier;
+        var mode = localStorage.getItem("batwa.perf");
+        if (mode !== "high" && mode !== "medium" && mode !== "low") mode = "auto";
+        // the raw choice, for base.css's reduced-motion block — an explicit
+        // "high" there must win over the OS preference, same as it does here.
+        document.documentElement.setAttribute("data-perf-mode", mode);
+        if (mode === "high" || mode === "medium" || mode === "low") {
+          tier = mode; // the user's explicit choice wins, even over reduce motion
+        } else if (matchMedia("(prefers-reduced-motion: reduce)").matches) {
+          tier = "low";
+        } else {
+          tier = null;
+          try {
+            var raw = localStorage.getItem("batwa.perfAuto");
+            if (raw) {
+              var saved = JSON.parse(raw);
+              // only a CONFIRMED "low" is authoritative — js/perf.js also
+              // saves a bare {strikes,v,at} record for a single ordinary-bad
+              // sample (a false-downgrade guard: one noisy sample must never
+              // demote a strong phone), and that must never be read as a tier.
+              if (saved && saved.tier === "low" && typeof saved.at === "number" && Date.now() - saved.at < 30 * 24 * 60 * 60 * 1000) {
+                tier = saved.tier;
+              }
+            }
+          } catch (e) {}
+          if (!tier) {
+            var mem = navigator.deviceMemory;
+            var cores = navigator.hardwareConcurrency;
+            var saveData = !!(navigator.connection && navigator.connection.saveData);
+            if (saveData) tier = "low";
+            else if (typeof mem === "number") {
+              tier = (mem <= 2 || cores <= 2) ? "low" : (mem <= 4 || cores <= 4) ? "medium" : "high";
+            } else {
+              // no deviceMemory (Safari/iOS, Firefox) — never go below medium
+              // from cores alone; js/perf.js's smoothness check catches the rest.
+              tier = (typeof cores === "number" && cores <= 2) ? "medium" : "high";
+            }
+          }
+        }
+        document.documentElement.setAttribute("data-perf", tier);
+      } catch (e) {}
+    })();
+  </script>
+
   <link rel="stylesheet" href="css/tokens.css">
   <link rel="stylesheet" href="css/base.css">
   <link rel="stylesheet" href="css/components.css">
   <link rel="stylesheet" href="css/onboarding.css">
+
+  <!-- Flattens js/app.js's static import waterfall: without these, the
+       browser only discovers a deeper module once its parent has finished
+       fetching + parsing, one level at a time (~5 levels here). Preloading
+       every module up front lets them all fetch in parallel instead, so the
+       lock/fingerprint path (which is at the bottom of that waterfall) is
+       ready far sooner.
+       This list is exactly the static import graph reachable from js/app.js
+       (walked with a throwaway script, not guessed) — lock-critical modules
+       first (auth + everything auth.js needs to decide and paint the lock
+       screen, plus ledger.js's own small dep chain, since js/ui/icons.js
+       imports it — see the icons.js/ledger.js/auth.js cycle note in
+       js/app.js), then the rest of the app in the order app.js's own imports
+       first reach them. If app.js's import graph changes — a new module, a
+       dropped one, a moved import — this list AND sw.js's SHELL array both
+       have to move with it, or a module either loads late again or (worse)
+       is fetched here but never actually served by the cache-first SW. -->
+  <link rel="modulepreload" href="js/app.js">
+  <link rel="modulepreload" href="js/db.js">
+  <link rel="modulepreload" href="js/config.js">
+  <link rel="modulepreload" href="js/auth.js">
+  <link rel="modulepreload" href="js/crypto.js">
+  <link rel="modulepreload" href="js/biometric.js">
+  <link rel="modulepreload" href="js/session.js">
+  <link rel="modulepreload" href="js/util/dom.js">
+  <link rel="modulepreload" href="js/perf.js">
+  <link rel="modulepreload" href="js/ui/icons.js">
+  <link rel="modulepreload" href="js/ledger.js">
+  <link rel="modulepreload" href="js/util/format.js">
+  <link rel="modulepreload" href="js/util/category.js">
+  <link rel="modulepreload" href="js/sync.js">
+  <link rel="modulepreload" href="js/ui/toast.js">
+  <link rel="modulepreload" href="js/ui/modals.js">
+  <link rel="modulepreload" href="js/spaces.js">
+  <link rel="modulepreload" href="js/relay.js">
+  <link rel="modulepreload" href="js/spaces/crypto.js">
+  <link rel="modulepreload" href="js/spaces/merge.js">
+  <link rel="modulepreload" href="js/spaces/notify.js">
+  <link rel="modulepreload" href="js/ui/pushsetup.js">
+  <link rel="modulepreload" href="js/ui/accounts.js">
+  <link rel="modulepreload" href="js/ui/reveal.js">
+  <link rel="modulepreload" href="js/util/expr.js">
+  <link rel="modulepreload" href="js/ui/catedit.js">
+  <link rel="modulepreload" href="js/ui/home.js">
+  <link rel="modulepreload" href="js/ui/monthsheet.js">
+  <link rel="modulepreload" href="js/insights.js">
+  <link rel="modulepreload" href="js/ui/pendingcard.js">
+  <link rel="modulepreload" href="js/ui/reports.js">
+  <link rel="modulepreload" href="js/ui/charts.js">
+  <link rel="modulepreload" href="js/ui/history.js">
+  <link rel="modulepreload" href="js/ui/settings.js">
+  <link rel="modulepreload" href="js/reminders.js">
+  <link rel="modulepreload" href="js/theme.js">
+  <link rel="modulepreload" href="js/ui/spaces.js">
+  <link rel="modulepreload" href="js/vendor/qrcode.js">
+  <link rel="modulepreload" href="js/nudge.js">
+  <link rel="modulepreload" href="js/smsparse.js">
+  <link rel="modulepreload" href="js/ui/dock.js">
+  <link rel="modulepreload" href="js/ui/spaceview.js">
 
   <!-- Structured data. `softwareVersion` mirrors the sw.js cache number and
        APP_VERSION in js/config.js — bump all three together. No LICENSE file
@@ -83,7 +217,7 @@
       "https://batwa.zubyr.dev/screenshots/01-home.png",
       "https://batwa.zubyr.dev/screenshots/02-reports.png"
     ],
-    "softwareVersion": "32",
+    "softwareVersion": "33",
     "isAccessibleForFree": true,
     "codeRepository": "https://github.com/zubairbinshaukat/batwa",
     "author": {
@@ -135,7 +269,13 @@
   <div id="toast-root" class="toast-root" aria-live="polite"></div>
   <div id="lock-root"></div>
 
-  <script src="js/vendor/gsap.min.js"></script>
+  <!-- defer, not a plain classic script: deferred classic scripts and module
+       scripts both execute in document order after parsing, so gsap is still
+       guaranteed to run (and define window.gsap) before js/app.js does — it
+       just no longer blocks the parser from reaching the body's end while it
+       downloads, which used to add its own delay before app.js could even
+       start. -->
+  <script defer src="js/vendor/gsap.min.js"></script>
   <script type="module" src="js/app.js"></script>
 
   <noscript>

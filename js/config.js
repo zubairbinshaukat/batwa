@@ -42,4 +42,4 @@ export function relayHost() {
  * MUST match the `CACHE` number in sw.js (`batwa-v<APP_VERSION>`): sw.js is a
  * classic worker and cannot import this file, so the two are bumped together.
  */
-export const APP_VERSION = "32";
+export const APP_VERSION = "33";

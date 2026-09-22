@@ -1,7 +1,8 @@
 // Bottom sheets (mobile) / centered modals (desktop):
 // add money, add/edit expense, confirm, and multi-choice sheets.
 
-import { $, el, esc, anim, animTo, trapFocus, motionOK, buzz, segmented } from "../util/dom.js";
+import { $, el, esc, anim, animTo, trapFocus, motionOK, buzz, segmented, tune } from "../util/dom.js";
+import { perfTier } from "../perf.js";
 import { state, addEntry, updateEntry, deleteEntry, deleteSeriesFuture, restoreEntries, transferMoney,
   accountBalance, balances, deleteBlockedReason, outstandingOf } from "../ledger.js";
 import {
@@ -113,8 +114,8 @@ function wireSwipeToDismiss(sheet, backdrop) {
   function springBack() {
     if (typeof gsap === "undefined") { backdrop.style.opacity = ""; return; }
     if (motionOK()) {
-      gsap.to(sheet, { y: 0, duration: 0.35, ease: "power3.out" });
-      gsap.to(backdrop, { opacity: 1, duration: 0.25 });
+      gsap.to(sheet, tune({ y: 0, duration: 0.35, ease: "power3.out" }));
+      gsap.to(backdrop, tune({ opacity: 1, duration: 0.25 }));
     } else {
       gsap.set(sheet, { y: 0 });
       gsap.set(backdrop, { opacity: 1 });
@@ -496,7 +497,7 @@ function prefillNote(prefill) {
       : "Filled from a shared message — check the amount."));
 }
 
-function toggleRow(labelText, checked, onFlip) {
+export function toggleRow(labelText, checked, onFlip) {
   let on = checked;
   const sw = el("button", { type: "button", class: "switch", role: "switch", "aria-checked": String(on) });
   sw.addEventListener("click", () => {
@@ -613,7 +614,9 @@ function fundsNote() {
 
 function setError(fieldEl, on) {
   fieldEl.classList.toggle("has-error", on);
-  if (on && motionOK()) gsap.fromTo(fieldEl, { x: 0 }, { x: 8, duration: 0.05, repeat: 5, yoyo: true, clearProps: "x" });
+  if (!on || !motionOK()) return;
+  const short = perfTier() === "medium";
+  gsap.fromTo(fieldEl, { x: 0 }, { x: short ? 5 : 8, duration: short ? 0.04 : 0.05, repeat: short ? 3 : 5, yoyo: true, clearProps: "x" });
 }
 
 /**
@@ -685,7 +688,7 @@ function deleteRow(entry, { kindLabel, isExpense }) {
       confirming = true;
       delBtn.textContent = "Tap again to confirm";
       hint.style.display = "";
-      if (motionOK()) gsap.fromTo(delBtn, { scale: 1 }, { scale: 1.04, duration: 0.15, yoyo: true, repeat: 1 });
+      if (motionOK()) gsap.fromTo(delBtn, { scale: 1 }, tune({ scale: 1.04, duration: 0.15, yoyo: true, repeat: 1 }));
       timer = setTimeout(() => {
         confirming = false;
         delBtn.textContent = `Delete ${kindLabel}`;
@@ -974,6 +977,7 @@ function buildMoneyForm(entry, prefill = null) {
     else await addEntry(data);
     if (prefill) await rememberShareAccount(prefill.providerKind, data.accountId);
     closeSheet();
+    buzz(14);
     toast(
       entry ? "Income updated" : pending ? `${desc.value.trim()} added as pending` : `${CURRENCY.symbol} ${amount.toLocaleString()} added`,
       { icon: icon(pending ? "clock" : "banknote", 18) }
@@ -1149,6 +1153,7 @@ function buildExpenseForm(entry, prefill = null) {
     else await addEntry(data);
     if (prefill) await rememberShareAccount(prefill.providerKind, data.accountId);
     closeSheet();
+    buzz(14);
     toast(entry ? "Expense updated" : "Expense added", { icon: icon("receipt", 18) });
   });
   return form;
@@ -1465,6 +1470,7 @@ function buildTransferForm(prefill = null) {
     lastAccountId = fromId;
     await transferMoney({ fromAccountId: fromId, toAccountId: toId, amount, note: note.value });
     closeSheet();
+    buzz(14);
     toast(`${fmtMoney(amount)} moved · ${accountName(fromId)} → ${accountName(toId)}`, { icon: icon("swap", 18) });
   });
   return form;
@@ -1511,7 +1517,7 @@ function deleteTransferRow(entry, fromName, toName) {
       confirming = true;
       delBtn.textContent = "Tap again to confirm";
       hint.style.display = "";
-      if (motionOK()) gsap.fromTo(delBtn, { scale: 1 }, { scale: 1.04, duration: 0.15, yoyo: true, repeat: 1 });
+      if (motionOK()) gsap.fromTo(delBtn, { scale: 1 }, tune({ scale: 1.04, duration: 0.15, yoyo: true, repeat: 1 }));
       timer = setTimeout(() => {
         confirming = false;
         delBtn.textContent = "Delete transfer";
@@ -1620,7 +1626,7 @@ export function quickAddSheet(initialKind = "expense") {
       if (hTween) { hTween.kill(); hTween = null; }
       if (!(h > 0)) return;
       if (animate && motionOK()) {
-        hTween = gsap.to(boxes, { height: h, duration: 0.24, ease: "power2.out", onComplete: () => (hTween = null) });
+        hTween = gsap.to(boxes, tune({ height: h, duration: 0.24, ease: "power2.out", onComplete: () => (hTween = null) }));
       } else {
         for (const b of boxes) b.style.height = `${h}px`;
       }
@@ -1665,13 +1671,13 @@ export function quickAddSheet(initialKind = "expense") {
       if (posTween) { posTween.kill(); posTween = null; }
       if (!motionOK()) { pos = to; render(); lockHeight(); return; }
       const s = { p: pos };
-      posTween = gsap.to(s, {
+      posTween = gsap.to(s, tune({
         p: to,
         duration: 0.34,
         ease: "power3.out",
         onUpdate: () => { pos = s.p; render(); },
         onComplete: () => { posTween = null; pos = to; render(); lockHeight(); },
-      });
+      }));
     }
 
     /* ---------- horizontal drag (the tab swipe claims this axis) ---------- */

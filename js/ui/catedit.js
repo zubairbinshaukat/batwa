@@ -12,6 +12,7 @@
 // follows it, so Save is always reachable while typing.
 
 import { el, buzz, segmented, motionOK, trapFocus } from "../util/dom.js";
+import { perfTier } from "../perf.js";
 import {
   state, addCategory, updateCategory, findCategory, CATEGORY_MAX, RESERVED_CATEGORY,
 } from "../ledger.js";
@@ -168,7 +169,8 @@ export function categoryEditorPanel({
     errNode.classList.toggle("is-on", !!text);
     nameField.classList.toggle("has-error", !!text);
     if (text && motionOK()) {
-      gsap.fromTo(node, { x: 0 }, { x: 6, duration: 0.05, repeat: 5, yoyo: true, clearProps: "x" });
+      const short = perfTier() === "medium";
+      gsap.fromTo(node, { x: 0 }, { x: short ? 4 : 6, duration: short ? 0.04 : 0.05, repeat: short ? 3 : 5, yoyo: true, clearProps: "x" });
     }
   }
   const clearErr = () => showErr("");

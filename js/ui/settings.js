@@ -1,10 +1,11 @@
 // Settings: sync config, backup, PIN, categories, install, about.
 
-import { $, el, esc, anim, buzz } from "../util/dom.js";
+import { $, el, esc, anim, buzz, hapticsOn, setHaptics, canVibrate } from "../util/dom.js";
 import { state, saveLimits, deleteCategory, countInCategory, RESERVED_CATEGORY } from "../ledger.js";
 import { changePin, disablePin, enablePin, getKeyMode, enrollBiometricWithPin } from "../auth.js";
 import { bioAvailable, isBioEnrolled, removeBio } from "../biometric.js";
-import { openSheet, closeSheet, confirmSheet, chooseSheet } from "./modals.js";
+import { openSheet, closeSheet, confirmSheet, chooseSheet, toggleRow } from "./modals.js";
+import { getPerfMode, setPerfMode, perfLabel, onPerfChange } from "../perf.js";
 import { toast } from "./toast.js";
 import {
   getSyncConfig, setSyncConfig, syncNow, syncStatusText,
@@ -37,6 +38,7 @@ const ICONS = {
   rem:     ["clock",       "var(--c-warn-soft)",   "var(--c-warn)"],
   remtest: ["sparkles",    "var(--c-violet-soft)", "var(--c-violet)"],
   theme:   ["moon",        "var(--c-violet-soft)", "var(--c-violet)"],
+  anim:    ["zap",         "var(--c-violet-soft)", "var(--c-violet)"],
   info:    ["info",        "var(--c-aqua-soft)",   "#0B87B8"],
 };
 
@@ -56,6 +58,14 @@ let _view = null;
 function refresh() {
   if (_view && _view.isConnected) renderSettings(_view);
 }
+
+// Subscribed ONCE at module level, not per-render — settings.js's module
+// instance is a singleton (one for the whole app lifetime), so re-adding this
+// inside renderSettings() on every open would leak a listener per open.
+// startSmoothnessCheck() can flip auto -> "low" live, long after this screen
+// last rendered; refresh() itself already checks _view.isConnected, so this
+// is a no-op whenever Settings isn't the mounted view.
+onPerfChange(() => refresh());
 
 export function renderSettings(view) {
   _view = view;
@@ -153,6 +163,15 @@ export function renderSettings(view) {
   const appCard = el("div", { class: "card set-card" });
   const themeRow = row("theme", "Theme", themeLabel(), themeSheet);
   appCard.append(themeRow);
+  const animRow = row("anim", "Animations", perfLabel(getPerfMode()), animationsSheet);
+  appCard.append(animRow);
+  if (canVibrate()) {
+    appCard.append(el("div", { style: "padding:12px 16px;border-top:1px solid var(--c-border)" },
+      toggleRow("Vibration", hapticsOn(), (on) => {
+        setHaptics(on);
+        if (on) buzz(12);
+      })));
+  }
   const inst = getInstallState();
   if (inst === "installable") {
     appCard.append(row("install", "Install app", "", promptInstall));
@@ -750,5 +769,25 @@ async function themeSheet() {
   if (!pick || pick === current) return;
   setThemeMode(pick);
   toast(`Theme: ${themeLabel(pick)}`, { icon: icon(resolvedTheme() === "dark" ? "moon" : "sun", 18) });
+  refresh();
+}
+
+/** Auto / Full / Reduced / Off. Applies instantly, no reload. */
+async function animationsSheet() {
+  const current = getPerfMode();
+  const mark = (m, label) => (m === current ? `✓ ${label}` : label);
+  const pick = await chooseSheet({
+    title: "Animations",
+    message: "Auto picks what your phone can run smoothly. Reduced is quicker and simpler; Off keeps things still with just a gentle fade.",
+    options: [
+      { value: "auto",   label: mark("auto", "Auto"),     style: current === "auto" ? "btn-primary" : "btn-ghost" },
+      { value: "high",   label: mark("high", "Full"),     style: current === "high" ? "btn-primary" : "btn-ghost" },
+      { value: "medium", label: mark("medium", "Reduced"), style: current === "medium" ? "btn-primary" : "btn-ghost" },
+      { value: "low",    label: mark("low", "Off"),       style: current === "low" ? "btn-primary" : "btn-ghost" },
+    ],
+  });
+  if (!pick || pick === current) return;
+  setPerfMode(pick);
+  toast(`Animations: ${perfLabel(pick)}`, { icon: icon("zap", 18) });
   refresh();
 }

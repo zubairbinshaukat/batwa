@@ -118,6 +118,14 @@ body[data-view="home"] .canopy { padding-bottom: calc(var(--s-6) + 28px); }
 }
 :root[data-theme="dark"] .canopy .theme-toggle,
 :root[data-theme="dark"] .canopy .spaces-btn { color: #fff; }
+/* low tier: drop the blur, keep the same glassy look with a flatter fill */
+html[data-perf="low"] .canopy .sync-pill,
+html[data-perf="low"] .canopy .theme-toggle,
+html[data-perf="low"] .canopy .spaces-btn {
+  background: rgba(255, 255, 255, 0.22);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
 /* state tints keep their icon colour; the text stays legible white */
 .canopy .sync-pill.st-synced  { background: rgba(255,255,255,0.16); color: #fff; }
 .canopy .sync-pill.st-pending { background: rgba(255,255,255,0.16); color: #fff; }
@@ -539,6 +547,9 @@ body[data-view="home"] .canopy { padding-bottom: calc(var(--s-6) + 28px); }
 .is-blurred .blurable { filter: blur(11px); }
 .is-blurred .hero-amount .cur { filter: blur(8px); }
 .is-blurred .exp-amount.blurable { filter: blur(9px); }
+/* the blur itself is the privacy feature and stays on every tier — only the
+   animated reveal/hide is a performance cost worth cutting on "low" */
+html[data-perf="low"] .blurable { transition: none; }
 
 /* Exact-amount tooltip */
 .tip {
@@ -777,6 +788,20 @@ body[data-view="home"] .canopy { padding-bottom: calc(var(--s-6) + 28px); }
   transition: height var(--t-med) var(--ease-out);
 }
 .bottom-nav.is-compact { height: 56px; }
+/* medium: cheaper blur, no saturate; low: no blur at all, opaque fill instead */
+html[data-perf="medium"] .bottom-nav {
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+html[data-perf="low"] .bottom-nav {
+  background: rgba(255, 255, 255, 0.94);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  /* the inset+drop stack above is a literal, not a token, so it needs its
+     own low-tier override here too (tokens.css only simplifies the ones that
+     already went through --shadow-*/--clay-* names) */
+  box-shadow: var(--shadow-xs);
+}
 .bottom-nav .nav-inner {
   height: 100%;
   display: grid;
@@ -920,6 +945,11 @@ body[data-view="home"] .canopy { padding-bottom: calc(var(--s-6) + 28px); }
   background: rgba(20, 16, 51, 0.45);
   backdrop-filter: blur(3px);
   -webkit-backdrop-filter: blur(3px);
+}
+html[data-perf="low"] .sheet-backdrop {
+  background: rgba(20, 16, 51, 0.6);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
 }
 .sheet {
   position: fixed;
@@ -1220,6 +1250,26 @@ select.input {
   flex: 0 0 auto;
 }
 
+/* =================== Boot shell =================== */
+/* Paints the lock screen's own gradient behind the very first frame, before
+   any JS has run — the inline head script sets data-boot="lock" only when
+   js/auth.js's "batwa.hasLock" flag says a PIN exists, so first-run and
+   no-PIN users never see this. var(--grad-hero) already carries both the
+   dark-theme override (:root[data-theme="dark"], tokens.css) and the low-perf
+   tier (which never touches this token), so one rule covers all of them.
+   z-index sits one below .lock-screen's 300 so the real screen's own paint —
+   whichever variant it turns out to be — simply lands on top with nothing to
+   cross-fade. Removed by js/auth.js the moment the real lock screen mounts
+   (or immediately after unlock when none was needed), and by an 8s failsafe
+   in the head script either way. */
+html[data-boot="lock"] body::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 299;
+  background: var(--grad-hero);
+}
+
 /* =================== Lock screen =================== */
 .lock-screen {
   position: fixed; inset: 0;
@@ -1370,6 +1420,18 @@ select.input {
   border: 1px solid rgba(255,255,255,0.18);
   backdrop-filter: blur(8px);
 }
+/* low tier: the lock screen sits on the violet gradient in both themes, so
+   the flat fallback fill is a literal white-alpha, same as the blurred look
+   it replaces — just without the blur cost. */
+html[data-perf="low"] .lock-logo,
+html[data-perf="low"] .key,
+html[data-perf="low"] .bio-btn,
+html[data-perf="low"] .lock-offer {
+  background: rgba(255, 255, 255, 0.22);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+html[data-perf="low"] .key.key-ghost { background: transparent; }
 .lock-offer-ico { display: grid; place-items: center; color: #fff; }
 .lock-offer-txt { display: flex; flex-direction: column; gap: 2px; min-width: 0; text-align: left; }
 .lock-offer-title { font-weight: 800; font-size: var(--fs-sm); }
@@ -2028,6 +2090,10 @@ svg.ico { display: inline-block; vertical-align: -0.16em; flex: 0 0 auto; }
   background: rgba(23, 19, 58, 0.28);
   backdrop-filter: blur(2px); -webkit-backdrop-filter: blur(2px);
 }
+html[data-perf="low"] .cat-dialog-backdrop {
+  background: rgba(23, 19, 58, 0.4);
+  backdrop-filter: none; -webkit-backdrop-filter: none;
+}
 .cat-dialog {
   position: absolute; left: 12px; right: 12px;
   bottom: calc(var(--kb) + 12px + var(--safe-b));
@@ -2047,6 +2113,12 @@ svg.ico { display: inline-block; vertical-align: -0.16em; flex: 0 0 auto; }
 @media (prefers-reduced-motion: reduce) { .cat-dialog.is-open { animation: none; } }
 :root[data-theme="dark"] .cat-dialog-backdrop { background: rgba(0, 0, 0, 0.5); }
 :root[data-theme="dark"] .cat-dialog { box-shadow: var(--clay-surface), 0 24px 60px -20px rgba(0, 0, 0, 0.8); }
+/* :root[data-theme="dark"] (pseudo-class + attribute + class) outranks the
+   plain html[data-perf="low"] (type + attribute + class) low-tier override
+   above, so the dark background wins it back without this — same fix as
+   tokens.css's shadow tokens. A bit more opaque than the dark rule above,
+   since there's no blur left to help hide what's behind it. */
+html[data-perf="low"][data-theme="dark"] .cat-dialog-backdrop { background: rgba(0, 0, 0, 0.65); }
 
 .cat-dialog-tabs { margin-bottom: var(--s-3); }
 .cat-dialog-tabs .segmented button { min-height: 40px; }
@@ -2108,6 +2180,16 @@ svg.ico { display: inline-block; vertical-align: -0.16em; flex: 0 0 auto; }
     inset 0 -2px 0 rgba(0, 0, 0, 0.35),
     0 10px 30px -10px rgba(0, 0, 0, 0.7);
 }
+/* This dark rule (specificity 0,3,0) already outranks the plain low-tier
+   html[data-perf="low"] .bottom-nav rule (0,2,1), so its own background
+   value — not the light-theme rgba(255,255,255,0.94) above — wins by
+   default. Restate it explicitly anyway, with a proper solid token rather
+   than the incidental rgba this dark rule happens to carry, so the low-tier
+   dark fill doesn't depend on that happy accident of selector counting. */
+html[data-perf="low"][data-theme="dark"] .bottom-nav {
+  background: var(--c-surface-2);
+  box-shadow: var(--shadow-xs);
+}
 :root[data-theme="dark"] .badge-once {
   background: rgba(148, 160, 184, 0.16);
   color: #A9B4CA;
@@ -2125,6 +2207,14 @@ svg.ico { display: inline-block; vertical-align: -0.16em; flex: 0 0 auto; }
 }
 :root[data-theme="dark"] .sheet-backdrop {
   background: rgba(4, 2, 16, 0.62);
+}
+/* Same specificity story as .bottom-nav/.cat-dialog-backdrop above — this
+   dark rule already outranks the plain low-tier html[data-perf="low"]
+   .sheet-backdrop rule, so its own background wins by default. Restate it a
+   touch more opaque, to make up for the blur that used to soften what's
+   behind it. */
+html[data-perf="low"][data-theme="dark"] .sheet-backdrop {
+  background: rgba(4, 2, 16, 0.78);
 }
 /* Bank marks are transparent SVGs drawn for a white card — keep the card white
    in both themes, just soften its edge so it doesn't glare. */

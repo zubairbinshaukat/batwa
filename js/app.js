@@ -3,7 +3,7 @@
 import { openDB, ensureSchema, getMeta, setMeta } from "./db.js";
 import { relayHost, relayUrl } from "./config.js";
 import {
-  hasPin, hasDeviceKey, isFirstRun, unlockWithDeviceKey, unlockWithSession,
+  unlockMeta, unlockWithDeviceKey, unlockWithSession,
   showSetup, showLock, showOnboarding, showAccountsStep, initAutoLock,
 } from "./auth.js";
 import { loadLedger, onChange, state } from "./ledger.js";
@@ -31,6 +31,7 @@ import { installPushMessageHandlers } from "./ui/pushsetup.js";
 import { pendingSheet } from "./ui/pendingcard.js";
 import { renderSpace, setSpaceTarget, spaceTarget } from "./ui/spaceview.js";
 import { spacesSwitcherSheet, openJoinFromLink } from "./ui/spaces.js";
+import { startSmoothnessCheck, mark, logMarks } from "./perf.js";
 
 /* ============================================================
    Views + nav
@@ -481,6 +482,15 @@ async function registerSW() {
     }
     if (reg.waiting && navigator.serviceWorker.controller) showUpdateToast(reg.waiting);
     reg.addEventListener("updatefound", () => reg.installing && watch(reg.installing));
+    // An installed app can stay open for days and the browser only re-checks
+    // sw.js on navigation, so look again whenever Batwa comes back on screen —
+    // at most once an hour.
+    let lastCheck = Date.now();
+    document.addEventListener("visibilitychange", () => {
+      if (document.hidden || Date.now() - lastCheck < 60 * 60 * 1000) return;
+      lastCheck = Date.now();
+      reg.update().catch(() => {});
+    });
     let reloading = false;
     navigator.serviceWorker.addEventListener("controllerchange", () => {
       if (reloading) return;
@@ -553,16 +563,27 @@ function initOnlineState() {
  *   first run-> welcome + security choice, then the accounts step over home
  * Anything else (a blob with no key meta) falls back to the legacy PIN setup.
  */
+let smoothnessQueued = false; // guards against initAutoLock's re-lock -> unlockFlow() re-arming this
+
 async function unlockFlow() {
   unlocked = false;
   let firstRun = false;
-  // a refresh (or the SW's own reload) must not re-ask for the PIN
-  if (await hasPin()) { if (!(await unlockWithSession())) await showLock(); }
-  else if (await hasDeviceKey()) await unlockWithDeviceKey();
-  else if (await isFirstRun()) { firstRun = true; await showOnboarding(); }
+  // a refresh (or the SW's own reload) must not re-ask for the PIN. The three
+  // reads that decide which branch this is run together (auth.js's
+  // unlockMeta) instead of one query at a time; same precedence as before.
+  const { pinSalt, deviceKey, hasEntries } = await unlockMeta();
+  if (pinSalt) { if (!(await unlockWithSession())) await showLock(); }
+  else if (deviceKey) await unlockWithDeviceKey();
+  else if (!hasEntries) { firstRun = true; await showOnboarding(); }
   else await showSetup();
+  // Covers the paths that never call showLock() (session restore, device
+  // key, first run, legacy setup) — showLock() already clears this itself
+  // the moment it mounts the real screen.
+  try { document.documentElement.removeAttribute("data-boot"); } catch {}
   await loadLedger();
   unlocked = true;
+  mark("batwa:unlocked");
+  logMarks();
   renderNav();
   renderView();
   updateSyncPill();
@@ -576,13 +597,21 @@ async function unlockFlow() {
     deferredOpen = null;
     setTimeout(() => handleOpenUrl(url), 320);
   }
+  // First successful unlock only — sample the home entrance animation, not
+  // the unlock itself, and never re-arm on a re-lock (initAutoLock -> here).
+  if (!smoothnessQueued) {
+    smoothnessQueued = true;
+    setTimeout(() => startSmoothnessCheck(), 600);
+  }
 }
 
 async function boot() {
+  mark("batwa:boot");
   try {
     initTheme();   // the inline boot script already painted it; this keeps it live
     initThemeToggle();
     await openDB();
+    mark("batwa:db");
     await ensureSchema();
     initOnlineState();
     registerSW();
@@ -623,6 +652,8 @@ async function boot() {
 
     if (shared !== null) await openSharedSheet(shared);
   } catch (err) {
+    // An error must never sit hidden behind the boot-shell overlay.
+    try { document.documentElement.removeAttribute("data-boot"); } catch {}
     console.error(err);
     $("#view").innerHTML = `
       <div class="empty"><div class="empty-ico">${icon("frown", 26)}</div>

@@ -1,7 +1,8 @@
 // Hand-drawn SVG charts: donut, monthly trend bars, split bar.
 // No libraries — everything renders offline.
 
-import { el } from "../util/dom.js";
+import { el, tune } from "../util/dom.js";
+import { perfTier } from "../perf.js";
 import { fmtCompact } from "../util/format.js";
 
 export const CHART_COLORS = [
@@ -182,15 +183,21 @@ export function phaseBar({ early = 0, mid = 0, late = 0 } = {}, { lastDay = 30 }
   return wrap;
 }
 
-/** GSAP entrance for charts inside a container (safe without GSAP). */
+/**
+ * GSAP entrance for charts inside a container (safe without GSAP).
+ * "medium" plays the same entrance with scaled-down durations/staggers (via
+ * tune()); "low" skips it entirely — every one of these elements is already
+ * painted at its final, fully-visible state by the caller, so skipping the
+ * fromTo just means it never dips to its "from" state at all.
+ */
 export function animateCharts(root) {
-  if (typeof gsap === "undefined" || matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  if (typeof gsap === "undefined" || perfTier() === "low") return;
   const segs = root.querySelectorAll(".donut-seg");
-  if (segs.length) gsap.fromTo(segs, { opacity: 0 }, { opacity: 1, duration: 0.5, stagger: 0.08, ease: "power2.out" });
+  if (segs.length) gsap.fromTo(segs, { opacity: 0 }, tune({ opacity: 1, duration: 0.5, stagger: 0.08, ease: "power2.out" }));
   const bars = root.querySelectorAll("rect.bar-anim");
-  if (bars.length) gsap.fromTo(bars, { scaleY: 0, transformOrigin: "bottom" }, { scaleY: 1, duration: 0.6, stagger: 0.04, ease: "power3.out" });
+  if (bars.length) gsap.fromTo(bars, { scaleY: 0, transformOrigin: "bottom" }, tune({ scaleY: 1, duration: 0.6, stagger: 0.04, ease: "power3.out" }));
   const divs = root.querySelectorAll("div.bar-anim");
-  if (divs.length) gsap.fromTo(divs, { scaleX: 0, transformOrigin: "left" }, { scaleX: 1, duration: 0.7, ease: "power3.out" });
+  if (divs.length) gsap.fromTo(divs, { scaleX: 0, transformOrigin: "left" }, tune({ scaleX: 1, duration: 0.7, ease: "power3.out" }));
   const catBars = root.querySelectorAll(".cat-bar");
-  if (catBars.length) gsap.fromTo(catBars, { scaleX: 0, transformOrigin: "left" }, { scaleX: 1, duration: 0.6, stagger: 0.05, ease: "power3.out" });
+  if (catBars.length) gsap.fromTo(catBars, { scaleX: 0, transformOrigin: "left" }, tune({ scaleX: 1, duration: 0.6, stagger: 0.05, ease: "power3.out" }));
 }

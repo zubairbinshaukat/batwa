@@ -5,11 +5,17 @@
 import { openDB, getMeta, setMeta, dbGet } from "./db.js";
 import { deriveKey, deriveKeyBits, importAesKey, encrypt, decrypt, randomSalt, b64, unb64 } from "./crypto.js";
 import {
-  bioAvailable, bioHint, isBioEnrolled, enrollBio, unwrapWithBio, rewrapBio, removeBio,
+  bioAvailable, bioAvailHint, bioHint, isBioEnrolled, enrollBio, unwrapWithBio, rewrapBio, removeBio,
 } from "./biometric.js";
 import { saveSession, restoreSession, clearSession, touchHidden, touchVisible } from "./session.js";
 import { $, el, esc, anim, animTo, motionOK, buzz } from "./util/dom.js";
+import { perfTier, mark } from "./perf.js";
 import { icon } from "./ui/icons.js";
+
+const HAS_LOCK_KEY = "batwa.hasLock";
+/** Set whenever a PIN exists — the boot-shell overlay's only gate (index.html head script). */
+function markHasLock() { try { localStorage.setItem(HAS_LOCK_KEY, "1"); } catch {} }
+function clearHasLock() { try { localStorage.removeItem(HAS_LOCK_KEY); } catch {} }
 
 const VERIFY_TOKEN = "batwa-ok";
 const LOCK_TIMEOUT_MS = 60000; // relock after 60s in background
@@ -41,6 +47,21 @@ export async function isFirstRun() {
   return !(await dbGet("entries", "blob"));
 }
 
+/**
+ * The precedence chain unlockFlow() runs (pin -> device -> first run ->
+ * setup), fetched together instead of one query at a time. pinSalt and
+ * deviceKey are read in parallel since either alone answers the question;
+ * the entries-blob check isFirstRun() needs only gets paid for when NEITHER
+ * exists — the two common cases (an existing PIN or device-key user) never
+ * wait on it. Same branches, same order, just not paid for serially.
+ */
+export async function unlockMeta() {
+  const [pinSalt, deviceKey] = await Promise.all([getMeta("pinSalt"), getMeta("deviceKey")]);
+  if (pinSalt || deviceKey) return { pinSalt, deviceKey, hasEntries: null };
+  const hasEntries = !!(await dbGet("entries", "blob"));
+  return { pinSalt, deviceKey, hasEntries };
+}
+
 async function persistNewPin(pin) {
   const salt = randomSalt();
   const key = await deriveKey(pin, salt);
@@ -50,6 +71,7 @@ async function persistNewPin(pin) {
   await setMeta("pinAttempts", 0);
   await setMeta("pinLockUntil", 0);
   _mode = "pin";
+  markHasLock();
   return key;
 }
 
@@ -214,6 +236,7 @@ export async function disablePin(currentPin) {
   // just be an orphaned copy of a key nothing opens.
   await removeBio();
   await clearSession();
+  clearHasLock(); // no PIN any more — the boot shell must not paint the lock gradient
   return { ok: true };
 }
 
@@ -238,6 +261,7 @@ export async function enablePin(newPin) {
   });
   _key = newKey;
   _mode = "pin";
+  markHasLock();
   await saveSession(newKey);
   return { ok: true };
 }
@@ -290,9 +314,13 @@ export async function enrollBiometricWithPin(pin) {
   }
 }
 
-/** Fingerprint -> key bytes -> verified working key. Resolves the unlock. */
-export async function tryBiometricUnlock() {
-  const r = await unwrapWithBio();
+/**
+ * Fingerprint -> key bytes -> verified working key. Resolves the unlock.
+ * `preRec` is forwarded to unwrapWithBio() — see there for why (showLock's
+ * auto attempt already has the "bio" record and skips a second IDB read).
+ */
+export async function tryBiometricUnlock(preRec = null) {
+  const r = await unwrapWithBio(preRec);
   if (!r.ok) {
     if (r.code === "corrupt") await removeBio();
     else if (r.code === "cancel" && r.elapsedMs >= BIO_NO_PROMPT_MS) {
@@ -416,6 +444,10 @@ function renderLockScreen({ title, sub, back = null, variant = "pin", bioKey = f
     }));
   }
   root.append(screen);
+  // The real lock screen has mounted — the boot-shell gradient underneath
+  // (index.html head script, css/components.css) has done its job.
+  try { document.documentElement.removeAttribute("data-boot"); } catch {}
+  mark("batwa:lock-shown");
   anim(screen, { opacity: 0 }, { opacity: 1, duration: 0.25 });
   anim($(".lock-logo", screen), { scale: 0.6, opacity: 0 }, { scale: 1, opacity: 1, duration: 0.5, ease: "back.out(1.8)" });
   anim([$(".lock-title", screen), $(".lock-sub", screen)], { y: 12, opacity: 0 }, { y: 0, opacity: 1, duration: 0.4, stagger: 0.06, delay: 0.1 });
@@ -432,8 +464,15 @@ function showBioHalf(screen) {
   $(".lock-pin-wrap", screen).hidden = true;
   if (motionOK()) {
     const ring = $(".bio-ring", screen);
-    gsap.fromTo(ring, { scale: 0.85, opacity: 0.55 },
-      { scale: 1.18, opacity: 0, duration: 1.6, repeat: -1, ease: "power1.out" });
+    if (perfTier() === "medium") {
+      // A scaled-down duration would make this infinite pulse busier, not
+      // calmer — the opposite of what "medium" is for. Use a slower, cheaper
+      // variant instead: no scale transform to repaint every frame, just opacity.
+      gsap.fromTo(ring, { opacity: 0.55 }, { opacity: 0, duration: 2.4, repeat: -1, ease: "power1.out" });
+    } else {
+      gsap.fromTo(ring, { scale: 0.85, opacity: 0.55 },
+        { scale: 1.18, opacity: 0, duration: 1.6, repeat: -1, ease: "power1.out" });
+    }
   }
 }
 
@@ -482,9 +521,11 @@ function paintDots(screen, n) {
 function shake(screen) {
   buzz(60);
   const dots = screen.querySelector(".pin-dots");
-  if (motionOK()) {
-    gsap.fromTo(dots, { x: 0 }, { x: 10, duration: 0.06, repeat: 5, yoyo: true, clearProps: "x" });
-  }
+  // Wrong PIN — this carries meaning, so it survives on "medium" (just
+  // shortened); "low" skips it and leans on the error text alone.
+  if (!motionOK()) return;
+  const short = perfTier() === "medium";
+  gsap.fromTo(dots, { x: 0 }, { x: short ? 6 : 10, duration: short ? 0.04 : 0.06, repeat: short ? 3 : 5, yoyo: true, clearProps: "x" });
 }
 
 function dismiss(screen, done) {
@@ -556,11 +597,26 @@ function lockToast(text, iconName) {
  */
 export function showLock() {
   return new Promise(async (resolve) => {
-    const enrolled = bioHint() && (await isBioEnrolled());
-    const usable = enrolled && (await bioAvailable());
-    const fails = (await getMeta("bioFails")) || 0;
+    markHasLock(); // showLock only runs when a PIN exists — keep the boot-shell flag honest
+    const hinted = bioHint();
+    const availHint = bioAvailHint();
+    // A cached "available" verdict lets the auto attempt below fire without
+    // waiting on the platform API at all — bioAvailable() still runs, just in
+    // the background, to keep that cache honest for next time. A hint of
+    // "no" or "never measured" awaits it as before.
+    if (availHint === true) bioAvailable();
+    const availP = availHint === true ? Promise.resolve(true) : bioAvailable();
+    // Same reasoning as the hint above: no local "enrolled" hint means there's
+    // nothing this read could change, so skip it rather than pay for it.
+    const bioRecP = hinted ? getMeta("bio").catch(() => null) : Promise.resolve(null);
+    const [bioRec, failsRaw, offerDismissed, avail] = await Promise.all([
+      bioRecP, getMeta("bioFails"), getMeta("bioOfferDismissed"), availP,
+    ]);
+    const enrolled = hinted && !!bioRec;
+    const usable = enrolled && avail;
+    const fails = failsRaw || 0;
     const bioFirst = usable && fails < BIO_MAX_FAILS;
-    const offer = !enrolled && (await bioAvailable()) && !(await getMeta("bioOfferDismissed"));
+    const offer = !enrolled && avail && !offerDismissed;
 
     const screen = renderLockScreen({
       title: "Welcome back",
@@ -579,11 +635,11 @@ export function showLock() {
 
     const bioBtn = $(".bio-btn", screen);
 
-    async function runBio({ auto = false } = {}) {
+    async function runBio({ auto = false, preRec = null } = {}) {
       if (bioBusy || busy) return;
       bioBusy = true;
       bioBtn.classList.add("is-busy");
-      const r = await tryBiometricUnlock();
+      const r = await tryBiometricUnlock(preRec);
       bioBtn.classList.remove("is-busy");
       bioBusy = false;
       if (r.ok) { buzz(20); dismiss(screen, () => resolve(r.key)); return; }
@@ -604,8 +660,10 @@ export function showLock() {
       morphToPin(screen, "Enter your PIN to unlock your money.");
     });
 
-    // one best-effort auto attempt; the big button is the guaranteed path
-    if (bioFirst) requestAnimationFrame(() => runBio({ auto: true }));
+    // one best-effort auto attempt; the big button is the guaranteed path.
+    // bioRec is already in hand from the Promise.all above — hand it straight
+    // to tryBiometricUnlock so nothing awaits between this paint and get().
+    if (bioFirst) requestAnimationFrame(() => runBio({ auto: true, preRec: bioRec }));
 
     /* ---- offer chip ---- */
 

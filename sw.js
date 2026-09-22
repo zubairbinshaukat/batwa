@@ -1,5 +1,5 @@
 /* Batwa service worker — app shell cache only. Never touches user data. */
-const CACHE = "batwa-v32";
+const CACHE = "batwa-v33";
 
 /* Marketing / SEO files. They are never precached, never runtime-cached, and
    the navigate branch below lets /about.html reach the network. The app's
@@ -20,6 +20,7 @@ const SHELL = [
   "./js/vendor/qrcode.js",
   "./js/app.js",
   "./js/config.js",
+  "./js/perf.js",
   "./js/relay.js",
   "./js/db.js",
   "./js/theme.js",
@@ -69,7 +70,13 @@ const SHELL = [
 ];
 
 self.addEventListener("install", (e) => {
-  e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)));
+  // Bypass the HTTP cache for every shell file: a host with a long max-age
+  // could otherwise hand us OLD files for the NEW cache version.
+  e.waitUntil(
+    caches.open(CACHE).then((c) =>
+      c.addAll(SHELL.map((u) => new Request(u, { cache: "reload" })))
+    )
+  );
 });
 
 self.addEventListener("activate", (e) => {

@@ -8,8 +8,10 @@
 
 import { getMeta, setMeta, dbDel } from "./db.js";
 import { b64, unb64, encrypt, decrypt, hkdfAesKey } from "./crypto.js";
+import { mark } from "./perf.js";
 
 const LS_KEY = "batwa.bio";
+const LS_AVAIL_KEY = "batwa.bioAvail";
 const WRAP_INFO = "batwa/bio-wrap/v1";
 const TIMEOUT = 60000;
 const RP_NAME = "Batwa";
@@ -22,6 +24,32 @@ function lsDel() { try { localStorage.removeItem(LS_KEY); } catch {} }
 /** Sync hint for the very first paint, before IndexedDB has answered. */
 export function bioHint() {
   try { return localStorage.getItem(LS_KEY) === "1"; } catch { return false; }
+}
+
+function lsAvailSet(v) { try { localStorage.setItem(LS_AVAIL_KEY, v ? "1" : "0"); } catch {} }
+function lsAvailDel() { try { localStorage.removeItem(LS_AVAIL_KEY); } catch {} }
+
+/**
+ * Sync hint for showLock: what bioAvailable() measured last time, before it
+ * has had a chance to ask the platform again this boot. true/false mirror
+ * the last real verdict; null means "never measured on this device" — the
+ * caller falls back to awaiting bioAvailable() same as before this existed.
+ */
+export function bioAvailHint() {
+  try {
+    const v = localStorage.getItem(LS_AVAIL_KEY);
+    if (v === "1") return true;
+    if (v === "0") return false;
+    return null;
+  } catch { return null; }
+}
+
+/** Drops the cached verdict, in memory and on disk, so the next check re-measures
+ * from scratch — used around enrol/remove, where the platform state is most
+ * likely to have actually changed. */
+function resetAvailCache() {
+  _avail = null;
+  lsAvailDel();
 }
 
 /** Cheap synchronous gate — is there any point asking the platform at all. */
@@ -48,6 +76,7 @@ export async function bioAvailable() {
     } catch { /* not implemented — fall through, create() decides */ }
     return true;
   })();
+  lsAvailSet(_avail);
   return _avail;
 }
 
@@ -72,6 +101,9 @@ function forget(credIdB64) {
  * prf.enabled without prf.results; Chrome 147+ returns results directly.
  */
 export async function enrollBio(pinKeyBits) {
+  // enrolling is the moment most likely to follow a real platform change
+  // (new phone, OS update) — don't trust a stale cached verdict here.
+  resetAvailCache();
   if (!(await bioAvailable())) {
     return { ok: false, code: "unsupported", reason: "This device has no fingerprint Batwa can use" };
   }
@@ -166,13 +198,19 @@ export async function enrollBio(pinKeyBits) {
   }
 }
 
-/** Ask the fingerprint sheet for the PIN key bytes back. */
-export async function unwrapWithBio() {
-  const rec = await getMeta("bio").catch(() => null);
+/**
+ * Ask the fingerprint sheet for the PIN key bytes back. `preRec` lets a
+ * caller that already has the "bio" meta record in hand (showLock's auto
+ * attempt) skip a second IndexedDB read and go straight into get() — a
+ * manual retry passes nothing here so it always reads a fresh copy.
+ */
+export async function unwrapWithBio(preRec = null) {
+  const rec = preRec || (await getMeta("bio").catch(() => null));
   if (!rec?.wrapped) return { ok: false, code: "gone", reason: "Fingerprint unlock isn't set up", elapsedMs: 0 };
   const prfSalt = unb64(rec.prfSalt);
   const t0 = Date.now();
   let asrt;
+  mark("batwa:bio-get");
   try {
     asrt = await navigator.credentials.get({
       publicKey: {
@@ -256,6 +294,7 @@ export async function removeBio({ signal = true } = {}) {
   try { await dbDel("meta", "bio"); } catch {}
   try { await setMeta("bioFails", 0); } catch {}
   lsDel();
+  resetAvailCache(); // the enrolment that made this hint meaningful is gone
   if (signal && rec?.credId) forget(rec.credId);
 }
 

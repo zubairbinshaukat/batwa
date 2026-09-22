@@ -48,6 +48,14 @@ body.is-onboarding { overflow: hidden; }
   color: #fff;
   box-shadow: inset 0 1px 0 rgba(255,255,255,0.3);
 }
+/* onboarding always sits on the violet gradient, same as the lock screen —
+   a flatter fill stands in for the blur on low tier, in both themes */
+html[data-perf="low"] .onb-logo-sm,
+html[data-perf="low"] .onb-opt {
+  background: rgba(255, 255, 255, 0.24);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
 
 .onb-brand {
   font-size: var(--fs-hero);

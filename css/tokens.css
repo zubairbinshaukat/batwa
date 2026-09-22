@@ -273,3 +273,54 @@
     inset -1px -1px 3px rgba(155, 133, 255, 0.12),
     0 4px 10px -6px rgba(0, 0, 0, 0.5);
 }
+
+/* ============================================================
+   Performance tiers
+   `data-perf` is written on <html> by the head script in index.html (before
+   first paint) and kept live by js/perf.js. "high" is the default — every
+   token above stays exactly as authored. Only cheap-to-recompute tokens move
+   here; the backdrop-filter/background swaps live next to the components
+   that use them (components.css, onboarding.css).
+   ============================================================ */
+html[data-perf="medium"] {
+  --t-fast: 110ms;
+  --t-med:  170ms;
+}
+
+html[data-perf="low"] {
+  --t-fast: 90ms;
+  --t-med:  90ms;
+
+  /* big layered shadows collapse to the one cheap flat one */
+  --shadow-lift:  var(--shadow-xs);
+  --shadow-hero:  var(--shadow-xs);
+  --shadow-sheet: var(--shadow-xs);
+  --shadow-card:  var(--shadow-xs);
+  --clay-surface: var(--shadow-xs);
+  --clay-soft:    var(--shadow-xs);
+  --clay-pastel:  var(--shadow-xs);
+  --clay-drop:    none;
+  --glow-violet:  var(--shadow-xs);
+  --glow-mint:    var(--shadow-xs);
+  --glow-danger:  var(--shadow-xs);
+  --glow-press:   none;
+}
+/* :root[data-theme="dark"] above redefines every one of these tokens with
+   higher specificity (pseudo-class + attribute) than a plain
+   html[data-perf="low"] attribute selector, so it would win them back on a
+   dark low-tier phone. Restate them at html[data-perf="low"][data-theme="dark"]
+   (attribute + attribute), which outranks it. */
+html[data-perf="low"][data-theme="dark"] {
+  --shadow-lift:  var(--shadow-xs);
+  --shadow-hero:  var(--shadow-xs);
+  --shadow-sheet: var(--shadow-xs);
+  --shadow-card:  var(--shadow-xs);
+  --clay-surface: var(--shadow-xs);
+  --clay-soft:    var(--shadow-xs);
+  --clay-pastel:  var(--shadow-xs);
+  --clay-drop:    none;
+  --glow-violet:  var(--shadow-xs);
+  --glow-mint:    var(--shadow-xs);
+  --glow-danger:  var(--shadow-xs);
+  --glow-press:   none;
+}

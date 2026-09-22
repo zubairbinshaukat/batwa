@@ -135,13 +135,39 @@ ul { margin: 0; padding: 0; list-style: none; }
   .home-grid > .home-left::-webkit-scrollbar { display: none; }
 }
 
-/* ---- Reduced motion ---- */
+/* ---- Reduced motion ----
+   Scoped to :not([data-perf-mode="high"]) — an explicit "Full" choice in
+   Settings must win over the OS preference, same as it wins over every other
+   auto signal (js/perf.js, index.html's head script). `data-perf-mode` is the
+   raw user choice ("auto"/"high"/"medium"/"low"); only "auto" (or "medium"/
+   "low", which already zero motion of their own accord) ever reaches here. */
 @media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after {
+  html:not([data-perf-mode="high"]) *,
+  html:not([data-perf-mode="high"]) *::before,
+  html:not([data-perf-mode="high"]) *::after {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
   }
   /* the clay shadow state still swaps instantly; only the squish is removed */
-  .btn:active, .nav-fab:active, .icon-btn:active, .chip-btn:active, .key:active { transform: none; }
+  html:not([data-perf-mode="high"]) .btn:active,
+  html:not([data-perf-mode="high"]) .nav-fab:active,
+  html:not([data-perf-mode="high"]) .icon-btn:active,
+  html:not([data-perf-mode="high"]) .chip-btn:active,
+  html:not([data-perf-mode="high"]) .key:active {
+    transform: none;
+  }
+}
+
+/* ---- Low performance tier ----
+   Same squish removal as prefers-reduced-motion above, but keyed off the
+   tier instead — a weak phone without the OS motion preference set still
+   shouldn't pay for the transform transition on every tap. --t-fast/--t-med
+   are shortened in tokens.css; this only drops the transform part. */
+html[data-perf="low"] .btn:active,
+html[data-perf="low"] .nav-fab:active,
+html[data-perf="low"] .icon-btn:active,
+html[data-perf="low"] .chip-btn:active,
+html[data-perf="low"] .key:active {
+  transform: none;
 }

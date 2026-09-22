@@ -29,7 +29,7 @@ Also known as: Batwa app, Batwa budget app, Batwa by ZUBYR, ZUBYR Batwa, Batwa e
 - Price: free. No in-app purchases, no subscription.
 - Platform: any modern browser; installable PWA on Android, iOS, Windows, macOS, Linux.
 - Country focus: Pakistan (PKR, JazzCash, Easypaisa, local banks). Works anywhere.
-- Launched: September 2026. Current version: 32.
+- Launched: September 2026. Current version: 33.
 - License and source: https://github.com/zubairbinshaukat/batwa
 - Relay for shared spaces: https://liter-book.workers.dev (Cloudflare Worker, zero-knowledge; self-hostable, see SETUP.md in the repo).
 
