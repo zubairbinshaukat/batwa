@@ -3,9 +3,9 @@
    ============================================================ */
 
 /* =================== Canopy ===================
-   The one saturated surface on every screen: a full-width violet sheet that
-   starts behind the status bar and ends in 32px bottom corners. It carries the
-   header everywhere, and on Home the big free-to-spend number too. */
+   The one saturated surface on Home and Space: a full-width violet sheet that
+   starts behind the status bar and ends in 32px bottom corners. Reports,
+   History, and Settings hide the canopy entirely (see body[data-view=…]). */
 .canopy {
   position: relative;
   isolation: isolate;
@@ -43,6 +43,17 @@ body[data-view="home"] .canopy { padding-bottom: calc(var(--s-6) + 28px); }
    so the canopy does not need to reserve the extra 28px either */
 @media (min-width: 900px) {
   body[data-view="home"] .canopy { padding-bottom: var(--s-6); }
+}
+
+/* Reports / History / Settings: no violet strip; shell owns the top safe area.
+   Scoped to data-view so the lock/onboarding first paint keeps the canopy. */
+body[data-view="reports"] .canopy,
+body[data-view="history"] .canopy,
+body[data-view="settings"] .canopy { display: none !important; }
+body[data-view="reports"] .app-shell,
+body[data-view="history"] .app-shell,
+body[data-view="settings"] .app-shell {
+  padding-top: calc(var(--safe-t) + var(--s-4));
 }
 
 /* =================== Header =================== */
@@ -1483,6 +1494,15 @@ html[data-perf="low"] .key.key-ghost { background: transparent; }
   margin-bottom: var(--s-4);
 }
 .month-nav .month-label { font-size: var(--fs-md); font-weight: 800; letter-spacing: -0.01em; }
+.month-nav-actions { display: flex; align-items: center; gap: var(--s-1); }
+
+/* Get data sheet */
+.gd-dates {
+  display: flex; gap: var(--s-3);
+  margin-top: var(--s-2);
+}
+.gd-actions { margin-top: var(--s-4); }
+.gd-actions .btn { gap: 8px; }
 
 .tiles { display: grid; grid-template-columns: 1fr 1fr; gap: var(--s-3); }
 .tile {
@@ -1909,6 +1929,21 @@ html[data-perf="low"] .key.key-ghost { background: transparent; }
 }
 .install-banner p { font-size: var(--fs-sm); color: rgba(255,255,255,0.75); }
 .install-banner strong { display: block; font-size: var(--fs-base); color: #fff; }
+/* Always dark text on the white chip — never theme ink (light in dark mode). */
+.install-banner .ib-action {
+  flex: 0 0 auto;
+  background: #fff;
+  color: #17133A;
+}
+.install-banner .ib-action:active { color: #17133A; }
+.install-banner .ib-dismiss {
+  flex: 0 0 auto;
+  width: 36px; height: 36px;
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  color: rgba(255,255,255,0.6);
+}
 
 /* =================== Misc =================== */
 .divider { height: 1px; background: var(--c-border); margin: var(--s-4) 0; }

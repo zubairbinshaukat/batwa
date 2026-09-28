@@ -7,12 +7,16 @@
 
 const KEY = "batwa.theme";
 const MODES = ["system", "light", "dark"];
-// The canopy is the top of every page now, so the status bar sits on its
-// gradient in both themes — these are the canopy gradient's top stops.
-const BAR = { light: "#4F33E8", dark: "#3A22C2" };
+// Status bar sits on the violet canopy on Home/Space, and on the page
+// background when the canopy is hidden (Reports / History / Settings).
+const BAR = {
+  canopy: { light: "#4F33E8", dark: "#3A22C2" },
+  page:   { light: "#F5F4FC", dark: "#0E0B22" },
+};
 
 const listeners = new Set();
 let mq = null;
+let barSurface = "canopy"; // "canopy" | "page"
 
 /** "system" | "light" | "dark" — what the user picked. */
 export function getThemeMode() {
@@ -34,9 +38,18 @@ function paint() {
   const theme = resolvedTheme();
   document.documentElement.setAttribute("data-theme", theme);
   const meta = document.querySelector('meta[name="theme-color"]');
-  if (meta) meta.setAttribute("content", BAR[theme]);
+  if (meta) meta.setAttribute("content", BAR[barSurface][theme]);
   for (const fn of listeners) { try { fn(theme); } catch {} }
   return theme;
+}
+
+/**
+ * Point the status bar at the canopy violet or the page background.
+ * Call from routing when entering/leaving Home and Space.
+ */
+export function setStatusBarSurface(surface) {
+  barSurface = surface === "page" ? "page" : "canopy";
+  return paint();
 }
 
 export function setThemeMode(mode) {

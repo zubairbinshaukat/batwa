@@ -12,6 +12,7 @@ import { donut, trendBars, splitBar, weekdayBars, phaseBar, animateCharts, CHART
 import { icon, catIcon } from "./icons.js";
 import { accountName } from "./accounts.js";
 import { addExpenseSheet } from "./modals.js";
+import { openGetDataSheet } from "./getdata.js";
 
 const WEEKDAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
 const TOP_TITLES = 5;
@@ -32,7 +33,10 @@ export function renderReports(view) {
     <div class="month-nav">
       <button class="icon-btn" id="m-prev" aria-label="Previous month">${icon("chevron-left", 18)}</button>
       <div class="month-label">${monthLabel(ym)}</div>
-      <button class="icon-btn" id="m-next" aria-label="Next month" ${isNow ? "disabled style='opacity:.35'" : ""}>${icon("chevron-right", 18)}</button>
+      <div class="month-nav-actions">
+        <button class="icon-btn" id="m-get-data" aria-label="Get data" title="Get data">${icon("share", 18)}</button>
+        <button class="icon-btn" id="m-next" aria-label="Next month" ${isNow ? "disabled style='opacity:.35'" : ""}>${icon("chevron-right", 18)}</button>
+      </div>
     </div>
 
     <div class="reports-grid">
@@ -77,6 +81,10 @@ export function renderReports(view) {
   $("#m-prev", view).addEventListener("click", () => { goMonth(view, -1); });
   $("#m-next", view).addEventListener("click", () => {
     if (currentMonth < thisMonth()) goMonth(view, 1);
+  });
+  $("#m-get-data", view).addEventListener("click", () => {
+    buzz(8);
+    openGetDataSheet(currentMonth);
   });
 
   renderShared($("#shared-slot", view), ym);

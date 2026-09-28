@@ -20,7 +20,7 @@ import { mountBackupNudge } from "./nudge.js";
 import { parseTransactionSms, matchAccount, prefillTitle } from "./smsparse.js";
 import { LOGO_KINDS } from "./ui/accounts.js";
 import { isoDate, greeting } from "./util/format.js";
-import { initTheme, resolvedTheme, setThemeMode, onThemeChange } from "./theme.js";
+import { initTheme, resolvedTheme, setThemeMode, onThemeChange, setStatusBarSurface } from "./theme.js";
 import { initDock, expandDock } from "./ui/dock.js";
 import {
   initSpaces, onSpacesChange, hasSpaces, anyPending, anyTrouble, getSpace,
@@ -144,12 +144,15 @@ function renderView() {
   const viewEl = $("#view");
   // The canopy belongs to the page, not to one tab: reset it here, because
   // onChange() and unlockFlow() come through this function too, not only go().
+  // Greeting + header actions stay on Home and Space only.
+  const showCanopy = currentView === "home" || currentView === "space";
   document.body.dataset.view = currentView;
+  setStatusBarSurface(showCanopy ? "canopy" : "page");
   const slot = $("#canopy-slot");
   if (slot) slot.innerHTML = "";
   $("#canopy")?.classList.remove("is-negative");
   const hello = $("#hello");
-  if (hello) hello.textContent = greeting();
+  if (hello && showCanopy) hello.textContent = greeting();
   try {
     VIEWS[currentView].render(viewEl);
     if (currentView === "home") mountHomeBanners();
@@ -400,10 +403,10 @@ async function mountInstallBanner() {
     <p>${state === "ios" ? "Share → Add to Home Screen in Safari" : "Installs like an app, works fully offline"}</p></span>
   `;
   if (state === "installable") {
-    banner.append(el("button", { class: "btn btn-sm", style: "background:#fff;color:var(--c-ink);flex:0 0 auto", onclick: promptInstall }, "Install"));
+    banner.append(el("button", { class: "btn btn-sm ib-action", onclick: promptInstall }, "Install"));
   }
   banner.append(el("button", {
-    class: "icon-btn", style: "background:transparent;border:none;box-shadow:none;color:rgba(255,255,255,0.6);width:36px;height:36px;flex:0 0 auto",
+    class: "icon-btn ib-dismiss",
     "aria-label": "Dismiss",
     html: icon("x", 16),
     onclick: async () => { await setMeta("installDismissed", true); banner.remove(); },
@@ -527,7 +530,7 @@ function showUpdateToast(worker) {
     <p>Restart Batwa to get the latest version — a tap does it, no browser reload needed</p></span>
   `;
   banner.append(el("button", {
-    class: "btn btn-sm", style: "background:#fff;color:var(--c-ink);flex:0 0 auto",
+    class: "btn btn-sm ib-action",
     onclick: () => worker.postMessage("SKIP_WAITING"),
   }, "Reload"));
   slot.append(banner);

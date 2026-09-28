@@ -1,5 +1,5 @@
 /* Batwa service worker — app shell cache only. Never touches user data. */
-const CACHE = "batwa-v33";
+const CACHE = "batwa-v34";
 
 /* Marketing / SEO files. They are never precached, never runtime-cached, and
    the navigate branch below lets /about.html reach the network. The app's
@@ -18,6 +18,7 @@ const SHELL = [
   "./fonts/caveat-var.woff2",
   "./js/vendor/gsap.min.js",
   "./js/vendor/qrcode.js",
+  "./js/vendor/exceljs.min.js",
   "./js/app.js",
   "./js/config.js",
   "./js/perf.js",
@@ -33,6 +34,7 @@ const SHELL = [
   "./js/nudge.js",
   "./js/smsparse.js",
   "./js/insights.js",
+  "./js/report-export.js",
   "./js/sync.js",
   "./js/spaces.js",
   "./js/spaces/merge.js",
@@ -45,6 +47,7 @@ const SHELL = [
   "./js/ui/accounts.js",
   "./js/ui/icons.js",
   "./js/ui/reports.js",
+  "./js/ui/getdata.js",
   "./js/ui/history.js",
   "./js/ui/settings.js",
   "./js/ui/spaces.js",
@@ -59,6 +62,7 @@ const SHELL = [
   "./js/util/category.js",
   "./js/util/dom.js",
   "./js/util/expr.js",
+  "./js/util/download.js",
   "./icons/favicon.svg",
   "./icons/icon-192-v2.png",
   "./icons/icon-512-v2.png",

@@ -7,6 +7,7 @@ import { getKey } from "./auth.js";
 import { decrypt, deriveKey, unb64 } from "./crypto.js";
 import { state, replaceAll, mergeData } from "./ledger.js";
 import { timeAgo } from "./util/format.js";
+import { downloadBlob } from "./util/download.js";
 import { toast } from "./ui/toast.js";
 import { chooseSheet, confirmSheet, sheetOpen, openSheet, closeSheet } from "./ui/modals.js";
 import { el } from "./util/dom.js";
@@ -300,13 +301,11 @@ export async function syncNow({ silent = false } = {}) {
    ============================================================ */
 
 export function downloadJSON(obj, filename) {
-  const blob = new Blob([JSON.stringify(obj, null, 2)], { type: "application/json" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = filename;
-  a.click();
-  setTimeout(() => URL.revokeObjectURL(url), 2000);
+  downloadBlob(
+    JSON.stringify(obj, null, 2),
+    filename,
+    "application/json",
+  );
 }
 
 /** When the last backup file was written (meta, local only — never in a payload). */
