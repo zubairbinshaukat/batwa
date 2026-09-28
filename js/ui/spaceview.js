@@ -17,6 +17,7 @@ import {
   getSpace, blobOf, membersOf, netFor, pendingForMe, waitingOnOthers, conflictsIn,
   spaceStatus, colorHex, initialsOf, MEMBER_COLORS, writeOffMember,
   archivedEntries, staleIn, contactOf, forgetSpace, compactionFor, STALE_DAYS,
+  settlementSplitOf, remindMember,
 } from "../spaces.js";
 import { transferSheet } from "./modals.js";
 import { toast } from "./toast.js";
@@ -134,7 +135,7 @@ export function renderSpace(view) {
 function paintCanopy(space) {
   const slot = $("#canopy-slot");
   if (!slot) return;
-  const { net } = netFor(space.id);
+  const { net, waitingNet } = netFor(space.id);
   const line = netLine(net);
   slot.innerHTML = "";
 
@@ -161,10 +162,17 @@ function paintCanopy(space) {
   }));
   slot.append(head);
 
-  slot.append(el("section", { class: "hero sv-hero" },
+  // Only accepted shares are owed. What is still waiting for a yes is shown
+  // under the figure, never inside it (see the owe rules in merge.js).
+  const hero = el("section", { class: "hero sv-hero" },
     el("div", { class: "hero-label" }, net > 0 ? "Owed to you" : net < 0 ? "You owe" : "All settled"),
     el("div", { class: `hero-amount num sv-net is-${line.tone}` }, fmtMoney(Math.abs(net))),
-  ));
+  );
+  if (waitingNet) {
+    hero.append(el("div", { class: "xsmall muted sv-waiting" },
+      `${fmtMoney(Math.abs(waitingNet))} ${waitingNet > 0 ? "more to come" : "more to pay"} once everyone accepts`));
+  }
+  slot.append(hero);
 }
 
 /* ============================================================
@@ -214,7 +222,7 @@ function loose(title, id, count, children) {
 const quiet = (text) => el("p", { class: "sv-quiet" }, text);
 
 function balancesBlock(space, view) {
-  const { perMember } = netFor(space.id);
+  const { perMember, waiting } = netFor(space.id);
   const others = membersOf(space.id).filter((m) => m.memberId !== space.myMemberId);
   const stale = new Set(staleIn(space.id).map((m) => m.memberId));
   const rows = others.map((m) => {
@@ -237,9 +245,11 @@ function balancesBlock(space, view) {
       : v > 0 ? `owes you ${fmtMoney(v)}`
         : v < 0 ? `you owe ${fmtMoney(-v)}`
           : "settled up";
-    const tail = !m.leftAt && stale.has(m.memberId)
+    const w = Math.round(waiting?.[m.memberId] || 0);
+    const pending = w && !m.leftAt ? ` \u00b7 ${fmtMoney(Math.abs(w))} waiting` : "";
+    const tail = pending + (!m.leftAt && stale.has(m.memberId)
       ? ` \u00b7 inactive ${STALE_DAYS}d`
-      : link ? " \u00b7 linked" : "";
+      : link ? " \u00b7 linked" : "");
     row.append(el("span", { class: "grow" },
       el("span", { class: "strong small", style: "display:block" }, m.name),
       el("span", { class: "xsmall muted" }, money + tail)));
@@ -247,10 +257,15 @@ function balancesBlock(space, view) {
     // settle with them — only the decision to stop counting on it (§9.18).
     if (m.leftAt && v > 0) {
       row.append(writeOffButton(space, m, v, view));
-    } else if (v) {
+    } else if (v > 0) {
+      // They owe me. Sending them money would not settle anything (a transfer
+      // never pays a debt the wrong way), and the money has to come from their
+      // phone anyway — so the honest action is a reminder, to them alone.
+      row.append(remindButton(space, m, v));
+    } else if (v < 0) {
       row.append(el("button", {
         class: "chip-btn chip-edit",
-        title: v > 0 ? `Record what ${m.name} paid you` : `Send ${m.name} what you owe`,
+        title: `Send ${m.name} what you owe`,
         onclick: () => {
           buzz(8);
           // Prefilled with the person, the space, every cover ticked, and the
@@ -274,6 +289,36 @@ function balancesBlock(space, view) {
     }));
   }
   return section("Balances", "sv-balances", 0, rows);
+}
+
+/** One reminder per member per visit: the button says so once it has gone. */
+function remindButton(space, member, owed) {
+  const btn = el("button", {
+    class: "chip-btn chip-edit", type: "button",
+    title: `Remind ${member.name} they owe you ${fmtMoney(owed)}`,
+  }, "Remind");
+  btn.addEventListener("click", async () => {
+    buzz(8);
+    btn.disabled = true;
+    const res = await remindMember(space.id, member.memberId, owed);
+    btn.textContent = res?.ok ? "Reminded" : "Remind";
+    if (res?.ok) toast(`Reminder sent to ${member.name}`, { icon: icon("bell", 17) });
+    else {
+      btn.disabled = false;
+      toast(res?.reason || "Couldn't send the reminder", { icon: icon("alert", 17) });
+    }
+  });
+  return btn;
+}
+
+/** "settlement", or how much of it paid a debt and how much only moved money. */
+function settlementNote(space, e) {
+  const split = settlementSplitOf(space.id, e.id);
+  if (!split) return "settlement";
+  if (split.rejected) return "not received";
+  if (!split.applied) return "transfer \u00b7 not a debt";
+  if (!split.extra) return "settlement";
+  return `${fmtMoney(split.applied)} settled \u00b7 ${fmtMoney(split.extra)} transfer`;
 }
 
 /** Tap to arm, tap to confirm — the same shape every other write-off-sized
@@ -446,7 +491,7 @@ function settlementRow(e, space) {
     <span class="hist-ico" style="background:var(--c-aqua-soft);color:var(--c-aqua)">${icon("swap", 18)}</span>
     <span class="grow">
       <span class="strong small truncate" style="display:block">${out ? "Sent to" : "From"} ${esc(other)}</span>
-      <span class="xsmall muted">settlement</span>
+      <span class="xsmall muted">${esc(settlementNote(space, e))}</span>
       ${statusDots(e, space)}
     </span>
     <span class="hist-amt num ${out ? "" : "in"}">${out ? "−" : "+"}${fmtCompact(Number(e.amount) || 0)}</span>`;

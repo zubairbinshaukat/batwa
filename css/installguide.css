@@ -1,0 +1,191 @@
+/* Install guide sheet (js/installguide.js). Loaded by the app and about.html.
+   Every colour is a token with a light fallback, so the sheet follows the
+   app's theme and still looks right on a page that defines fewer tokens. */
+
+.ig-root {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+
+.ig-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(23, 19, 58, 0.42);
+  opacity: 0;
+}
+
+.ig-sheet {
+  position: relative;
+  width: 100%;
+  max-width: 520px;
+  max-height: min(88vh, 760px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 20px 20px calc(24px + env(safe-area-inset-bottom, 0px));
+  border-radius: var(--r-xl, 28px) var(--r-xl, 28px) 0 0;
+  background: var(--c-surface, #fff);
+  color: var(--c-ink, #17133A);
+  box-shadow: var(--shadow-sheet, 0 -14px 56px rgba(23, 19, 58, 0.2));
+  transform: translateY(24px);
+  opacity: 0;
+}
+
+.ig-root.is-open .ig-backdrop { opacity: 1; }
+.ig-root.is-open .ig-sheet { transform: none; opacity: 1; }
+
+@media (prefers-reduced-motion: no-preference) {
+  .ig-backdrop { transition: opacity 0.22s ease; }
+  .ig-sheet { transition: transform 0.28s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.22s ease; }
+}
+
+/* A centred card on wide screens. */
+@media (min-width: 720px) {
+  .ig-root { align-items: center; padding: 24px; }
+  .ig-sheet { border-radius: var(--r-xl, 28px); padding-bottom: 24px; }
+}
+
+.ig-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.ig-head h2 {
+  margin: 4px 0 0;
+  font-size: 1.25rem;
+  line-height: 1.25;
+}
+
+.ig-close {
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  margin: -4px -6px 0 0;
+  border: 0;
+  border-radius: var(--r-pill, 999px);
+  background: var(--c-surface-2, #FAF9FE);
+  color: var(--c-ink-soft, #4A4668);
+  cursor: pointer;
+}
+.ig-close svg { width: 20px; height: 20px; }
+
+.ig-lead {
+  margin: 6px 0 16px;
+  color: var(--c-ink-soft, #4A4668);
+  font-size: 0.95rem;
+}
+
+.ig-steps {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 10px;
+}
+
+.ig-step {
+  display: grid;
+  grid-template-columns: 28px 44px 1fr;
+  align-items: center;
+  gap: 10px;
+  padding: 12px;
+  border-radius: var(--r-md, 16px);
+  background: var(--c-surface-2, #FAF9FE);
+  border: 1px solid var(--c-border, rgba(23, 19, 58, 0.07));
+}
+
+.ig-num {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--r-pill, 999px);
+  background: var(--c-violet, #6248F5);
+  color: #fff;
+  font-weight: 700;
+  font-size: 0.85rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.ig-glyph {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  background: var(--c-violet-soft, #EEEAFE);
+  color: var(--c-violet, #6248F5);
+}
+.ig-glyph img { display: block; }
+
+.ig-text { font-size: 0.95rem; line-height: 1.4; }
+.ig-text b { font-weight: 700; }
+
+.ig-shot {
+  grid-column: 1 / -1;
+  display: block;
+  margin-top: 4px;
+}
+.ig-shot img {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: 12px;
+  border: 1px solid var(--c-border, rgba(23, 19, 58, 0.07));
+}
+
+.ig-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.ig-btn {
+  min-height: 44px;
+  padding: 0 18px;
+  border: 0;
+  border-radius: var(--r-pill, 999px);
+  background: var(--c-violet, #6248F5);
+  color: #fff;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.ig-copied {
+  font-size: 0.85rem;
+  color: var(--c-ink-soft, #4A4668);
+  word-break: break-all;
+}
+
+.ig-qr {
+  width: 168px;
+  margin: 16px auto 4px;
+  padding: 10px;
+  border-radius: var(--r-md, 16px);
+  background: #fff;
+  color: #17133A;
+}
+.ig-qr svg { display: block; width: 100%; height: auto; }
+
+.ig-foot {
+  margin: 12px 0 0;
+  font-size: 0.85rem;
+  line-height: 1.45;
+  color: var(--c-ink-soft, #4A4668);
+}
+
+.ig-close:focus-visible,
+.ig-btn:focus-visible {
+  outline: 3px solid var(--c-violet, #6248F5);
+  outline-offset: 2px;
+}

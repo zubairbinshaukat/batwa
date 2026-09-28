@@ -1,15 +1,16 @@
 <!DOCTYPE html>
-<html lang="en" prefix="og: https://ogp.me/ns# article: https://ogp.me/ns/article#">
+<html lang="en" data-theme="light" prefix="og: https://ogp.me/ns# article: https://ogp.me/ns/article#">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>Batwa by ZUBYR – Free Private Budget App for Pakistan</title>
   <meta name="description" content="Meet Batwa, the offline budget tracker built by Zubair bin Shaukat (ZUBYR). Track JazzCash, Easypaisa, bank and cash money with a PIN-locked encrypted ledger. Free, open source, no sign-up.">
   <meta name="theme-color" content="#4F33E8">
+  <!-- Light only, on purpose: no dark variant and no toggle on this page. -->
+  <meta name="color-scheme" content="light">
   <link rel="canonical" href="https://batwa.zubyr.dev/about.html">
   <link rel="author" href="https://zubyr.dev">
   <meta name="robots" content="index,follow,max-image-preview:large">
-  <meta name="keywords" content="Batwa, Batwa app, Batwa budget app, Batwa by ZUBYR, ZUBYR, Zubair bin Shaukat, budget app Pakistan, expense tracker Pakistan, JazzCash budget, Easypaisa expense tracker, offline budget app, private budget tracker, PIN locked money app, free budget app, PWA budget tracker, Lahore developer">
   <link rel="alternate" type="text/plain" href="https://batwa.zubyr.dev/llms.txt" title="Batwa for AI assistants (llms.txt)">
 
   <meta property="og:type" content="website">
@@ -34,31 +35,18 @@
   <link rel="icon" href="icons/favicon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="icons/apple-touch-icon-180-v2.png">
 
-  <script>
-    // Theme, before the first paint — copied verbatim from index.html so the
-    // page matches the app. Mirrors js/theme.js; keep the key and values in step.
-    (function () {
-      try {
-        var m = localStorage.getItem("batwa.theme");
-        if (m !== "light" && m !== "dark") {
-          m = matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
-        }
-        document.documentElement.setAttribute("data-theme", m);
-        var meta = document.querySelector('meta[name="theme-color"]');
-        if (meta && m === "dark") meta.setAttribute("content", "#3A22C2");
-      } catch (e) {}
-    })();
-  </script>
-
   <link rel="preload" as="font" type="font/woff2" href="fonts/fraunces-var.woff2" crossorigin>
   <link rel="preload" as="font" type="font/woff2" href="fonts/outfit-var.woff2" crossorigin>
-  <link rel="stylesheet" href="css/tokens.css">
-  <link rel="stylesheet" href="css/base.css">
-  <link rel="stylesheet" href="css/components.css">
-  <link rel="stylesheet" href="css/about.css">
+  <!-- The live install counter reads the relay; open the connection early. -->
+  <link rel="preconnect" href="https://batwa-relay.liter-book.workers.dev" crossorigin>
+  <!-- One stylesheet, light only (it used to be four, one of them the app's
+       97 KB components.css). The install sheet's styles are only needed once
+       somebody taps "How to install", so they never block the first paint. -->
+  <link rel="stylesheet" href="css/about-page.css">
+  <link rel="stylesheet" href="css/installguide.css" media="print" onload="this.media='all'">
   <!-- The reveal-on-scroll classes start invisible; without JS they must not
        hide the page's content from a reader (or a crawler). -->
-  <noscript><style>.rise { opacity: 1; transform: none; }</style></noscript>
+  <noscript><style>.rise { opacity: 1; transform: none; } #installs, #install-btn { display: none; }</style></noscript>
 
   <script type="application/ld+json">
   {
@@ -70,7 +58,7 @@
         "name": "Batwa",
         "alternateName": ["Batwa app", "Batwa budget app", "Batwa by ZUBYR", "ZUBYR Batwa", "Batwa wallet app", "Batwa expense tracker"],
         "url": "https://batwa.zubyr.dev/",
-        "description": "Private, offline-first personal budget tracker for Pakistan. PIN-locked, encrypted on the device, no account, no server, no tracking. Tracks JazzCash, Easypaisa, bank and cash accounts in rupees.",
+        "description": "Private, offline-first personal budget tracker for Pakistan. PIN-locked, encrypted on the device, no account, no tracking. Tracks JazzCash, Easypaisa, bank and cash accounts in rupees.",
         "keywords": "budget app Pakistan, expense tracker Pakistan, JazzCash, Easypaisa, offline budget app, private budget tracker, PWA",
         "inLanguage": "en",
         "countriesSupported": "PK",
@@ -82,7 +70,7 @@
           "Share a bank SMS on Android to fill an expense",
           "Monthly limits per category and spending reports",
           "Shared spaces to split bills through a zero-knowledge relay",
-          "No sign-up, no analytics, no third-party requests"
+          "No sign-up, no analytics, only an anonymous install count"
         ],
         "applicationCategory": "FinanceApplication",
         "operatingSystem": "Android, iOS, Windows, macOS, Linux (web browser)",
@@ -93,7 +81,7 @@
           "https://batwa.zubyr.dev/screenshots/01-home.png",
           "https://batwa.zubyr.dev/screenshots/02-reports.png"
         ],
-        "softwareVersion": "34",
+        "softwareVersion": "35",
         "isAccessibleForFree": true,
         "codeRepository": "https://github.com/zubairbinshaukat/batwa",
         "author": { "@id": "https://zubyr.dev/#person" },
@@ -153,7 +141,12 @@
           {
             "@type": "Question",
             "name": "Does it work on iPhone?",
-            "acceptedAnswer": { "@type": "Answer", "text": "Yes. Open batwa.zubyr.dev in Safari, tap Share, then Add to Home Screen. Fingerprint unlock and background bill reminders are Android-only for now." }
+            "acceptedAnswer": { "@type": "Answer", "text": "Yes. Open batwa.zubyr.dev in Safari, tap the ••• button (or Share on older iPhones), then Add to Home Screen. Notifications work from the home-screen app on iOS 16.4 and later. Fingerprint unlock and background bill reminders are Android-only for now." }
+          },
+          {
+            "@type": "Question",
+            "name": "Does Batwa count me?",
+            "acceptedAnswer": { "@type": "Answer", "text": "Only once, when you install it. Your phone sends the word android, ios or other plus a random one-time code, so a retry is not counted twice. No ID, no IP address stored, nothing about your money. The random code is deleted after 7 days." }
           },
           {
             "@type": "Question",
@@ -194,11 +187,10 @@
 <header class="ab-top">
   <div class="ab-wrap">
     <a class="ab-brand" href="./" aria-label="Batwa home">
-      <img src="icons/icon-192-v2.png" alt="" title="Batwa" width="34" height="34" decoding="async">
+      <img src="icons/logo-68.webp" alt="" width="34" height="34" decoding="async">
       <span>Batwa</span>
     </a>
     <nav aria-label="Page">
-      <button class="icon-btn" id="theme-toggle" type="button" aria-label="Switch to dark theme" title="Theme"></button>
       <a class="btn btn-primary btn-sm" href="./">Open Batwa</a>
     </nav>
   </div>
@@ -215,21 +207,44 @@
         <div class="ab-actions">
           <a class="btn btn-primary" href="./">Open Batwa</a>
           <a class="btn btn-ghost" href="https://github.com/zubairbinshaukat/batwa" target="_blank" rel="noopener">View on GitHub</a>
-          <button class="btn btn-ghost" id="install-btn" type="button" hidden>Install app</button>
+          <!-- "Install app" on Android, "How to install" on iPhone. In the HTML
+               from the start so nothing moves when js/installguide.js adopts it. -->
+          <button class="btn btn-ghost" id="install-btn" type="button">How to install</button>
         </div>
       </div>
       <div class="ab-art is-float">
         <div class="ab-glow" aria-hidden="true"></div>
-        <img src="screenshots/hero-home.webp"
-             srcset="screenshots/hero-home-sm.webp 713w, screenshots/hero-home.webp 1184w"
-             sizes="(min-width: 900px) 48vw, 80vw"
-             width="1184" height="1328" fetchpriority="high" decoding="async"
-             alt="The Batwa home screen floating between clay tiles for free-to-spend and bills paid" title="Batwa budget app home screen">
+        <!-- AVIF first: smaller than the old WebP AND closer to the source
+             (tools/make-images.mjs). `sizes` matches the rendered width:
+             80% of the column on phones, 48% of the page from 900px. -->
+        <picture>
+          <source type="image/avif"
+                  srcset="screenshots/hero-home-480.avif 480w, screenshots/hero-home-640.avif 640w, screenshots/hero-home-800.avif 800w, screenshots/hero-home-1184.avif 1184w"
+                  sizes="(min-width: 1250px) 560px, (min-width: 900px) 44vw, 72vw">
+          <img src="screenshots/hero-home-640.webp"
+               srcset="screenshots/hero-home-480.webp 480w, screenshots/hero-home-640.webp 640w, screenshots/hero-home-800.webp 800w, screenshots/hero-home-1184.webp 1184w"
+               sizes="(min-width: 1250px) 560px, (min-width: 900px) 44vw, 72vw"
+               width="1184" height="1328" fetchpriority="high" decoding="async"
+               alt="The Batwa home screen floating between clay tiles for free-to-spend and bills paid" title="Batwa budget app home screen">
+        </picture>
       </div>
     </div>
   </section>
 
   </div><!-- /.ab-shell -->
+
+  <!-- Live install counter. Its space is held from the first paint (a dash
+       until the relay answers) so the page never jumps; it is removed if the
+       relay cannot be reached, and it never shows 0. -->
+  <section class="ab-count" id="installs" aria-labelledby="installs-label">
+    <div class="ab-wrap">
+      <span class="ab-count-num" data-count aria-hidden="true">&ndash;</span>
+      <span class="ab-count-live">Live</span>
+      <h2 class="ab-count-label" id="installs-label">phones carry Batwa</h2>
+      <p class="ab-count-note">Counted anonymously: one ping when Batwa is installed, no ID, no tracking. <a href="#faq-count">What is sent</a></p>
+      <p class="sr-only" aria-live="polite" data-count-say></p>
+    </div>
+  </section>
 
   <!-- 2. What Batwa is -->
   <section class="ab-sec rise">
@@ -244,8 +259,8 @@
         </div>
         <div class="card">
           <b>0</b>
-          <h3>bytes sent to a server</h3>
-          <p>No analytics, no crash reporting, no third-party requests at runtime.</p>
+          <h3>bytes of your money data sent anywhere</h3>
+          <p>No analytics, no crash reports. The only thing ever sent is one anonymous "installed" count.</p>
         </div>
         <div class="card">
           <b>100%</b>
@@ -291,11 +306,16 @@
   <section class="ab-sec ab-band rise">
     <div class="ab-wrap">
       <div class="ab-art">
-        <img src="screenshots/hero-spaces.webp"
-             srcset="screenshots/hero-spaces-sm.webp 711w, screenshots/hero-spaces.webp 1182w"
-             sizes="(min-width: 900px) 46vw, 80vw"
-             width="1182" height="1330" loading="lazy" decoding="async"
-             alt="A shared space in Batwa with split-a-bill and settle-up tiles and member avatars" title="Shared spaces in Batwa: split bills and settle up">
+        <picture>
+          <source type="image/avif"
+                  srcset="screenshots/hero-spaces-480.avif 480w, screenshots/hero-spaces-640.avif 640w, screenshots/hero-spaces-800.avif 800w, screenshots/hero-spaces-1184.avif 1184w"
+                  sizes="(min-width: 1250px) 480px, (min-width: 900px) 40vw, 72vw">
+          <img src="screenshots/hero-spaces-640.webp"
+               srcset="screenshots/hero-spaces-480.webp 480w, screenshots/hero-spaces-640.webp 640w, screenshots/hero-spaces-800.webp 800w, screenshots/hero-spaces-1184.webp 1184w"
+               sizes="(min-width: 1250px) 480px, (min-width: 900px) 40vw, 72vw"
+               width="1184" height="1330" loading="lazy" decoding="async"
+               alt="A shared space in Batwa with split-a-bill and settle-up tiles and member avatars" title="Shared spaces in Batwa: split bills and settle up">
+        </picture>
       </div>
       <div>
         <h2>Split bills with the people you actually split with</h2>
@@ -329,9 +349,9 @@
         </div>
         <div class="card">
           <span class="ab-ico"><svg class="ico" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 2l20 20M9.34 5.34A7 7 0 0 1 15.71 10h1.79a4.5 4.5 0 0 1 3.2 7.68M5.33 8.5A7 7 0 0 0 9 19h8.5"/></svg></span>
-          <h3>Nothing phones home</h3>
-          <p>No analytics, no crash reporting, no fonts or scripts fetched from anyone else.</p>
-          <p><span class="ab-mono">0 third-party requests</span></p>
+          <h3>Nothing about you phones home</h3>
+          <p>No analytics, no crash reporting, no fonts or scripts fetched from anyone else. One anonymous count when you install, to Batwa's own relay: a platform word and a random code, deleted after a week.</p>
+          <p><span class="ab-mono">0 trackers</span></p>
         </div>
       </div>
     </div>
@@ -344,6 +364,7 @@
       <div class="ab-shots">
         <figure>
           <picture>
+            <source srcset="screenshots/01-home.avif" type="image/avif">
             <source srcset="screenshots/01-home.webp" type="image/webp">
             <img src="screenshots/01-home.png" width="780" height="1688" loading="lazy" decoding="async" alt="Batwa home screen with free to spend and account balances" title="Batwa home screen: free to spend, account balances and upcoming bills">
           </picture>
@@ -351,6 +372,7 @@
         </figure>
         <figure>
           <picture>
+            <source srcset="screenshots/02-reports.avif" type="image/avif">
             <source srcset="screenshots/02-reports.webp" type="image/webp">
             <img src="screenshots/02-reports.png" width="780" height="1688" loading="lazy" decoding="async" alt="Batwa reports screen with spending by category" title="Batwa reports: spending by category with monthly limits">
           </picture>
@@ -358,6 +380,7 @@
         </figure>
         <figure>
           <picture>
+            <source srcset="screenshots/03-history.avif" type="image/avif">
             <source srcset="screenshots/03-history.webp" type="image/webp">
             <img src="screenshots/03-history.png" width="780" height="1688" loading="lazy" decoding="async" alt="Batwa history screen listing transactions" title="Batwa history: every transaction, filterable by account and category">
           </picture>
@@ -365,6 +388,7 @@
         </figure>
         <figure>
           <picture>
+            <source srcset="screenshots/04-add.avif" type="image/avif">
             <source srcset="screenshots/04-add.webp" type="image/webp">
             <img src="screenshots/04-add.png" width="780" height="1688" loading="lazy" decoding="async" alt="Batwa add-expense sheet" title="Batwa add expense sheet">
           </picture>
@@ -388,7 +412,7 @@
         <li>
           <div>
             <h3>Add it to your home screen</h3>
-            <p>Android offers an install prompt. On iPhone tap Share, then Add to Home Screen.</p>
+            <p>Android offers an install prompt. On iPhone tap &bull;&bull;&bull; (or Share), then Add to Home Screen.</p>
           </div>
         </li>
         <li>
@@ -434,7 +458,13 @@
         <details>
           <summary><span>Does it work on iPhone?</span><i aria-hidden="true"></i></summary>
           <div class="ab-faq-body">
-            <p>Yes. Open batwa.zubyr.dev in Safari, tap Share, then Add to Home Screen. Fingerprint unlock and background bill reminders are Android-only for now.</p>
+            <p>Yes. Open batwa.zubyr.dev in Safari, tap the &bull;&bull;&bull; button (or Share on older iPhones), then Add to Home Screen. Notifications work from the home-screen app on iOS 16.4 and later. Fingerprint unlock and background bill reminders are Android-only for now.</p>
+          </div>
+        </details>
+        <details id="faq-count">
+          <summary><span>Does Batwa count me?</span><i aria-hidden="true"></i></summary>
+          <div class="ab-faq-body">
+            <p>Only once, when you install it. Your phone sends the word android, ios or other plus a random one-time code, so a retry is not counted twice. No ID, no IP address stored, nothing about your money. The random code is deleted after 7 days. <a href="https://github.com/zubairbinshaukat/batwa/blob/develop/relay/src/stats.js" target="_blank" rel="noopener">Read the code</a></p>
           </div>
         </details>
         <details>
@@ -482,7 +512,7 @@
   <div class="ab-foot-shell">
     <div class="ab-foot-row">
       <a class="ab-brand" href="./" aria-label="Batwa home">
-        <img src="icons/icon-192-v2.png" alt="" title="Batwa" width="30" height="30" loading="lazy" decoding="async">
+        <img src="icons/logo-68.webp" alt="" width="30" height="30" loading="lazy" decoding="async">
         <span>Batwa</span>
       </a>
       <nav aria-label="Footer">
@@ -501,6 +531,7 @@
       <span>&copy; 2026 ZUBYR</span>
       <span>Open source, free forever</span>
       <span>No account, no tracking</span>
+      <span>v35 &middot; install guide, live install count, fairer shared balances</span>
       <span class="ab-hand">batwa = wallet in Urdu</span>
     </p>
     <div class="ab-foot-mark" aria-hidden="true">Batwa</div>
@@ -512,43 +543,98 @@
 </div>
 
 <script type="module">
-  // Theme: same localStorage key and values as js/theme.js and the pre-paint
-  // script above. Nothing else is stored, and nothing is fetched.
-  const SUN = '<svg class="ico" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>';
-  const MOON = '<svg class="ico" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>';
-  const root = document.documentElement;
-  const toggle = document.getElementById("theme-toggle");
+  import { installButton } from "./js/installguide.js";
+  import { relayUrl } from "./js/config.js";
 
-  function paint() {
-    const dark = root.getAttribute("data-theme") === "dark";
-    toggle.innerHTML = dark ? SUN : MOON;
-    toggle.setAttribute("aria-label", dark ? "Switch to light theme" : "Switch to dark theme");
-    const meta = document.querySelector('meta[name="theme-color"]');
-    if (meta) meta.setAttribute("content", dark ? "#3A22C2" : "#4F33E8");
+  // Light only: this page never reads or writes the app's `batwa.theme`
+  // (it used to, and toggling here flipped the app's theme too).
+
+  // Install: "Install app" where the browser offers a prompt, "How to
+  // install" with the steps sheet on iPhone and everywhere else.
+  const installEl = document.getElementById("install-btn");
+  if (installEl) installButton({ element: installEl });
+
+  /* ---- Live install counter ------------------------------------------
+     GET /v1/stats on the relay: { total, android, ios, other }. Polled every
+     15 s while the tab is visible, stopped after 15 minutes on the page, with
+     backoff on errors. The band stays hidden until the first answer and is
+     never shown with a made-up number. */
+  const band = document.getElementById("installs");
+  const numEl = band?.querySelector("[data-count]");
+  const sayEl = band?.querySelector("[data-count-say]");
+  const fmt = new Intl.NumberFormat("en-PK");
+  const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const base = relayUrl() ? relayUrl().replace(/\/+$/, "") : "";
+  const POLL_MS = 15_000;
+  const STOP_AFTER_MS = 15 * 60_000;
+  const startedAt = Date.now();
+  let shown = null;        // the figure on screen
+  let seen = false;        // band has been scrolled into view at least once
+  let pending = null;      // a figure that arrived before the band was seen
+  let delay = POLL_MS;
+  let timer = null;
+
+  function tween(from, to) {
+    if (reduce || from === to) { numEl.textContent = fmt.format(to); return; }
+    const t0 = performance.now();
+    const dur = from === 0 ? 900 : 600;
+    const step = (now) => {
+      const k = Math.min(1, (now - t0) / dur);
+      const eased = 1 - Math.pow(1 - k, 3);
+      numEl.textContent = fmt.format(Math.round(from + (to - from) * eased));
+      if (k < 1) requestAnimationFrame(step);
+    };
+    requestAnimationFrame(step);
+    if (from !== 0) {
+      numEl.classList.remove("is-pop");
+      void numEl.offsetWidth; // restart the animation
+      numEl.classList.add("is-pop");
+    }
   }
-  toggle.addEventListener("click", () => {
-    const next = root.getAttribute("data-theme") === "dark" ? "light" : "dark";
-    root.setAttribute("data-theme", next);
-    try { localStorage.setItem("batwa.theme", next); } catch (e) {}
-    paint();
-  });
-  paint();
 
-  // Install prompt. The manifest is linked above and its scope covers "./".
-  const installBtn = document.getElementById("install-btn");
-  let deferred = null;
-  window.addEventListener("beforeinstallprompt", (e) => {
-    e.preventDefault();
-    deferred = e;
-    installBtn.hidden = false;
-  });
-  installBtn.addEventListener("click", async () => {
-    if (!deferred) return;
-    installBtn.hidden = true;
-    deferred.prompt();
-    deferred = null;
-  });
-  window.addEventListener("appinstalled", () => { installBtn.hidden = true; deferred = null; });
+  function show(total) {
+    if (!Number.isFinite(total) || total <= 0) return; // never a sad "0"
+    band.hidden = false;
+    if (!seen) { pending = total; return; }
+    const from = shown ?? 0;
+    shown = total;
+    tween(from, total);
+    if (from === 0 && sayEl) sayEl.textContent = `${fmt.format(total)} phones carry Batwa`;
+  }
+
+  async function poll() {
+    timer = null;
+    if (document.visibilityState !== "visible") return;
+    if (Date.now() - startedAt > STOP_AFTER_MS) return;
+    try {
+      const res = await fetch(base + "/v1/stats", { cache: "no-store", credentials: "omit" });
+      if (!res.ok) throw new Error(String(res.status));
+      const body = await res.json();
+      show(Number(body.total));
+      delay = POLL_MS;
+    } catch {
+      if (shown == null && pending == null) { band.hidden = true; }
+      delay = Math.min(delay * 2, 5 * 60_000);
+    }
+    timer = setTimeout(poll, delay);
+  }
+
+  if (band && !base) band.hidden = true;
+  if (band && numEl && base) {
+    new IntersectionObserver((entries, obs) => {
+      if (!entries.some((e) => e.isIntersecting)) return;
+      seen = true;
+      obs.disconnect();
+      if (pending != null) { const v = pending; pending = null; show(v); }
+    }, { rootMargin: "0px 0px -10% 0px" }).observe(band);
+
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "visible" && !timer) poll();
+    });
+    const go = () => poll();
+    if ("requestIdleCallback" in window) requestIdleCallback(go, { timeout: 3000 });
+    else setTimeout(go, 1200);
+  }
 
   // FAQ: <details> snaps open by default. Animate the answer's height with the
   // Web Animations API so it slides, and keep one question open at a time.

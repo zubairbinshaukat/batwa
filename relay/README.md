@@ -20,6 +20,13 @@ Per space, in one Durable Object keyed by the space id:
 | `updatedAt` | ISO timestamp of the last write |
 | `sub:<deviceId>` | a browser PushSubscription plus the member id that owns it |
 
+Once for the whole relay, in the `Stats` Durable Object (`src/stats.js`):
+
+| Field | What it is |
+|---|---|
+| `c:android`, `c:ios`, `c:other` | how many installs pinged, per platform: whole numbers, nothing else |
+| `n:<nonce>` | a random one-time value a phone sent with its ping, so a retry is not counted twice. Deleted after 7 days by a daily alarm |
+
 ## What it can see
 
 - A random 22-character space id (128 bits), which means nothing on its own.
@@ -47,20 +54,37 @@ All JSON, all under `/v1`. Every request carries `X-Space-Token: <token>`.
 
 | Route | Body | Result |
 |---|---|---|
-| `PUT /v1/space/:id` | `{ version, blob }`, header `If-Match: "<version>"` | `201 {version, updatedAt}` on create, `200` after. `412 {version, blob}` when someone else wrote first. `413` when `blob` > 1 MiB. `version` is the version you last saw; `0` creates. `If-Match: *` overwrites unconditionally. |
+| `PUT /v1/space/:id` | `{ version, blob, notify? }`, header `If-Match: "<version>"` | `201 {version, updatedAt, notified}` on create, `200` after. `412 {version, blob}` when someone else wrote first. `413` when `blob` > 1 MiB. `version` is the version you last saw; `0` creates. `If-Match: *` overwrites unconditionally. `notify` has the same shape as the body of `/notify`: it is pushed **only after** the write is stored, so a banner never arrives before its data (a lost version race never notifies). |
 | `GET /v1/space/:id` | — | `200 {version, blob, updatedAt}` with `ETag: "<version>"`; `304` when `If-None-Match` matches |
 | `HEAD /v1/space/:id` | — | `200` with `ETag` and `X-Version`, no body — cheap polling |
 | `PUT /v1/space/:id/sub/:deviceId` | `{ memberId, subscription }` | `200 {subscribed:true}` |
 | `DELETE /v1/space/:id/sub/:deviceId` | — | `200 {unsubscribed:true}` |
-| `POST /v1/space/:id/notify` | `{ payload, exceptDeviceId }`, header `X-Space-Id` | `200 {sent, gone, goneDevices}`. `payload` is base64 ciphertext ≤ 3 KiB; endpoints answering 404/410 are pruned |
+| `POST /v1/space/:id/notify` | `{ payload, exceptDeviceId?, onlyDeviceId?, onlyMemberId?, urgent? }` | `200 {sent, gone, goneDevices, rejected, retryLater}`. `payload` is base64 ciphertext ≤ 3 KiB. `onlyDeviceId` aims at one phone (the Settings test), `onlyMemberId` at one member's phones (Remind). 404/410 endpoints are pruned; `rejected` counts 400/401/403/413 from the push service (bad VAPID), `retryLater` 429/5xx. `503 push-not-configured` when a VAPID secret is missing or `VAPID_SUBJECT` is not a real `mailto:`/`https:` URL |
 | `POST /v1/space/:id/rotate` | `{ newTokenHash }` (64 hex chars) | `200 {rotated:true, version}` — old invites stop working, the blob survives |
 | `DELETE /v1/space/:id` | — | `200 {deleted:true}` — blob and every subscription are erased |
 
 Auth failures are `401 unauthorised`, unknown spaces `404 not-found`.
 
+The space id the push carries is taken from the URL by the router, never from
+the caller.
+
+Two routes need no token:
+
+| Route | Body | Result |
+|---|---|---|
+| `POST /v1/install` | `{"p":"android"\|"ios"\|"other","n":"<16–64 base64url chars>"}` (sent as `text/plain`, ≤ 256 bytes) | `200 {ok:true}`, or `{ok:true, dup:true}` for a nonce already seen. `400` for anything else, `413` when too big, `429` after 10 pings per IP per hour |
+| `GET /v1/stats` | — | `200 {total, android, ios, other}` with `Cache-Control: public, max-age=10` (the about page polls it) |
+
 Limits: 60 writes and 30 notifies per space per minute, 600 requests per IP per
 minute (the IP window is per Worker isolate, so it is a brake rather than a
 guarantee). Over the limit is `429` with `Retry-After: 60`.
+
+Every push goes out with `TTL: 86400` (a day; the app pulls on open anyway),
+`Urgency: high` for things a person has to answer (split, settle, accept,
+reject, nudge, remind, test) and `normal` otherwise, and `Topic: <spaceId>` so
+an undelivered older banner for the same space is replaced rather than queued.
+The relay logs one line per push: the push service's host and the status code,
+nothing else (`wrangler tail` shows them).
 
 The push payload the browser receives is `{"s": "<spaceId>", "p": "<ciphertext>"}`
 encrypted per RFC 8291 (`aes128gcm`) and signed with VAPID per RFC 8292. Both are
@@ -85,20 +109,31 @@ You need a free Cloudflare account. About twenty minutes, once.
 4. **Edit `relay/wrangler.toml`**: set `ALLOWED_ORIGIN` to your app's origin
    (for example `https://you.github.io`) and `VAPID_PUBLIC_KEY` to the public
    key from step 3.
-5. **Deploy and set the secrets**:
+5. **Deploy and set the secrets**. The NAME goes on the command line; the
+   value is pasted when Wrangler asks for it:
    ```
    cd relay
    wrangler deploy
-   wrangler secret put VAPID_PRIVATE_KEY
-   wrangler secret put VAPID_SUBJECT        # mailto:you@example.com
+   wrangler secret put VAPID_PRIVATE_KEY    # then paste the private key
+   wrangler secret put VAPID_SUBJECT        # then paste mailto:you@example.com
+   wrangler secret list                     # must list exactly those two names
    ```
+   If `secret list` shows your key or your email as a *name*, the value was
+   typed where the name goes: `wrangler secret delete "<that name>"` and put
+   it again. Until both names are right, `/notify` answers 503
+   `push-not-configured` and Settings → Notifications says so.
 6. **Point the app at it**: put the Worker URL
    (`https://batwa-relay.<your-subdomain>.workers.dev`, or a custom domain such
    as `relay.batwa.app`) and the VAPID public key into `js/config.js`, bump the
    cache name in `sw.js`, and deploy the app.
 7. **Optional**: turn off request logging in the Cloudflare dashboard, and add a
    custom domain. Durable Object storage is created automatically on the first
-   write to each space — there is no database to set up.
+   write to each space — there is no database to set up. The `v2` migration in
+   `wrangler.toml` creates the `Stats` object on the next deploy.
+8. **Recommended**: add one rate-limiting rule in the dashboard (Security →
+   WAF → Rate limiting rules; the free plan includes one) for requests whose
+   path equals `/v1/install`, for example 20 per 10 minutes per IP. The Worker
+   already brakes at 10 per hour per isolate; the rule makes it global.
 
 ## Tests
 
@@ -111,8 +146,10 @@ npm test
 This boots `wrangler dev --local` on ports 8787 and 8788 and runs `node:test`
 against it: create, wrong token, `If-Match` conflict, 413, `HEAD`/`ETag`/`304`,
 subscribe and notify (asserting the `aes128gcm` payload decrypts with the test
-subscription's own keys), 404/410 pruning, rotate, delete, the per-space write
-limit, and CORS. A second file drives the app's own `js/relay.js` against the
+subscription's own keys), 404/410 pruning, a push riding on a PUT (and never on
+a lost race), `onlyDeviceId`/`onlyMemberId`, the `Urgency`/`TTL`/`Topic`
+headers, the install counter (counting, nonce dedupe, validation, the weekly
+purge, the per-IP limit), rotate, delete, the per-space write limit, and CORS. A second file drives the app's own `js/relay.js` against the
 same dev worker.
 
 The fake push service lives in the worker itself and only exists when the

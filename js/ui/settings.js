@@ -17,6 +17,7 @@ import { manageAccountsSheet } from "./accounts.js";
 import { icon, catIcon } from "./icons.js";
 import { categoryEditorPanel } from "./catedit.js";
 import { getInstallState, promptInstall } from "../app.js";
+import { installButton } from "../installguide.js";
 import { getThemeMode, setThemeMode, themeLabel, resolvedTheme, onThemeChange } from "../theme.js";
 import { renderSpacesSettings } from "./spaces.js";
 import { APP_VERSION } from "../config.js";
@@ -175,16 +176,17 @@ export function renderSettings(view) {
   const inst = getInstallState();
   if (inst === "installable") {
     appCard.append(row("install", "Install app", "", promptInstall));
-  } else if (inst === "ios") {
-    appCard.append(el("div", { style: "padding:14px 16px" },
-      el("div", { class: "strong small", html: `${icon("smartphone", 14)} Install on iPhone` }),
-      el("p", { class: "xsmall muted", style: "margin-top:4px" },
-        "Open the Share menu in Safari, then tap “Add to Home Screen”. Batwa will open full-screen and work offline."),
-    ));
   } else if (inst !== "standalone") {
+    // iPhone, Android without a prompt, in-app browsers and desktop: one
+    // button that opens the right written steps (js/installguide.js).
+    const phone = inst === "guide";
     appCard.append(el("div", { style: "padding:14px 16px" },
-      el("p", { class: "xsmall muted" }, "Open this page in your phone's browser to install Batwa to the home screen."),
-    ));
+      el("div", { class: "strong small", html: `${icon("smartphone", 14)} ${phone ? "Install Batwa" : "Install on your phone"}` }),
+      el("p", { class: "xsmall muted", style: "margin:4px 0 10px" },
+        phone
+          ? "Add Batwa to your home screen. It opens full-screen, works offline and can show notifications."
+          : "Batwa is made for your phone. Open this page there to add it to the home screen."),
+      installButton({ className: "btn btn-ghost btn-sm" })));
   }
   appg.append(appCard);
   grid.append(appg);
@@ -301,8 +303,11 @@ async function paintRemindersRow(slot, testRow) {
   testRow.disabled = st !== "on";
 
   if (st === "not-installed") {
+    const btn = installButton({ className: "btn btn-ghost btn-sm" });
+    btn.style.marginTop = "8px";
     r.insertAdjacentElement("afterend", el("div", { style: "padding:0 16px 12px" },
-      el("p", { class: "xsmall muted" }, "Install Batwa to the home screen first — Chrome only runs background sync for an installed app.")));
+      el("p", { class: "xsmall muted" }, "Install Batwa to the home screen first — Chrome only runs background sync for an installed app."),
+      btn));
   } else if (st === "off") {
     let perm = "default";
     try { perm = Notification.permission; } catch {}

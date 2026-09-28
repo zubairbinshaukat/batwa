@@ -4,7 +4,7 @@ import { $, el, anim, animTo } from "../util/dom.js";
 
 const DURATION = 3800;
 
-export function toast(message, { undo, icon = "" } = {}) {
+export function toast(message, { undo, action = null, icon = "" } = {}) {
   const root = $("#toast-root");
   const t = el("div", { class: "toast", role: "status" });
   if (icon) t.append(el("span", { class: "toast-ico", "aria-hidden": "true", html: icon }));
@@ -30,6 +30,14 @@ export function toast(message, { undo, icon = "" } = {}) {
         },
       }, "Undo")
     );
+  }
+
+  // A plain action button ("Open"), same place and look as Undo.
+  if (!undo && action && action.label && typeof action.onClick === "function") {
+    t.append(el("button", {
+      class: "toast-undo",
+      onclick: () => { kill(); action.onClick(); },
+    }, action.label));
   }
 
   // keep at most 2 visible

@@ -1,9 +1,163 @@
 /* ============================================================
-   Batwa — about.html only (marketing page).
-   Never loaded by the app, never precached by sw.js. Colour, radius,
-   spacing and depth all come from css/tokens.css; this file adds the
-   display face and the landing-page layout on top.
+   Batwa — about.html, the whole stylesheet (marketing page).
+   Never loaded by the app, never precached by sw.js.
+
+   One file instead of four: the page used to block its first paint on the
+   app's tokens, base and 97 KB components.css, of which it used about 1 KB.
+   This file carries the light-theme tokens the page actually reads, the few
+   components it borrows (.card, .btn), and the landing-page layout. The page
+   is light-only, so there are no dark rules here at all.
+
+   If you change a token or a .btn/.card rule in the app's CSS and want the
+   about page to follow, copy it here too — on purpose, not by accident.
    ============================================================ */
+
+:root {
+  color-scheme: light;
+  --c-bg:            #F5F4FC;
+  --c-bg-deep:       #EEEBFA;
+  --c-surface:       #FFFFFF;
+  --c-border:        rgba(23, 19, 58, 0.07);
+  --c-border-strong: rgba(23, 19, 58, 0.14);
+  --c-ink:        #17133A;
+  --c-ink-soft:   #4A4668;
+  --c-muted:      #837FA3;
+  --c-violet:      #6248F5;
+  --c-violet-soft: #EEEAFE;
+  --c-aqua-soft:   #E3F5FC;
+  --grad-action: linear-gradient(135deg, #5B3DF0 0%, #8257F6 100%);
+  --shadow-xs:    0 1px 2px rgba(23, 19, 58, 0.05);
+  --shadow-card:  0 1px 2px rgba(23, 19, 58, 0.04), 0 10px 28px -10px rgba(23, 19, 58, 0.12);
+  --shadow-lift:  0 2px 6px rgba(23, 19, 58, 0.06), 0 18px 44px -12px rgba(23, 19, 58, 0.18);
+  --clay-hi:  rgba(255, 255, 255, 0.85);
+  --clay-lo:  rgba(98, 72, 245, 0.10);
+  --clay-drop: 0 12px 28px -12px rgba(98, 72, 245, 0.22);
+  --clay-surface:
+    inset 0 1.5px 0 var(--clay-hi),
+    inset 0 -2px 0 var(--clay-lo),
+    0 1px 2px rgba(23, 19, 58, 0.04),
+    var(--clay-drop);
+  --clay-soft:
+    inset 2px 2px 6px rgba(255, 255, 255, 0.95),
+    inset -2px -3px 6px rgba(98, 72, 245, 0.10),
+    0 6px 14px -6px rgba(98, 72, 245, 0.25);
+  --clay-soft-press:
+    inset 2px 3px 8px rgba(98, 72, 245, 0.16),
+    inset -1px -1px 3px rgba(255, 255, 255, 0.6),
+    0 1px 3px -1px rgba(98, 72, 245, 0.15);
+  --clay-ink-hi: rgba(255, 255, 255, 0.34);
+  --clay-ink-lo: rgba(12, 4, 60, 0.26);
+  --clay-btn:
+    inset 3px 3px 8px var(--clay-ink-hi),
+    inset -3px -4px 8px var(--clay-ink-lo);
+  --clay-btn-press:
+    inset 3px 4px 10px var(--clay-ink-lo),
+    inset -1px -1px 3px rgba(255, 255, 255, 0.14);
+  --glow-violet: 0 12px 26px -8px rgba(91, 61, 240, 0.55);
+  --glow-press:  0 3px 8px -4px rgba(23, 19, 58, 0.30);
+  --r-sm:   10px;
+  --r-lg:   22px;
+  --r-xl:   28px;
+  --r-pill: 999px;
+  --s-2: 8px;
+  --s-3: 12px;
+  --s-4: 16px;
+  --s-5: 20px;
+  --s-6: 24px;
+  --s-7: 32px;
+  --s-8: 40px;
+  --s-9: 56px;
+  --font: "Outfit", -apple-system, "Segoe UI", Roboto, sans-serif;
+  --fs-xs:   0.75rem;
+  --fs-sm:   0.8125rem;
+  --fs-base: 0.9375rem;
+  --fs-md:   1.0625rem;
+  --fs-lg:   1.375rem;
+  --t-fast: 160ms;
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@font-face {
+  font-family: "Outfit";
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url("../fonts/outfit-var.woff2") format("woff2");
+}
+/* ---- Borrowed from components.css: the only app components this page uses ---- */
+.card {
+  background: var(--c-surface);
+  border-radius: var(--r-lg);
+  box-shadow: var(--clay-surface);
+  border: 1px solid var(--c-border);
+}
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  min-height: 52px;
+  padding: 12px 22px;
+  border-radius: 18px;
+  font-size: var(--fs-base);
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  transition: transform var(--t-fast) var(--ease-out), filter var(--t-fast);
+  user-select: none;
+}
+.btn:active { transform: translateY(1px) scale(0.97); }
+.btn-primary { background: var(--grad-action); color: #fff; box-shadow: var(--clay-btn), var(--glow-violet); }
+.btn-ghost   { background: var(--c-surface); color: var(--c-ink); border: 1px solid var(--c-border-strong); box-shadow: var(--clay-soft); }
+.btn-primary:active { box-shadow: var(--clay-btn-press), var(--glow-press); }
+.btn-ghost:active { box-shadow: var(--clay-soft-press); }
+.btn-sm { min-height: 40px; padding: 8px 16px; font-size: var(--fs-sm); border-radius: var(--r-sm); }
+.btn[disabled] { opacity: 0.5; pointer-events: none; }
+.btn-block { width: 100%; }
+.btn[hidden] { display: none; }
+svg.ico { display: inline-block; vertical-align: -0.16em; flex: 0 0 auto; }
+.btn svg.ico { vertical-align: middle; }
+
+/* ---- Base (the parts of base.css this page needs) ---- */
+*, *::before, *::after { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0;
+  font-family: var(--font);
+  font-size: var(--fs-base);
+  line-height: 1.5;
+  color: var(--c-ink);
+  -webkit-font-smoothing: antialiased;
+  -webkit-tap-highlight-color: transparent;
+}
+h1, h2, h3, h4, p { margin: 0; }
+h1 { font-size: var(--fs-lg); font-weight: 700; letter-spacing: -0.01em; }
+h2 { font-size: var(--fs-md); font-weight: 700; letter-spacing: -0.01em; }
+h3 { font-size: var(--fs-base); font-weight: 600; }
+button {
+  font: inherit; color: inherit; background: none; border: 0; padding: 0;
+  cursor: pointer; touch-action: manipulation;
+}
+a { color: var(--c-violet); text-decoration: none; }
+img, svg { display: block; max-width: 100%; }
+ul, ol { margin: 0; padding: 0; list-style: none; }
+.num { font-variant-numeric: tabular-nums lining-nums; letter-spacing: -0.015em; }
+:focus-visible {
+  outline: 3px solid rgba(98, 72, 245, 0.55);
+  outline-offset: 2px;
+  border-radius: var(--r-sm);
+}
+:focus:not(:focus-visible) { outline: none; }
+.grow { flex: 1 1 auto; min-width: 0; }
+.sr-only {
+  position: absolute; width: 1px; height: 1px;
+  padding: 0; margin: -1px; overflow: hidden;
+  clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+  .btn:active { transform: none; }
+}
 
 @font-face {
   font-family: "Fraunces";
@@ -17,12 +171,14 @@
   --font-display: "Fraunces", Georgia, "Times New Roman", serif;
   --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
   --ab-pad: var(--s-9);
+  /* --c-muted (#837FA3) is 3.5:1 on this page's lavender: too faint for the
+     small text it is used for here. The app keeps its own token untouched. */
+  --ab-muted: #686489;
   --ab-topbar: 60px;
 }
 @media (min-width: 900px) { :root { --ab-pad: 96px; --ab-topbar: 68px; } }
 
 body { overflow-x: hidden; background: var(--c-surface); }
-:root[data-theme="dark"] body { background: var(--c-bg); }
 
 /* Detached hero shell: the soft lavender canvas floats inside a white page,
    the way most soft-UI landing pages frame their first screen. */
@@ -31,7 +187,6 @@ body { overflow-x: hidden; background: var(--c-surface); }
   border-radius: var(--r-xl); background: var(--c-bg);
   box-shadow: var(--shadow-xs); overflow: hidden; position: relative;
 }
-:root[data-theme="dark"] .ab-shell { background: var(--c-surface); }
 @media (min-width: 900px) {
   .ab-shell { width: min(1440px, 100% - 32px); margin-block: 16px; border-radius: 36px; }
 }
@@ -64,8 +219,6 @@ h1, h2, h3 { text-wrap: balance; }
   letter-spacing: -0.01em;
 }
 .ab-top nav { display: flex; align-items: center; gap: var(--s-2); }
-.ab-top .icon-btn { width: 40px; height: 40px; }
-@media (max-width: 599px) { .ab-top .icon-btn { display: none; } }
 
 /* =================== Sections =================== */
 .ab-sec { padding: var(--ab-pad) 0; }
@@ -90,8 +243,8 @@ h1, h2, h3 { text-wrap: balance; }
   border-radius: var(--r-pill); font-weight: 700;
 }
 .ab-hand {
-  font-family: var(--font-hand); font-size: var(--fs-hand);
-  color: var(--c-muted); line-height: 1.3;
+  font-family: var(--font-display); font-style: italic; font-weight: 500;
+  font-size: 1.125rem; color: var(--ab-muted); line-height: 1.3;
 }
 .ab-mono {
   display: inline-block; font-family: var(--font-mono);
@@ -115,7 +268,9 @@ h1, h2, h3 { text-wrap: balance; }
 .ab-hero .ab-hand { margin-top: var(--s-4); }
 .ab-art { position: relative; margin-top: var(--s-8); width: 80%; margin-inline: auto; }
 .ab-art img { width: 100%; height: auto; position: relative; z-index: 1; }
-.ab-art.is-float img { animation: ab-float 6s ease-in-out infinite; }
+@media (prefers-reduced-motion: no-preference) {
+  .ab-art.is-float img { animation: ab-float 6s ease-in-out infinite; }
+}
 @keyframes ab-float { 50% { transform: translateY(-14px); } }
 
 .ab-glow { position: absolute; inset: -12% -6%; z-index: 0; pointer-events: none; }
@@ -315,7 +470,6 @@ h1, h2, h3 { text-wrap: balance; }
   box-shadow: var(--shadow-xs);
   padding: var(--s-6) var(--s-5) var(--s-9);
 }
-:root[data-theme="dark"] .ab-foot-shell { background: var(--c-surface); }
 @media (min-width: 900px) {
   .ab-foot { padding: 16px 0; }
   .ab-foot-shell {
@@ -345,11 +499,10 @@ h1, h2, h3 { text-wrap: balance; }
 .ab-foot nav a:hover::after { transform: scaleX(1); }
 .ab-foot-by {
   display: inline-flex; align-items: center; gap: 8px;
-  font-size: var(--fs-sm); color: var(--c-muted);
+  font-size: var(--fs-sm); color: var(--ab-muted);
   padding: 6px 12px 6px 10px; border-radius: var(--r-pill);
   background: var(--c-surface); border: 1px solid var(--c-border);
 }
-:root[data-theme="dark"] .ab-foot-by { background: var(--c-surface-2); }
 .ab-foot-by a { color: var(--c-ink); font-weight: 600; }
 .ab-foot-by a:hover { color: var(--c-violet); }
 .ab-foot-dot {
@@ -361,7 +514,7 @@ h1, h2, h3 { text-wrap: balance; }
 .ab-foot-meta {
   position: relative; z-index: 1;
   margin-top: var(--s-5); display: flex; flex-wrap: wrap; justify-content: center;
-  gap: 4px var(--s-4); font-size: var(--fs-xs); color: var(--c-muted);
+  gap: 4px var(--s-4); font-size: var(--fs-xs); color: var(--ab-muted);
 }
 .ab-foot-meta .ab-hand { font-size: 1.05rem; color: var(--c-violet); }
 .ab-foot-mark {
@@ -373,7 +526,6 @@ h1, h2, h3 { text-wrap: balance; }
   -webkit-background-clip: text; background-clip: text; color: transparent;
   opacity: 0.26;
 }
-:root[data-theme="dark"] .ab-foot-mark { opacity: 0.34; }
 @media (min-width: 900px) {
   .ab-foot-row { flex-direction: row; justify-content: space-between; text-align: left; }
   .ab-foot-meta { justify-content: flex-start; }
@@ -398,3 +550,38 @@ body { padding-bottom: 96px; }
 .rise { opacity: 0; transform: translateY(18px); transition: opacity .6s var(--ease-out), transform .6s var(--ease-out); }
 .rise.is-in { opacity: 1; transform: none; }
 @media (prefers-reduced-motion: reduce) { .rise { opacity: 1; transform: none; } }
+
+/* =================== Install counter =================== */
+/* A number that is live: polled every 15 s while the tab is visible, so it
+   must never make the page jump. The band's height is reserved before the
+   first figure arrives, and the whole band goes if the relay never answers. */
+.ab-count { padding: clamp(32px, 6vw, 64px) 0; text-align: center; }
+.ab-count[hidden] { display: none; }
+.ab-count .ab-wrap { display: flex; flex-direction: column; align-items: center; gap: var(--s-2); }
+.ab-count-num {
+  display: block; min-height: 1.05em; min-width: 3ch;
+  font-family: var(--font-display); font-weight: 700;
+  font-size: clamp(3rem, 12vw, 6rem); line-height: 1.05; letter-spacing: -0.03em;
+  font-variant-numeric: tabular-nums lining-nums;
+  color: var(--c-violet);
+}
+.ab-count-num.is-pop { animation: ab-pop 0.5s var(--ease-out); }
+@keyframes ab-pop { 40% { transform: scale(1.06); } }
+.ab-count-label {
+  font-family: var(--font-display); font-weight: 600;
+  font-size: clamp(1.125rem, 3.4vw, 1.5rem); color: var(--c-ink);
+}
+.ab-count-note { font-size: var(--fs-sm); color: var(--ab-muted); max-width: 44ch; }
+.ab-count-note a { font-weight: 600; }
+.ab-count-live {
+  display: inline-flex; align-items: center; gap: 8px;
+  font-size: var(--fs-xs); font-weight: 600; letter-spacing: 0.06em;
+  text-transform: uppercase; color: var(--c-violet);
+}
+.ab-count-live::before {
+  content: ""; width: 8px; height: 8px; border-radius: 50%; background: #2FB6A0;
+  box-shadow: 0 0 0 3px rgba(47, 182, 160, 0.22);
+}
+/* Stay stacked and centered on every width — a side-by-side layout made the
+   big number read left-anchored on desktop. */
+@media (prefers-reduced-motion: reduce) { .ab-count-num.is-pop { animation: none; } }

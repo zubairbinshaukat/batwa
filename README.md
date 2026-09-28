@@ -6,7 +6,7 @@
 
 <p align="center">
   A private, offline-first budget tracker you install from the browser.<br>
-  PIN-locked, encrypted on the device, no account, no server, no tracking.
+  PIN-locked, encrypted on the device, no account, no tracking.
 </p>
 
 <p align="center">
@@ -31,7 +31,7 @@
 
 **Batwa** (Urdu for *wallet*) is a personal money tracker built for people who want to know where their salary goes without handing that information to anyone. It runs entirely inside your phone's browser as an installable app: you set a PIN, add your accounts (JazzCash, Easypaisa, banks, cash), log what comes in and goes out, and Batwa shows you what is actually free to spend after the bills that are already committed.
 
-Everything is encrypted with a key derived from your PIN before it touches storage. There is no sign-up, no backend, and no analytics. Cloud sync is optional, and even then only the encrypted blob leaves the device.
+Everything is encrypted with a key derived from your PIN before it touches storage. There is no sign-up and no analytics. Nothing about your money ever leaves your phone unencrypted; the only ping Batwa sends on its own is one anonymous install count. Cloud sync is optional, and even then only the encrypted blob leaves the device.
 
 ## Features
 
@@ -63,6 +63,7 @@ Everything is encrypted with a key derived from your PIN before it touches stora
 | Type | Outfit and Caveat (self-hosted variable fonts) | Outfit for UI, Caveat for tips and insights. |
 | Sync (optional) | JSONBin REST API | Any static host plus a free bin you control. |
 | Shared spaces (optional) | Cloudflare Worker + Durable Objects, Web Push (VAPID) | Stores only ciphertext keyed by random ids and forwards encrypted notifications. Code in [relay/](relay/). |
+| Install count | The same Worker, one `Stats` Durable Object | Three whole numbers (android, ios, other) and week-old random nonces. Shown live on the about page. |
 
 No framework, no bundler, no npm install, no runtime dependencies.
 
@@ -72,7 +73,7 @@ Batwa is designed so that nobody, including the people who wrote it, can see you
 
 - **Your PIN is the key, literally.** The four-digit PIN derives the encryption key. Nothing is stored that can rebuild it. Forget the PIN and the data is gone, which is why Settings offers an export backup and Home nudges you to take one.
 - **Encrypted at rest, on your device.** The ledger lives in your browser's IndexedDB as AES-GCM ciphertext. The static host that serves the app files never receives a byte of it.
-- **Nothing phones home.** No analytics, no crash reporting, no fonts or scripts fetched from third parties at runtime.
+- **Nothing about you phones home.** No analytics, no crash reporting, no fonts or scripts fetched from third parties at runtime. The one ping is an install count: the first time Batwa runs as an installed app it sends the word `android`, `ios` or `other` and a random one-time nonce to the relay, once, ever. No ID, no user agent, no IP is stored, and the relay forgets the nonce after a week ([relay/src/stats.js](relay/src/stats.js)).
 - **Sync is opt-in and blind.** If you enable JSONBin sync, only the encrypted blob is uploaded to a bin you created with your own key.
 - **Reminders leak the minimum.** To notify you while the app is closed, only due dates and counts are kept outside the encrypted store. Never titles, never amounts.
 - **Shared spaces are blind too.** A space is a random id, a write token and a key that live inside your encrypted ledger. The relay stores ciphertext and never learns names, amounts or who is in a space. Notification text is encrypted on the sender's phone.
@@ -84,6 +85,7 @@ Batwa can keep a joint ledger with the people you actually split money with, wit
 
 - **One space per group.** Create a space, invite by QR or code in person, and each member picks a display name and colour. Nothing shared appears in the app until you hold at least one space.
 - **Propose, approve, settle.** Anyone can add a shared expense with an equal or custom split. Each named member accepts it for themselves, choosing their own category and account, or rejects it with a reason. Settlements live in the transfer sheet under People, with a list of what you owe that person.
+- **Only shared expenses create a debt.** A share counts as owed once it is accepted; until then it shows as waiting. Money sent to someone only pays down what you owe them, never past zero, so a plain transfer never makes anyone owe anyone. Balances are computed from the space on every read, so both phones always show the same numbers.
 - **Sync without a database.** Every space is one encrypted document in a Cloudflare Worker. Phones merge per entry with revision counters, so three people editing offline still converge.
 - **Notifications with context, still private.** "Faraz split Dinner · Rs 3,000" is encrypted with a per-space key before it leaves the sender's phone. Turn details off per space to get only "New activity".
 
@@ -101,7 +103,7 @@ Deploy the folder to any static host and open the URL on your phone.
 | Cloudflare Pages | Create a project, direct upload, drag the folder |
 | Vercel | Run `npx vercel` inside the folder |
 
-Then install it: on Android Chrome accept the install prompt or use *Add to Home screen*; on iPhone Safari use Share, then *Add to Home Screen*.
+Then install it: on Android Chrome accept the install prompt or use *Add to Home screen*; on iPhone Safari tap ••• (or Share), then *Add to Home Screen*. The app and the about page show an **Install app** button where the browser offers a prompt and a **How to install** guide everywhere else (`js/installguide.js`).
 
 > Batwa cannot run from `file://`. Service workers need `https://` or `localhost`.
 
@@ -136,6 +138,8 @@ css/
   base.css              reset, layout primitives, focus and reduced-motion rules
   components.css        every component, grouped by section comments
   onboarding.css        first-run screens
+  installguide.css      the "How to install" sheet, shared with about.html
+  about-page.css        about.html's only stylesheet (light only, never loaded by the app)
 
 js/
   app.js                boot, routing, navigation, update flow
@@ -149,7 +153,10 @@ js/
   sync.js               JSONBin push, pull and conflict handling
   relay.js              client for the shared-spaces relay
   spaces.js             shared spaces: bundles, sync loop, proposals, settlements, push
-  spaces/               merge (pure), crypto (keys, invite codec), notify (encrypted summaries)
+  spaces/               merge (pure: merging, who-owes-whom, compaction), crypto (keys,
+                        invite codec), notify (encrypted summaries)
+  installguide.js       install button + guide sheet for every browser (app and about page)
+  installcount.js       the one anonymous install ping
   reminders.js          due-date schedule and background notifications
   nudge.js              backup reminder banner
   smsparse.js           bank and wallet SMS parser for the share target
@@ -161,7 +168,10 @@ js/
 
 fonts/                  Outfit and Caveat variable fonts
 icons/                  favicon and PWA icon set, generated from branding/logo-source.png
-screenshots/            store screenshots listed in the manifest (Chrome's rich install sheet)
+screenshots/            store screenshots listed in the manifest (Chrome's rich install sheet),
+                        and the about page's AVIF/WebP images (regenerate with tools/)
+tools/
+  make-images.mjs       dev-only: AVIF + WebP sets for the about page (cd tools && npm i && npm run images)
 branding/
   logo-source.png       master logo render; the one file to replace to rebrand
   logo.png              trimmed logo for the README and docs
@@ -187,6 +197,12 @@ for f in js/*.js js/ui/*.js js/util/*.js; do node --check "$f"; done
 
 # exercise a pure module
 node -e "import('./js/util/expr.js').then(m => console.log(m.evalAmountExpr('120+80')))"
+
+# fixtures: the owe rules and compaction (js/spaces/merge.js), report export
+node --test test/*.test.mjs
+
+# the relay, end to end against a local wrangler dev
+cd relay && npm ci && npm test
 ```
 
 For UI changes, serve the folder and test on a real phone or a 390 x 844 viewport in devtools, in both themes.
@@ -207,4 +223,4 @@ Issues and pull requests are welcome. Keep changes small and focused, follow the
 
 ## Acknowledgements
 
-Built with the Web Platform and nothing else: IndexedDB, Web Crypto, WebAuthn, Service Workers, Web Share Target. Animations by [GSAP](https://gsap.com). Typefaces [Outfit](https://fonts.google.com/specimen/Outfit) and [Caveat](https://fonts.google.com/specimen/Caveat).
+Built with the Web Platform and nothing else: IndexedDB, Web Crypto, WebAuthn, Service Workers, Web Share Target. Animations by [GSAP](https://gsap.com). Typefaces [Outfit](https://fonts.google.com/specimen/Outfit), [Caveat](https://fonts.google.com/specimen/Caveat) and [Fraunces](https://fonts.google.com/specimen/Fraunces).

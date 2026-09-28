@@ -425,65 +425,171 @@ export function splitEqually(total, memberIds, paidBy) {
   return shares;
 }
 
+/* ============================================================
+   Who owes whom (the owe rules)
+   ============================================================
+
+   Only a shared expense (or shared income) creates a debt, and only once both
+   ends of it have said yes: the member who owes, and the member who paid when
+   the payer is asked at all. A share still `proposed` is WAITING — shown, but
+   never owed — and a `rejected` share is nothing until the payer resolves it.
+
+   Money sent between two people (a `settlement`) can only pay a debt DOWN, to
+   zero and never past it. Whatever part of it is bigger than what the sender
+   owed the receiver at that moment is a plain transfer: it left the sender's
+   account (their ledger already says so) but it changes nobody's balance. So a
+   transfer never creates a debt — there are no loans in a space.
+
+   "At that moment" makes this a fold, not a sum: entries are walked in one
+   order every phone agrees on (date, then createdAt, then id) and each pair's
+   balance is carried along. A backdated expense therefore sorts before the
+   settlement that paid it off, which is the order the two humans meant.
+
+   A settlement the receiver rejected ("Didn't receive") counts on NEITHER
+   phone, so both always read the same number; the sender sees it flagged as
+   unconfirmed instead (spaces.js settlementStatus).
+
+   All of this is computed from the blob on every read, which is also why old
+   records came out right the moment this shipped: nothing was ever stored
+   wrong, only added up wrong.                                                 */
+
+const rupees = (v) => Math.round(Number(v) || 0);
+
+/** The one order every phone folds a space in. */
+export function foldOrder(x, y) {
+  const dx = String(x?.date || "").slice(0, 10);
+  const dy = String(y?.date || "").slice(0, 10);
+  if (dx !== dy) return dx < dy ? -1 : 1;
+  const cx = String(x?.createdAt || "");
+  const cy = String(y?.createdAt || "");
+  if (cx !== cy) return cx < cy ? -1 : 1;
+  const ix = String(x?.id || "");
+  const iy = String(y?.id || "");
+  return ix < iy ? -1 : ix > iy ? 1 : 0;
+}
+
+/** What `b` owes `a` in a pair map; negative when `a` owes `b`. */
+export function pairOwed(pairs, a, b) {
+  if (!a || !b || a === b) return 0;
+  const v = Number(pairs?.[pairKey(a, b)]) || 0;
+  return a < b ? v : -v;
+}
+
 /**
- * My net position in a space: positive when the others owe me, negative when I
- * owe. Only accepted-or-proposed entries that are not tombstoned count, and a
- * settlement moves the balance the other way.
- *
- * `writeoffs` (M4, plan §9.18) is `{ memberId: rupees }` of debt I have given
- * up on. It lives in MY ledger only — a write-off is my decision about my own
- * money and the space never hears about it — so it cannot be read off the blob
- * and has to be handed in. Without it the hero would keep insisting a member
- * who left still owes me money I have already written off.
- *
- * A settlement counts for its sender the moment it is sent (plan §0: "the
- * sender's balance drops immediately") and for its receiver unless they have
- * said "Didn't receive". The two phones therefore disagree while a settlement
- * is disputed, which is exactly what the dispute is.
+ * Does a debt from `debtor` to `payer` count yet? The debtor must have
+ * accepted; the payer too, when the payer was asked (a payer outside the
+ * split has no participant record and nothing to say).
+ * Returns "owed" | "waiting" | null.
  */
-export function netPosition(blob, myMemberId, { writeoffs = null } = {}) {
-  let net = 0;
-  const perMember = {};
-  const bump = (id, v) => { perMember[id] = (perMember[id] || 0) + v; };
-  for (const e of blob?.entries || []) {
-    const shares = e?.split?.shares || {};
+function shareState(entry, debtor, payer) {
+  const mine = entry.participants?.[debtor]?.status;
+  const theirs = entry.participants?.[payer]
+    ? entry.participants[payer].status
+    : "accepted";
+  if (mine === "rejected" || theirs === "rejected") return null;
+  if (mine === "accepted" && theirs === "accepted") return "owed";
+  return "waiting";
+}
+
+/**
+ * The fold itself. `startCarry` is the compacted history (same pairwise shape
+ * as the result), so compaction and netPosition can never drift apart: they
+ * are the same function.
+ *
+ * Returns
+ *   pairs            pairwise owed balances, `pairKey` -> what HIGHER owes LOWER
+ *   waiting          the same shape, for shares nobody has finished saying yes to
+ *   settlementSplit  entryId -> { applied, extra, rejected } for every settlement
+ */
+export function foldPairs(entries, startCarry = {}) {
+  const pairs = {};
+  for (const [k, v] of Object.entries(startCarry || {})) {
+    const n = rupees(v);
+    if (n) pairs[k] = n;
+  }
+  const waiting = {};
+  const settlementSplit = {};
+  const sorted = (entries || []).filter((e) => e && e.id).slice().sort(foldOrder);
+
+  for (const e of sorted) {
     if (e.kind === "settlement") {
       const { from, to } = e.settlement || {};
-      const amount = Math.round(Number(e.amount) || 0);
-      if (from === myMemberId) { net += amount; bump(to, amount); }
-      else if (to === myMemberId && e.participants?.[myMemberId]?.status !== "rejected") {
-        net -= amount; bump(from, -amount);
+      const amount = rupees(e.amount);
+      if (!from || !to || from === to || amount <= 0) continue;
+      if (e.participants?.[to]?.status === "rejected") {
+        settlementSplit[e.id] = { applied: 0, extra: 0, rejected: true };
+        continue;
       }
+      const debt = Math.max(0, pairOwed(pairs, to, from)); // what `from` owes `to`
+      const applied = Math.min(amount, debt);
+      if (applied) pairAdd(pairs, to, from, -applied);
+      settlementSplit[e.id] = { applied, extra: amount - applied, rejected: false };
       continue;
     }
+    if (e.kind !== "expense" && e.kind !== "income") continue;
+    const payer = e.paidBy;
+    if (!payer) continue;
     const sign = e.kind === "income" ? -1 : 1;
-    if (e.paidBy === myMemberId) {
-      for (const [id, share] of Object.entries(shares)) {
-        if (id === myMemberId) continue;
-        net += sign * Math.round(Number(share) || 0);
-        bump(id, sign * Math.round(Number(share) || 0));
-      }
-    } else if (shares[myMemberId] != null) {
-      const share = Math.round(Number(shares[myMemberId]) || 0);
-      net -= sign * share;
-      bump(e.paidBy, -sign * share);
+    for (const [id, share] of Object.entries(e.split?.shares || {})) {
+      if (id === payer) continue;
+      const v = sign * rupees(share);
+      if (!v) continue;
+      const state = shareState(e, id, payer);
+      if (state === "owed") pairAdd(pairs, payer, id, v);
+      else if (state === "waiting") pairAdd(waiting, payer, id, v);
     }
   }
-  // Everything compacted away, still counted to the rupee (plan §8).
-  for (const [key, v] of Object.entries(blob?.carry || {})) {
-    const amount = Math.round(Number(v) || 0);
+  return { pairs: normCarry(pairs), waiting: normCarry(waiting), settlementSplit };
+}
+
+/** Read one member's view off a pair map: `memberId -> what they owe me`. */
+function viewOf(pairs, me) {
+  const out = {};
+  for (const [key, v] of Object.entries(pairs || {})) {
+    const amount = rupees(v);
     if (!amount) continue;
     const [lo, hi] = String(key).split("|");
-    if (lo === myMemberId) { net += amount; bump(hi, amount); }
-    else if (hi === myMemberId) { net -= amount; bump(lo, -amount); }
+    if (lo === me) out[hi] = (out[hi] || 0) + amount;
+    else if (hi === me) out[lo] = (out[lo] || 0) - amount;
   }
+  return out;
+}
+
+const sumOf = (map) => Object.values(map).reduce((t, v) => t + v, 0);
+
+/**
+ * My position in a space: positive when the others owe me, negative when I
+ * owe. Every phone gets the same pair balances out of the same blob, so what
+ * my phone says Ali owes me is exactly what Ali's phone says he owes me.
+ *
+ * `writeoffs` (plan §9.18) is `{ memberId: rupees }` of debt I have given up
+ * on. It lives in MY ledger only — a write-off is my decision about my own
+ * money and the space never hears about it — so it cannot be read off the blob
+ * and has to be handed in. It is applied after the fold.
+ *
+ * Returns
+ *   net, perMember        accepted debts only: the numbers that are real
+ *   waiting, waitingNet   shares still waiting for a yes, shown but never owed
+ *   settlementSplit       entryId -> { applied, extra, rejected }
+ */
+export function netPosition(blob, myMemberId, { writeoffs = null } = {}) {
+  const { pairs, waiting: waitingPairs, settlementSplit } =
+    foldPairs(blob?.entries || [], blob?.carry || {});
+  const perMember = viewOf(pairs, myMemberId);
   for (const [id, v] of Object.entries(writeoffs || {})) {
-    const amount = Math.round(Number(v) || 0);
+    const amount = rupees(v);
     if (!amount) continue;
-    net -= amount;
-    bump(id, -amount);
+    perMember[id] = (perMember[id] || 0) - amount;
+    if (!perMember[id]) delete perMember[id];
   }
-  return { net, perMember };
+  const waiting = viewOf(waitingPairs, myMemberId);
+  return {
+    net: sumOf(perMember),
+    perMember,
+    waiting,
+    waitingNet: sumOf(waiting),
+    settlementSplit,
+  };
 }
 
 /* ============================================================
@@ -499,8 +605,9 @@ export function netPosition(blob, myMemberId, { writeoffs = null } = {}) {
 
    The invariant this file guarantees, and the fixture asserts:
        netPosition(before, m) === netPosition(after, m)   for every member m
-   which holds by construction, because `carryOf` is exactly the pairwise form
-   of what `netPosition` would have read off the entries being removed.        */
+   which holds by construction, because compaction and netPosition run the
+   very same fold (`foldPairs`): the new carry is the fold of the removed
+   entries onto the old carry, and netPosition starts its fold from it.       */
 
 /** The hard ceiling the relay enforces (413). Nothing may be pushed past it. */
 export const MAX_BLOB_BYTES = 1024 * 1024;
@@ -528,32 +635,10 @@ export function compactable(entry) {
   return people.every((p) => p?.status === "accepted");
 }
 
-/** The pairwise carry one entry contributes. Mirrors netPosition exactly. */
-export function carryOf(entry, into = {}) {
-  const shares = entry?.split?.shares || {};
-  if (entry?.kind === "settlement") {
-    const { from, to } = entry.settlement || {};
-    // Only a settlement the receiver confirmed can be folded; an unconfirmed
-    // one is never `compactable` in the first place, so this is belt and braces.
-    if (from && to && entry.participants?.[to]?.status !== "rejected") {
-      pairAdd(into, from, to, Math.round(Number(entry.amount) || 0));
-    }
-    return into;
-  }
-  const sign = entry?.kind === "income" ? -1 : 1;
-  const payer = entry?.paidBy;
-  if (!payer) return into;
-  for (const [id, share] of Object.entries(shares)) {
-    if (id === payer) continue;
-    pairAdd(into, payer, id, sign * Math.round(Number(share) || 0));
-  }
-  return into;
-}
-
 /**
  * What compacting to the start of `month` would do, without doing it.
  * `{ month, removed, kept, carry, before, after }` — `removed` is the detail
- * each phone archives locally, `carry` the pairwise residue that replaces it.
+ * each phone archives locally, `carry` the pair balances that replace it.
  */
 export function compactionPlan(blob, month) {
   const cutoff = monthStart(month);
@@ -564,19 +649,28 @@ export function compactionPlan(blob, month) {
     if (day && day < cutoff && compactable(e)) removed.push(e);
     else kept.push(e);
   }
-  const carry = {};
-  for (const e of removed) carryOf(e, carry);
+  const carry = foldPairs(removed, blob?.carry || {}).pairs;
   return {
     month: String(month || "").slice(0, 7),
     removed,
     kept,
-    carry: normCarry(carry),
+    carry,
     before: blobBytes(blob),
-    after: blobBytes({ ...blob, entries: kept, carry: mergeCarry(blob?.carry, carry) }),
+    after: blobBytes({ ...blob, entries: kept, carry }),
   };
 }
 
-/** Apply a plan. Returns the next blob; the caller archives `plan.removed`. */
+/**
+ * Apply a plan. Returns the next blob; the caller archives `plan.removed`.
+ *
+ * Carry is no longer a sum of per-entry parts: a settlement only pays a debt
+ * down, so what an entry means depends on what came before it. The new carry
+ * is therefore the old carry with the removed entries FOLDED onto it, and it
+ * replaces the old one. That is only right because every removed entry sorts
+ * before every kept one — the `line` below guarantees it, and the owe maths
+ * depends on that guarantee. (Carry written by the older, summing version of
+ * this function is left as it was: its detail is no longer in the blob.)
+ */
 export function applyCompaction(blob, month) {
   const plan = compactionPlan(blob, month);
   // An entry too old to keep but not yet settled pins the line back to its own
@@ -588,13 +682,12 @@ export function applyCompaction(blob, month) {
     .sort()[0];
   const line = oldestKept && oldestKept < plan.month ? oldestKept : plan.month;
   const removed = plan.removed.filter((e) => String(e.date).slice(0, 10) < monthStart(line));
-  const carry = {};
-  for (const e of removed) carryOf(e, carry);
+  const carry = foldPairs(removed, blob?.carry || {}).pairs;
   const goneIds = new Set(removed.map((e) => e.id));
   const next = {
     ...blob,
     entries: (blob.entries || []).filter((e) => !goneIds.has(e.id)),
-    carry: mergeCarry(blob?.carry, carry),
+    carry,
     compactedBefore: maxIso(blob?.compactedBefore || null, line) || line,
   };
   return { blob: normaliseBlob(next), removed, carry: normCarry(carry), month: line };

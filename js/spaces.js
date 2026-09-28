@@ -32,7 +32,7 @@ import {
   splitEqually, compactionDue, compactionPlan, applyCompaction, blobBytes,
   staleMembers, needsNewInvite, isCompacted, MAX_BLOB_BYTES, STALE_DAYS,
 } from "./spaces/merge.js";
-import { encodeSummary, sealSummary } from "./spaces/notify.js";
+import { encodeSummary, sealSummary, isUrgentKind } from "./spaces/notify.js";
 import {
   pushSupported, pushState, subscribePush, unsubscribePush, currentSubscription, deviceId,
 } from "./ui/pushsetup.js";
@@ -224,16 +224,52 @@ export async function saveProfile({ name, color }) {
    Derived figures
    ============================================================ */
 
+const NO_POSITION = Object.freeze({
+  net: 0, perMember: {}, waiting: {}, waitingNet: 0, settlementSplit: {},
+});
+
+/** blob -> { key, value }. Blobs are replaced, never mutated, so identity is enough. */
+const positionCache = new WeakMap();
+
 /**
- * My net position in a space — positive means the others owe me.
+ * My net position in a space — positive means the others owe me. Only
+ * accepted shares count; `waiting` holds the ones still waiting for a yes, and
+ * `settlementSplit` says how much of each settlement paid a debt and how much
+ * was a plain transfer (see the owe rules in js/spaces/merge.js).
  * Write-offs live in my ledger, never in the blob, so they are handed to the
  * pure function rather than found by it (§9.18).
  */
 export function netFor(id) {
   const space = getSpace(id);
   const blob = blobs.get(id);
-  if (!space || !blob) return { net: 0, perMember: {} };
-  return netPosition(blob, space.myMemberId, { writeoffs: writeoffsFor(id) });
+  if (!space || !blob) return NO_POSITION;
+  const writeoffs = writeoffsFor(id);
+  const key = `${space.myMemberId}|${JSON.stringify(writeoffs)}`;
+  const hit = positionCache.get(blob);
+  if (hit && hit.key === key) return hit.value;
+  const value = netPosition(blob, space.myMemberId, { writeoffs });
+  positionCache.set(blob, { key, value });
+  return value;
+}
+
+/**
+ * How one settlement landed: `{ applied, extra, rejected }` — the part that
+ * paid a debt down and the part that was only a transfer. Null when unknown.
+ */
+export function settlementSplitOf(spaceId, entryId) {
+  return netFor(spaceId).settlementSplit?.[entryId] || null;
+}
+
+/** What I owe `memberId` right now in this space, in rupees (0 when nothing). */
+export function owedTo(spaceId, memberId) {
+  const v = Math.round(netFor(spaceId).perMember?.[memberId] || 0);
+  return v < 0 ? -v : 0;
+}
+
+/** What `memberId` owes me right now in this space (0 when nothing). */
+export function owedBy(spaceId, memberId) {
+  const v = Math.round(netFor(spaceId).perMember?.[memberId] || 0);
+  return v > 0 ? v : 0;
 }
 
 /** `memberId -> rupees` I have given up on in this space. */
@@ -590,7 +626,7 @@ function handleRelayError(id, err) {
  * and now: merge what the relay handed back and try again, up to five times
  * (plan §9.2), then leave the space dirty for the next trigger.
  */
-export async function pushSpace(id) {
+export async function pushSpace(id, { keepalive = false } = {}) {
   const space = getSpace(id);
   const blob = blobs.get(id);
   if (!space || !blob || !relayConfigured()) return false;
@@ -609,7 +645,18 @@ export async function pushSpace(id) {
   for (let attempt = 0; attempt < MAX_RETRY; attempt++) {
     try {
       const cipher = await encryptBlob(space.key, local);
-      const res = await relayPut(space, space.lastVersion || 0, cipher);
+      const note = await pendingNotifyFor(space);
+      const res = await relayPut(space, space.lastVersion || 0, cipher, {
+        notify: note?.field || null, keepalive,
+      });
+      // Only the summary that actually went is cleared: an edit made while
+      // this request was in flight queued a newer one for the next write.
+      if (note && notifyPending.get(id) === note.queued) notifyPending.delete(id);
+      if (note) {
+        recordNotify(res.notifyError
+          ? { via: "write", error: res.notifyError }
+          : { via: "write", queued: !!res.notified }).catch(() => {});
+      }
       space.lastVersion = res.version ?? (space.lastVersion || 0) + 1;
       space.dirty = false;
       // The new key is now what the relay holds; the old one has no more work.
@@ -738,7 +785,11 @@ export async function initSpaces() {
     started = true;
     document.addEventListener("visibilitychange", () => {
       if (!document.hidden) pullAll();
+      // Leaving: a write still on its debounce goes now (plan 2.4), or the
+      // phone freezes the page and the others hear nothing until next open.
+      else flushPendingPushes();
     });
+    window.addEventListener("pagehide", () => flushPendingPushes());
     // Back on the network: everything that queued while offline goes out now
     // (plan §9.3). `dirty` is the outbox, so a pull-then-push per space is the
     // whole of the flush.
@@ -997,6 +1048,9 @@ export async function leaveSpace(id) {
   archives.delete(id);
   clearTimeout(pushTimers.get(id));
   pushTimers.delete(id);
+  // A banner still queued for this space must not ride on a later write if
+  // the same space is joined again ("X left" arriving with the re-join).
+  notifyPending.delete(id);
   try { await dbDel("meta", cacheKey(id)); } catch {}
   try { await dbDel("meta", archiveKey(id)); } catch {}
   await saveSpaces();
@@ -1153,6 +1207,9 @@ export async function forgetSpace(id) {
   blobs.delete(id);
   status.delete(id);
   archives.delete(id);
+  clearTimeout(pushTimers.get(id));
+  pushTimers.delete(id);
+  notifyPending.delete(id);
   try { await dbDel("meta", cacheKey(id)); } catch {}
   try { await dbDel("meta", archiveKey(id)); } catch {}
   await saveSpaces();
@@ -1181,31 +1238,83 @@ export async function forgetSpace(id) {
    Push fan-out (plan 7.2)
    ------------------------------------------------------------ */
 
-/** One notification per space per 5 s: a burst of edits is one banner. */
-const NOTIFY_COALESCE = 5000;
-/** spaceId -> the summary that will be sent when its timer fires. */
+/**
+ * spaceId -> `{ summary, at }`: the banner the NEXT write to that space will
+ * carry. A burst of edits is one write (PUSH_DEBOUNCE) and therefore one
+ * banner, and the latest summary wins because it describes where the entry
+ * actually ended up.
+ */
 const notifyPending = new Map();
-const notifyTimers = new Map();
+/** A banner that could not go out for a day is not news any more. */
+const NOTIFY_STALE_MS = 24 * 60 * 60 * 1000;
 
-async function sendSummary(space, summary) {
+/** meta `lastNotifyResult`: what the last send did, for Settings (plan 2.6). */
+async function recordNotify(result) {
+  try { await setMeta("lastNotifyResult", { at: nowIso(), ...result }); } catch {}
+}
+
+/** The last send's outcome, or null. */
+export const lastNotifyResult = () => getMeta("lastNotifyResult");
+
+/**
+ * The `notify` field for a PUT of this space, or null. Sealing happens here,
+ * at send time, so a key rotation between the edit and the write is honoured.
+ */
+async function pendingNotifyFor(space) {
+  const queued = notifyPending.get(space.id);
+  if (!queued) return null;
+  if (Date.now() - queued.at > NOTIFY_STALE_MS || !space.notifKey) {
+    notifyPending.delete(space.id);
+    return null;
+  }
   try {
-    if (!space || !space.notifKey) return;
+    return {
+      queued,
+      field: {
+        payload: await sealSummary(space.notifKey, queued.summary),
+        exceptDeviceId: deviceId(),
+        urgent: isUrgentKind(queued.summary.t),
+      },
+    };
+  } catch {
+    notifyPending.delete(space.id);
+    return null;
+  }
+}
+
+/**
+ * Send a summary on its own (no write to ride on): Nudge, Remind, the
+ * Settings test, and join/leave, which are announced after their write.
+ * Returns the relay's buckets, or `{ error }`. Never throws.
+ */
+async function sendSummary(space, summary, { onlyDeviceId = null, onlyMemberId = null } = {}) {
+  try {
+    if (!space || !space.notifKey) return { error: "no-key" };
     const payload = await sealSummary(space.notifKey, summary);
-    await relayNotify(space, payload, deviceId());
+    const res = await relayNotify(space, payload, onlyDeviceId ? null : deviceId(), {
+      onlyDeviceId, onlyMemberId, urgent: isUrgentKind(summary.t),
+    });
+    await recordNotify({ via: "direct", ...res });
+    return res;
   } catch (err) {
     // A notification is the nicety on top of the pull-on-open path: if the
-    // relay is unreachable, or nobody is subscribed, nothing is lost.
-    console.debug("space notify failed", err);
+    // relay is unreachable, or nobody is subscribed, nothing is lost — but
+    // Settings is told, so a broken relay is never invisible again.
+    const error = String(err?.message || "failed");
+    await recordNotify({ via: "direct", error });
+    return { error };
   }
 }
 
 /**
  * Tell the other members that something happened. Fire-and-forget by design:
- * it never throws, never blocks the mutation that called it, and does nothing
- * at all when there is no relay or notifications are off on this phone.
+ * it never throws and never blocks the mutation that called it.
  *
- * Coalesced per space within 5 s - the LATEST summary wins, because that is
- * the one that describes where the entry actually ended up.
+ * When a write to this space is on its way (the usual case: every mutation
+ * goes through writeEntry, which queues a push), the summary rides on THAT
+ * write, so the relay only pushes once the data is really there, and the
+ * banner survives the sender closing the app a second after saving. With no
+ * write pending it goes out on its own, at once.
  */
 export function notifyChange(space, summary) {
   if (!space || !summary) return null;
@@ -1218,15 +1327,79 @@ export function notifyChange(space, summary) {
   let encoded;
   try { encoded = encodeSummary(summary); } catch { return null; }
 
-  notifyPending.set(space.id, { space, summary: encoded });
-  if (notifyTimers.has(space.id)) return null;
-  notifyTimers.set(space.id, setTimeout(() => {
-    notifyTimers.delete(space.id);
-    const queued = notifyPending.get(space.id);
-    notifyPending.delete(space.id);
-    if (queued) sendSummary(queued.space, queued.summary);
-  }, NOTIFY_COALESCE));
+  if (space.dirty || pushTimers.has(space.id)) {
+    notifyPending.set(space.id, { summary: encoded, at: Date.now() });
+  } else {
+    sendSummary(space, encoded);
+  }
   return null;
+}
+
+/**
+ * "Remind": a banner to ONE member (all of their phones) that they owe me.
+ * The relay routes by the member id it stored at subscribe time; nobody else
+ * in the space sees it.
+ */
+export async function remindMember(spaceId, memberId, amount) {
+  const space = getSpace(spaceId);
+  if (!space || !memberId) return { ok: false, reason: "That space is gone." };
+  if (!relayUrl()) return { ok: false, reason: "Shared spaces aren't set up on this build." };
+  if (!space.notifKey) return { ok: false, reason: "Reminders need notifications for this space." };
+  const res = await sendSummary(space, encodeSummary({
+    t: "remind", space: space.name, by: space.myName, amount: Math.round(Number(amount) || 0),
+  }), { onlyMemberId: memberId });
+  if (res.error === "push-not-configured") {
+    return { ok: false, reason: "The relay's notification keys aren't set up." };
+  }
+  if (res.error) return { ok: false, reason: "Couldn't reach the relay. Try again in a moment." };
+  if (!res.sent) {
+    return { ok: false, reason: `${memberNameIn(spaceId, memberId)} hasn't turned on notifications yet.` };
+  }
+  return { ok: true, sent: res.sent };
+}
+
+/**
+ * Settings → "Send test notification": subscribe this device to the first
+ * space if it is not already, then aim one banner at this device only.
+ * Resolves `{ ok, reason }` with a sentence fit for the screen.
+ */
+export async function sendTestNotification() {
+  if (!relayUrl()) return { ok: false, reason: "Shared spaces aren't set up on this build." };
+  const space = spaces().find((s) => s.notifKey);
+  if (!space) return { ok: false, reason: "Join or create a shared space first." };
+  let perm = "default";
+  try { perm = Notification.permission; } catch {}
+  if (perm === "denied") return { ok: false, reason: "Notifications are blocked for Batwa in your browser settings." };
+  const sub = await currentSubscription();
+  if (!sub || perm !== "granted") return { ok: false, reason: "Turn on notifications above first." };
+  if (!(await subscribeSpace(space, sub))) {
+    return { ok: false, reason: "Couldn't register this phone with the relay." };
+  }
+  const res = await sendSummary(space, encodeSummary({ t: "test" }), { onlyDeviceId: deviceId() });
+  if (res.error === "push-not-configured") {
+    return { ok: false, reason: "The relay is missing VAPID_PRIVATE_KEY or VAPID_SUBJECT (see SETUP.md)." };
+  }
+  if (res.error) return { ok: false, reason: `The relay didn't answer (${res.error}).` };
+  if (res.sent) return { ok: true, reason: "Sent. It should arrive in a few seconds." };
+  if (res.rejected) {
+    return { ok: false, reason: "The push service refused the relay's keys. Check VAPID_SUBJECT is a real mailto: address." };
+  }
+  if (res.gone) return { ok: false, reason: "This phone's subscription had expired. Turn notifications off and on again." };
+  if (res.retryLater) return { ok: false, reason: "The push service is busy. Try again in a minute." };
+  return { ok: false, reason: "This phone isn't registered with the relay yet." };
+}
+
+/**
+ * The page is going away (app switched, screen off, tab closed): anything
+ * still waiting on the 1.5 s debounce goes now, with keepalive, so a change
+ * made a second before closing still reaches the others — banner included.
+ */
+export function flushPendingPushes() {
+  for (const [id, timer] of [...pushTimers]) {
+    clearTimeout(timer);
+    pushTimers.delete(id);
+    pushSpace(id, { keepalive: true }).catch(() => {});
+  }
 }
 
 /* ------------------------------------------------------------
@@ -1301,6 +1474,9 @@ async function subscribeSpace(space, subscription = null) {
     const sub = subscription || (await currentSubscription());
     if (!sub) return false;
     await relaySubscribe(space, deviceId(), space.myMemberId, sub);
+    // Settings counts these ("registered in 2 of 2 spaces"); the weekly
+    // refresh in resubscribeSpacePush reads them too.
+    space.pushRegisteredAt = nowIso();
     return true;
   } catch (err) {
     console.debug("space subscribe failed", err);
@@ -1350,6 +1526,7 @@ export async function enableSpacePush() {
   for (const s of spaces()) {
     if (!(await subscribeSpace(s, res.subscription))) failed++;
   }
+  await saveSpaces();
   await syncSpaceHeads();
   await registerSpacesSync(); // a no-op where periodic sync does not exist
   emitSpaces(null, "notifications");
@@ -1358,7 +1535,11 @@ export async function enableSpacePush() {
 
 /** The inverse: off the relay, off the browser, and no tokens left behind. */
 export async function disableSpacePush() {
-  for (const s of spaces()) await unsubscribeSpace(s);
+  for (const s of spaces()) {
+    await unsubscribeSpace(s);
+    delete s.pushRegisteredAt;
+  }
+  await saveSpaces();
   try { await unsubscribePush(); } catch {}
   notifyOn = false;
   await setMeta("pushOn", false);
@@ -1371,11 +1552,18 @@ export async function disableSpacePush() {
   return { ok: true };
 }
 
+/** A relay may prune a device after a transient 404/410; a week is plenty. */
+const REREGISTER_MS = 7 * 24 * 60 * 60 * 1000;
+
 /**
- * After unlock: quietly put the subscription back if the browser rotated it
- * (meta `pushResubscribe`, set by the worker) or if it vanished while we still
- * think notifications are on. Never prompts - a device that has not granted
- * permission is left alone until the user asks again.
+ * After unlock: quietly put the subscription back where it belongs. Never
+ * prompts - a device that has not granted permission is left alone until the
+ * user asks again. Re-registers every space when
+ *   • the worker flagged a `pushsubscriptionchange` (meta `pushResubscribe`),
+ *   • the browser's subscription vanished or its endpoint changed, or
+ *   • a space has not been re-registered in a week (the relay drops a device
+ *     on a 404/410 and would otherwise never hear from it again).
+ * `PUT /sub/:deviceId` is idempotent, so doing it again costs one request.
  */
 export async function resubscribeSpacePush() {
   if (!relayUrl()) return false;
@@ -1388,15 +1576,49 @@ export async function resubscribeSpacePush() {
   let perm = "default";
   try { perm = Notification.permission; } catch {}
   if (perm !== "granted") return false;
-  if (!flagged && (await currentSubscription())) return false;
 
-  const res = await subscribePush(VAPID_PUBLIC_KEY);
-  if (!res.ok) return false;
-  for (const s of spaces()) await subscribeSpace(s, res.subscription);
-  await setMeta("pushEndpoint", res.subscription.endpoint || null);
+  const current = await currentSubscription();
+  const known = await getMeta("pushEndpoint");
+  const moved = !current || (known && current.endpoint !== known);
+  const now = Date.now();
+  const stale = spaces().filter((s) =>
+    !s.pushRegisteredAt || now - new Date(s.pushRegisteredAt).getTime() > REREGISTER_MS);
+  if (!flagged && !moved && !stale.length) return false;
+
+  let subscription = current;
+  if (flagged || moved) {
+    const res = await subscribePush(VAPID_PUBLIC_KEY);
+    if (!res.ok) return false;
+    subscription = res.subscription;
+  }
+  const targets = flagged || moved ? spaces() : stale;
+  for (const s of targets) await subscribeSpace(s, subscription);
+  await setMeta("pushEndpoint", subscription?.endpoint || null);
   await setMeta("pushResubscribe", false);
+  await saveSpaces();
   await syncSpaceHeads();
   return true;
+}
+
+/**
+ * Everything Settings shows under "Notifications" to explain why a banner did
+ * or did not arrive (plan 2.6). Reads only; changes nothing.
+ */
+export async function pushDiagnostics() {
+  let permission = "unsupported";
+  try { if ("Notification" in window) permission = Notification.permission; } catch {}
+  const sub = await currentSubscription();
+  let host = null;
+  try { host = sub ? new URL(sub.endpoint).host : null; } catch {}
+  const all = spaces();
+  return {
+    permission,
+    subscribed: !!sub,
+    host,
+    registered: notifyOn ? all.filter((s) => s.pushRegisteredAt).length : 0,
+    total: all.length,
+    last: await getMeta("lastNotifyResult"),
+  };
 }
 
 /** Put `entry` into the blob (replacing any older copy) and cache it. */
@@ -2095,13 +2317,20 @@ export async function writeOffMember(spaceId, memberId) {
   return owed;
 }
 
-/** M5 sends the reminder for real; for now it is the same stub as the rest. */
+/** "Nudge again": remind the other side a settlement is waiting on them. */
 export function nudgeSettlement(spaceId, entryId) {
   const space = getSpace(spaceId);
   const entry = sharedEntry(spaceId, entryId);
-  if (!space || !entry) return null;
-  return notifyChange(space, {
-    t: "nudge", space: space.name, by: space.myName,
-    title: entry.title, amount: Number(entry.amount) || 0,
-  });
+  if (!space || !entry || !relayUrl() || !space.notifKey) return null;
+  // Sent on its own, never queued behind a write: a nudge changes no data, so
+  // it must neither replace the banner a pending write carries nor wait for a
+  // space that is stuck offline.
+  let summary;
+  try {
+    summary = encodeSummary({
+      t: "nudge", space: space.name, by: space.myName,
+      title: entry.title, amount: Number(entry.amount) || 0,
+    });
+  } catch { return null; }
+  return sendSummary(space, summary);
 }

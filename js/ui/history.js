@@ -9,6 +9,7 @@ import { icon, catIcon } from "./icons.js";
 import { addExpenseSheet, addMoneySheet, transferDetailSheet, sharedDetailSheet } from "./modals.js";
 import {
   hasSpaces, getSpace, colorHex, memberNameIn, rowSettlementStatus, nudgeSettlement,
+  settlementSplitOf,
   settlementIdOf,
 } from "../spaces.js";
 
@@ -270,12 +271,20 @@ function settlementHistoryRow(e) {
     ? `Written off${who ? ` · ${who}` : ""}`
     : who ? `${inn ? "From" : "Sent to"} ${who}` : (e.title || (inn ? "Money received" : "Money sent"));
   const st = rowSettlementStatus(e);
+  // How much of it paid a debt down and how much only moved money (owe rules).
+  const split = !e.writeoff && e.spaceId && e.sharedEntryId
+    ? settlementSplitOf(e.spaceId, e.sharedEntryId) : null;
+  const kind = e.writeoff ? "written off"
+    : !split || split.rejected ? "settlement"
+      : !split.applied ? "transfer · not a debt"
+        : split.extra ? `${fmtCompact(split.applied)} settled · ${fmtCompact(split.extra)} transfer`
+          : "settlement";
   const row = el("div", { class: `hist-row ${st ? `is-${st}` : ""}` });
   row.innerHTML = `
     <span class="hist-ico" style="background:var(--c-aqua-soft);color:var(--c-aqua)">${icon(e.writeoff ? "scale" : "swap", 18)}</span>
     <span class="grow">
       <span class="strong small truncate" style="display:block">${spaceDot(e)}${esc(title)}${spaceName(e) ? ` · ${esc(spaceName(e))}` : ""}</span>
-      <span class="xsmall muted">${e.writeoff ? "written off" : "settlement"}
+      <span class="xsmall muted">${esc(kind)}
         ${st ? `· ${SETTLE_MARK[st]}` : ""}
         ${e.accountId && accountName(e.accountId) ? `· ${esc(accountName(e.accountId))}` : ""}</span>
     </span>

@@ -28,6 +28,11 @@ import {
   anyQueued, takeRemovedNotice,
 } from "./spaces.js";
 import { installPushMessageHandlers } from "./ui/pushsetup.js";
+import { initInstallCount } from "./installcount.js";
+import {
+  installContext, installButton, openInstallGuide, onInstallContextChange,
+  promptInstall as nativeInstallPrompt,
+} from "./installguide.js";
 import { pendingSheet } from "./ui/pendingcard.js";
 import { renderSpace, setSpaceTarget, spaceTarget } from "./ui/spaceview.js";
 import { spacesSwitcherSheet, openJoinFromLink } from "./ui/spaces.js";
@@ -288,12 +293,37 @@ function handleOpenUrl(url) {
   else if (q.get("join")) openJoinFromLink(q.get("join"));
 }
 
+/** A push that landed while the app was locked, shown once the PIN is in. */
+let deferredPushToast = null;
+
+/**
+ * The loud half of a push that lands while the app is in front of the user:
+ * the worker showed the banner silently, so the words appear here as a toast,
+ * with a way straight to whatever is waiting.
+ */
+function showPushToast(spaceId, summary) {
+  if (!summary || !summary.title) return;
+  const text = summary.body ? `${summary.title} · ${summary.body}` : summary.title;
+  toast(text, {
+    icon: icon("bell", 18),
+    action: spaceId ? { label: "Open", onClick: () => openPendingFromLink(spaceId) } : null,
+  });
+}
+
 /** The worker's three messages, wired once (js/ui/pushsetup.js). */
 function initPushMessages() {
   installPushMessageHandlers({
-    // A push landed: pull that space quietly. The ledger emits silently, so
-    // the page underneath never re-renders (§9.29).
-    onSpacesChanged: (id) => { if (id) pullSpace(id).catch(() => {}); },
+    // A push landed: pull that space quietly (the ledger emits silently, so
+    // the page underneath never re-renders, §9.29), then say what happened if
+    // somebody is looking. The spaces emit repaints the badge and the inbox.
+    onSpacesChanged: (id, summary) => {
+      if (!id) return;
+      pullSpace(id).catch(() => {}).then(() => {
+        if (!summary || document.hidden) return;
+        if (!unlocked) { deferredPushToast = { id, summary }; return; }
+        showPushToast(id, summary);
+      });
+    },
     onOpen: (url) => handleOpenUrl(url),
     onResubscribe: () => { resubscribeSpacePush().catch(() => {}); },
   });
@@ -356,29 +386,32 @@ setInterval(updateSyncPill, 60000); // keep "Synced X min ago" fresh
    Install experience
    ============================================================ */
 
-let deferredPrompt = null;
+// Detection, the native prompt and the guide sheet live in js/installguide.js,
+// shared with about.html. These two wrappers keep the older names working.
 
-const isStandalone = () =>
-  matchMedia("(display-mode: standalone)").matches || navigator.standalone === true;
-const isIOS = () => /iphone|ipad|ipod/i.test(navigator.userAgent) && !window.MSStream;
-
+/**
+ * "standalone" | "installable" | "guide" | "browser":
+ *   installable  the browser has its own install prompt ready
+ *   guide        a phone browser that needs the written steps (iPhone,
+ *                Android without a prompt, an in-app browser)
+ *   browser      a desktop browser without a prompt
+ */
 export function getInstallState() {
-  if (isStandalone()) return "standalone";
-  if (deferredPrompt) return "installable";
-  if (isIOS()) return "ios";
-  return "browser";
+  const ctx = installContext();
+  if (ctx === "installed") return "standalone";
+  if (ctx === "prompt") return "installable";
+  if (ctx === "desktop") return "browser";
+  return "guide";
 }
 
 export async function promptInstall() {
-  if (!deferredPrompt) return;
-  deferredPrompt.prompt();
-  const { outcome } = await deferredPrompt.userChoice;
-  if (outcome === "accepted") { deferredPrompt = null; toast("Batwa installed", { icon: icon("check-circle", 18) }); }
+  const outcome = await nativeInstallPrompt();
+  if (outcome === "accepted") toast("Batwa installed", { icon: icon("check-circle", 18) });
+  else if (outcome === "unavailable") openInstallGuide();
 }
 
-window.addEventListener("beforeinstallprompt", (e) => {
-  e.preventDefault();
-  deferredPrompt = e;
+// The prompt can arrive (or go) after Home has painted: re-mount the banner.
+onInstallContextChange(() => {
   if (unlocked && currentView === "home") mountHomeBanners();
 });
 
@@ -391,20 +424,20 @@ async function mountHomeBanners() {
 /** Returns true when the install banner is on screen. */
 async function mountInstallBanner() {
   const slot = $("#install-slot");
-  if (!slot || isStandalone()) return false;
-  if (await getMeta("installDismissed")) return false;
+  if (!slot) return false;
   const state = getInstallState();
-  if (state !== "installable" && state !== "ios") return false;
+  if (state === "standalone" || state === "browser" || (await getMeta("installDismissed"))) {
+    slot.innerHTML = "";
+    return false;
+  }
   slot.innerHTML = "";
   const banner = el("div", { class: "install-banner" });
   banner.innerHTML = `
     <span class="ib-ico" style="color:#fff">${icon("smartphone", 20)}</span>
     <span class="grow"><strong>Put Batwa on your home screen</strong>
-    <p>${state === "ios" ? "Share → Add to Home Screen in Safari" : "Installs like an app, works fully offline"}</p></span>
+    <p>Installs like an app, works fully offline</p></span>
   `;
-  if (state === "installable") {
-    banner.append(el("button", { class: "btn btn-sm ib-action", onclick: promptInstall }, "Install"));
-  }
+  banner.append(installButton({ className: "btn btn-sm ib-action" }));
   banner.append(el("button", {
     class: "icon-btn ib-dismiss",
     "aria-label": "Dismiss",
@@ -598,7 +631,13 @@ async function unlockFlow() {
   if (deferredOpen) {
     const url = deferredOpen;
     deferredOpen = null;
+    deferredPushToast = null; // the tap already answers it
     setTimeout(() => handleOpenUrl(url), 320);
+  }
+  if (deferredPushToast) {
+    const { id, summary } = deferredPushToast;
+    deferredPushToast = null;
+    setTimeout(() => showPushToast(id, summary), 600);
   }
   // First successful unlock only — sample the home entrance animation, not
   // the unlock itself, and never re-arm on a re-lock (initAutoLock -> here).
@@ -621,6 +660,9 @@ async function boot() {
     if ("scrollRestoration" in history) history.scrollRestoration = "manual";
     initDock();
     initPushMessages();
+    // Before the lock screen, on purpose: counting an install needs no PIN and
+    // touches nothing encrypted (js/installcount.js).
+    initInstallCount();
     history.replaceState({ view: "home" }, "");
 
     // Consumed once, and the query goes before the lock screen does — a reload

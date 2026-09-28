@@ -149,7 +149,7 @@ describe("push", () => {
       body: JSON.stringify({ payload: "b64-ciphertext-from-the-phone", exceptDeviceId: "device-b" }),
     });
     assert.equal(notify.status, 200);
-    assert.deepEqual(await notify.json(), { sent: 1, gone: 0, goneDevices: [] });
+    assert.deepEqual(await notify.json(), { sent: 1, gone: 0, goneDevices: [], rejected: 0, retryLater: 0 });
 
     const got = await deliveries(base, box);
     assert.equal(got.length, 1);
@@ -172,7 +172,7 @@ describe("push", () => {
       method: "POST", headers: auth(token, { "X-Space-Id": id }),
       body: JSON.stringify({ payload: "p", exceptDeviceId: "mine" }),
     });
-    assert.deepEqual(await res.json(), { sent: 0, gone: 0, goneDevices: [] });
+    assert.deepEqual(await res.json(), { sent: 0, gone: 0, goneDevices: [], rejected: 0, retryLater: 0 });
     assert.equal((await deliveries(base, box)).length, 0);
   });
 
@@ -201,7 +201,7 @@ describe("push", () => {
       method: "POST", headers: auth(token, { "X-Space-Id": id }),
       body: JSON.stringify({ payload: "p2" }),
     })).json();
-    assert.deepEqual(second, { sent: 1, gone: 0, goneDevices: [] }, "dead subs are gone for good");
+    assert.deepEqual(second, { sent: 1, gone: 0, goneDevices: [], rejected: 0, retryLater: 0 }, "dead subs are gone for good");
   });
 
   test("DELETE /sub/:deviceId unsubscribes", async () => {
@@ -228,6 +228,195 @@ describe("push", () => {
       body: JSON.stringify({ payload: "p".repeat(3 * 1024 + 1) }),
     });
     assert.equal(res.status, 413);
+  });
+});
+
+describe("push that rides on a write, and aimed pushes", () => {
+  /** Deliveries arrive after the PUT answers (the fan-out is not awaited). */
+  async function waitFor(box, n, ms = 5000) {
+    const until = Date.now() + ms;
+    for (;;) {
+      const got = await deliveries(base, box);
+      if (got.length >= n || Date.now() > until) return got;
+      await new Promise((r) => setTimeout(r, 100));
+    }
+  }
+
+  async function subscribe(id, token, device, member, box) {
+    const sub = await makeSubscription(base, box);
+    const res = await fetch(url(id, "/sub/" + device), {
+      method: "PUT", headers: auth(token),
+      body: JSON.stringify({ memberId: member, subscription: sub.json }),
+    });
+    assert.equal(res.status, 200);
+    return sub;
+  }
+
+  test("a PUT carrying notify stores first, then pushes with the URL's space id", async () => {
+    const { id, token } = await createSpace();
+    const box = "ride" + Math.random().toString(36).slice(2, 10);
+    const sub = await subscribe(id, token, "other-phone", "m-b", box);
+
+    const res = await fetch(url(id), {
+      method: "PUT", headers: auth(token, { "If-Match": '"1"' }),
+      body: JSON.stringify({
+        blob: "cipher-2",
+        notify: { payload: "sealed-summary", exceptDeviceId: "my-phone", urgent: true },
+      }),
+    });
+    assert.equal(res.status, 200);
+    const body = await res.json();
+    assert.equal(body.version, 2);
+    assert.equal(body.notified, true);
+
+    const got = await waitFor(box, 1);
+    assert.equal(got.length, 1);
+    assert.deepEqual(JSON.parse(await decryptPush(got[0].body, sub)), { s: id, p: "sealed-summary" });
+    assert.equal(got[0].urgency, "high");
+    assert.equal(got[0].topic, id);
+    assert.equal(got[0].ttl, "86400");
+  });
+
+  test("a PUT that loses the version race never pushes", async () => {
+    const { id, token } = await createSpace();
+    const box = "race" + Math.random().toString(36).slice(2, 10);
+    await subscribe(id, token, "other-phone", "m-b", box);
+    const res = await fetch(url(id), {
+      method: "PUT", headers: auth(token, { "If-Match": '"7"' }),
+      body: JSON.stringify({ blob: "stale", notify: { payload: "nope" } }),
+    });
+    assert.notEqual(res.status, 200);
+    await res.arrayBuffer();
+    await new Promise((r) => setTimeout(r, 400));
+    assert.equal((await deliveries(base, box)).length, 0);
+  });
+
+  test("a bad notify field on a PUT is refused before anything is stored", async () => {
+    const { id, token } = await createSpace();
+    const res = await fetch(url(id), {
+      method: "PUT", headers: auth(token, { "If-Match": '"1"' }),
+      body: JSON.stringify({ blob: "x", notify: { payload: "p".repeat(3 * 1024 + 1) } }),
+    });
+    assert.equal(res.status, 413);
+    const head = await fetch(url(id), { method: "HEAD", headers: auth(token) });
+    assert.equal(head.headers.get("etag"), '"1"');
+  });
+
+  test("onlyDeviceId reaches one device, onlyMemberId one member", async () => {
+    const { id, token } = await createSpace();
+    const tag = Math.random().toString(36).slice(2, 8);
+    await subscribe(id, token, "d-1", "m-1", "one" + tag);
+    await subscribe(id, token, "d-2", "m-2", "two" + tag);
+    await subscribe(id, token, "d-3", "m-2", "three" + tag);
+
+    const toDevice = await (await fetch(url(id, "/notify"), {
+      method: "POST", headers: auth(token),
+      body: JSON.stringify({ payload: "test", onlyDeviceId: "d-1" }),
+    })).json();
+    assert.equal(toDevice.sent, 1);
+
+    const toMember = await (await fetch(url(id, "/notify"), {
+      method: "POST", headers: auth(token),
+      body: JSON.stringify({ payload: "remind", onlyMemberId: "m-2" }),
+    })).json();
+    assert.equal(toMember.sent, 2, "both of m-2's phones");
+
+    assert.equal((await deliveries(base, "one" + tag)).length, 1);
+    assert.equal((await deliveries(base, "two" + tag)).length, 1);
+    assert.equal((await deliveries(base, "three" + tag)).length, 1);
+  });
+
+  test("a malformed target is refused rather than broadcast", async () => {
+    const { id, token } = await createSpace();
+    const box = "closed" + Math.random().toString(36).slice(2, 10);
+    await subscribe(id, token, "d", "m", box);
+    for (const bad of [{ onlyMemberId: "no spaces allowed" }, { onlyDeviceId: 42 }, { onlyMemberId: "" }]) {
+      const res = await fetch(url(id, "/notify"), {
+        method: "POST", headers: auth(token), body: JSON.stringify({ payload: "p", ...bad }),
+      });
+      assert.equal(res.status, 400, JSON.stringify(bad));
+      await res.arrayBuffer();
+    }
+    assert.equal((await deliveries(base, box)).length, 0);
+  });
+
+  test("a push that is not urgent says so, and keeps the one-day TTL", async () => {
+    const { id, token } = await createSpace();
+    const box = "calm" + Math.random().toString(36).slice(2, 10);
+    await subscribe(id, token, "d", "m", box);
+    await fetch(url(id, "/notify"), {
+      method: "POST", headers: auth(token), body: JSON.stringify({ payload: "p" }),
+    });
+    const got = await deliveries(base, box);
+    assert.equal(got[0].urgency, "normal");
+    assert.equal(got[0].ttl, "86400");
+  });
+});
+
+describe("install counter", () => {
+  const install = (body, ip) => fetch(`${base}/v1/install`, {
+    method: "POST",
+    headers: { "Content-Type": "text/plain", ...(ip ? { "CF-Connecting-IP": ip } : {}) },
+    body: typeof body === "string" ? body : JSON.stringify(body),
+  });
+  const stats = async () => (await fetch(`${base}/v1/stats`)).json();
+  const nonce = () => newToken().slice(0, 24);
+
+  test("one ping counts once, a retry with the same nonce does not", async () => {
+    const before = await stats();
+    const n = nonce();
+    const first = await install({ p: "android", n }, "10.0.0.1");
+    assert.equal(first.status, 200);
+    assert.deepEqual(await first.json(), { ok: true });
+    const again = await install({ p: "android", n }, "10.0.0.1");
+    assert.deepEqual(await again.json(), { ok: true, dup: true });
+    await (await install({ p: "ios", n: nonce() }, "10.0.0.1")).arrayBuffer();
+
+    const after = await stats();
+    assert.equal(after.android, before.android + 1);
+    assert.equal(after.ios, before.ios + 1);
+    assert.equal(after.total, before.total + 2);
+    assert.equal(after.total, after.android + after.ios + after.other);
+  });
+
+  test("anything but a platform word and a nonce is refused", async () => {
+    assert.equal((await install({ p: "windows-phone", n: nonce() }, "10.0.0.2")).status, 400);
+    assert.equal((await install({ p: "ios" }, "10.0.0.2")).status, 400);
+    assert.equal((await install({ p: "ios", n: "short" }, "10.0.0.2")).status, 400);
+    assert.equal((await install("not json", "10.0.0.2")).status, 400);
+    assert.equal((await install("x".repeat(300), "10.0.0.2")).status, 413);
+    assert.equal((await fetch(`${base}/v1/install`)).status, 405);
+  });
+
+  test("stats are cacheable for ten seconds and readable cross-origin", async () => {
+    const res = await fetch(`${base}/v1/stats`, { headers: { Origin: "http://127.0.0.1:5173" } });
+    assert.equal(res.status, 200);
+    assert.equal(res.headers.get("cache-control"), "public, max-age=10");
+    assert.equal(res.headers.get("access-control-allow-origin"), "http://127.0.0.1:5173");
+    const body = await res.json();
+    assert.deepEqual(Object.keys(body).sort(), ["android", "ios", "other", "total"]);
+  });
+
+  test("nonces are forgotten after a week", async () => {
+    await (await install({ p: "other", n: nonce() }, "10.0.0.3")).arrayBuffer();
+    const soon = await (await fetch(`${base}/__test/stats-purge`, {
+      method: "POST", body: JSON.stringify({ now: Date.now() + 60_000 }),
+    })).json();
+    assert.equal(soon.purged, 0, "a fresh nonce stays");
+    const later = await (await fetch(`${base}/__test/stats-purge`, {
+      method: "POST", body: JSON.stringify({ now: Date.now() + 8 * 24 * 3600 * 1000 }),
+    })).json();
+    assert.ok(later.purged >= 1, "a week-old nonce goes");
+  });
+
+  test("one address is cut off after ten pings an hour", async () => {
+    let limited = 0;
+    for (let i = 0; i < 12; i++) {
+      const res = await install({ p: "ios", n: nonce() }, "10.9.9.9");
+      if (res.status === 429) limited++;
+      await res.arrayBuffer();
+    }
+    assert.ok(limited >= 1, `expected the tail to be limited, got ${limited}`);
   });
 });
 

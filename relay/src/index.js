@@ -7,8 +7,9 @@
 //     installed PWAs send) so a random page cannot use a leaked token silently.
 
 import { Space } from "./space.js";
+import { Stats } from "./stats.js";
 
-export { Space };
+export { Space, Stats };
 
 /** 128 bits of randomness, base64url, no padding. */
 const ID_RE = /^[A-Za-z0-9_-]{22}$/;
@@ -18,19 +19,27 @@ const IP_LIMIT = 600;
 const IP_WINDOW_MS = 60_000;
 const ipHits = new Map();
 
-function rateLimitIp(ip, limit) {
+/** Install pings per IP. A real phone sends one, ever; a retry or two at most. */
+const INSTALL_LIMIT = 10;
+const INSTALL_WINDOW_MS = 60 * 60 * 1000;
+const installHits = new Map();
+
+/** A fixed window per key, in memory. Best effort: per isolate, never stored. */
+function rateLimit(map, key, limit, windowMs) {
   const now = Date.now();
-  let rec = ipHits.get(ip);
-  if (!rec || now - rec.start >= IP_WINDOW_MS) {
+  let rec = map.get(key);
+  if (!rec || now - rec.start >= windowMs) {
     rec = { start: now, n: 0 };
-    ipHits.set(ip, rec);
+    map.set(key, rec);
   }
   rec.n++;
-  if (ipHits.size > 10000) {
-    for (const [k, v] of ipHits) if (now - v.start >= IP_WINDOW_MS) ipHits.delete(k);
+  if (map.size > 10000) {
+    for (const [k, v] of map) if (now - v.start >= windowMs) map.delete(k);
   }
   return rec.n <= limit;
 }
+
+const rateLimitIp = (ip, limit) => rateLimit(ipHits, ip, limit, IP_WINDOW_MS);
 
 function corsHeaders(request, env) {
   const origin = request.headers.get("Origin");
@@ -64,9 +73,9 @@ function json(body, status, extra) {
   return new Response(JSON.stringify(body), { status, headers: h });
 }
 
-function finish(res, request, env) {
+function finish(res, request, env, { cache = "no-store" } = {}) {
   const h = new Headers(res.headers);
-  h.set("Cache-Control", "no-store");
+  h.set("Cache-Control", cache);
   h.set("Referrer-Policy", "no-referrer");
   h.set("X-Content-Type-Options", "nosniff");
   for (const [k, v] of corsHeaders(request, env)) h.set(k, v);
@@ -96,6 +105,27 @@ export default {
       return finish(await testRoute(request, env, url), request, env);
     }
 
+    // The install counter (one anonymous ping per install; see src/stats.js).
+    if (url.pathname === "/v1/install") {
+      if (request.method !== "POST") return finish(json({ error: "method" }, 405), request, env);
+      if (!rateLimit(installHits, ip, INSTALL_LIMIT, INSTALL_WINDOW_MS)) {
+        return finish(json({ error: "rate-limit" }, 429, { "Retry-After": "3600" }), request, env);
+      }
+      const res = await statsStub(env).fetch(new Request("https://stats/install", {
+        method: "POST", body: await request.text(),
+      }));
+      return finish(res, request, env);
+    }
+    if (url.pathname === "/v1/stats") {
+      if (request.method !== "GET" && request.method !== "HEAD") {
+        return finish(json({ error: "method" }, 405), request, env);
+      }
+      const res = await statsStub(env).fetch(new Request("https://stats/stats"));
+      // Ten seconds of edge/browser cache: the about page polls this, and a
+      // number ten seconds old is still the live number to a person.
+      return finish(res, request, env, { cache: "public, max-age=10" });
+    }
+
     const m = url.pathname.match(/^\/v1\/space\/([^/]+)(\/.*)?$/);
     if (!m) return finish(json({ error: "not-found" }, 404), request, env);
 
@@ -115,17 +145,29 @@ export default {
     const stub = env.SPACES.get(env.SPACES.idFromName(id));
     const inner = new URL(request.url);
     inner.pathname = rest;
+    // The object does not know its own name, and a push it sends needs the
+    // space id so the service worker can find the right notification key.
+    // Taken from the URL, never trusted from the caller.
+    const headers = new Headers(request.headers);
+    headers.set("X-Space-Id", id);
     const res = await stub.fetch(
-      new Request(inner.toString(), { method: request.method, headers: request.headers, body })
+      new Request(inner.toString(), { method: request.method, headers, body })
     );
     return finish(res, request, env);
   },
 };
 
+const statsStub = (env) => env.STATS.get(env.STATS.idFromName("global"));
+
 /** Fake push service used by the test suite (TEST_MODE only). */
 async function testRoute(request, env, url) {
   // /__test/push/<box>   POST  — pretend to be a push service
   // /__test/pushed/<box> GET   — read back what arrived
+  if (url.pathname === "/__test/stats-purge") {
+    return statsStub(env).fetch(new Request("https://stats/purge", {
+      method: "POST", body: await request.text(),
+    }));
+  }
   const push = url.pathname.match(/^\/__test\/push\/([A-Za-z0-9_-]+)$/);
   const read = url.pathname.match(/^\/__test\/pushed\/([A-Za-z0-9_-]+)$/);
   const box = push?.[1] || read?.[1];
@@ -146,6 +188,8 @@ async function testRoute(request, env, url) {
         "X-Rec-Auth": request.headers.get("Authorization") || "",
         "X-Rec-Encoding": request.headers.get("Content-Encoding") || "",
         "X-Rec-Ttl": request.headers.get("TTL") || "",
+        "X-Rec-Urgency": request.headers.get("Urgency") || "",
+        "X-Rec-Topic": request.headers.get("Topic") || "",
       },
       body,
     }));

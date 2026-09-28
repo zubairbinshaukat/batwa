@@ -119,20 +119,27 @@ export async function vapidHeader(endpoint, { publicKey, privateKey, subject }) 
 /**
  * Send one push. Returns the HTTP status from the push service so the caller
  * can prune 404/410 subscriptions. Never throws on a non-2xx.
+ *
+ *   ttl      a day: a "Faraz split Dinner" banner three weeks late is noise,
+ *            and the app pulls on open anyway
+ *   urgency  "high" for things a person has to answer (Android Doze holds
+ *            "normal" back), "normal" for the rest
+ *   topic    lets the push service replace an undelivered older message with
+ *            the same topic instead of queueing both (RFC 8030 §5.4)
  */
-export async function sendPush(subscription, plaintext, vapid, { ttl = 2419200 } = {}) {
+export async function sendPush(subscription, plaintext, vapid, {
+  ttl = 86400, urgency = "normal", topic = null,
+} = {}) {
   const body = await encryptPayload(plaintext, subscription.keys.p256dh, subscription.keys.auth);
   const authorization = await vapidHeader(subscription.endpoint, vapid);
-  const res = await fetch(subscription.endpoint, {
-    method: "POST",
-    headers: {
-      Authorization: authorization,
-      "Content-Encoding": "aes128gcm",
-      "Content-Type": "application/octet-stream",
-      TTL: String(ttl),
-      Urgency: "normal",
-    },
-    body,
-  });
+  const headers = {
+    Authorization: authorization,
+    "Content-Encoding": "aes128gcm",
+    "Content-Type": "application/octet-stream",
+    TTL: String(ttl),
+    Urgency: urgency === "high" ? "high" : "normal",
+  };
+  if (topic) headers.Topic = topic;
+  const res = await fetch(subscription.endpoint, { method: "POST", headers, body });
   return res.status;
 }
