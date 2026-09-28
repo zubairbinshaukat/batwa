@@ -21,7 +21,17 @@ const te = new TextEncoder();
 const td = new TextDecoder();
 
 /** The event kinds a summary can describe. Anything else is not sent. */
-export const SUMMARY_KINDS = ["split", "settle", "accept", "reject", "edit", "nudge", "join", "leave"];
+export const SUMMARY_KINDS = [
+  "split", "settle", "accept", "reject", "edit", "nudge", "join", "leave", "remind", "test",
+];
+
+/**
+ * Kinds a person has to answer: sent with `Urgency: high`, which Android's
+ * Doze delivers straight away instead of at the next maintenance window. The
+ * relay cannot read a summary, so the app says which is which in the clear.
+ */
+const URGENT_KINDS = new Set(["split", "settle", "accept", "reject", "nudge", "remind", "test"]);
+export const isUrgentKind = (t) => URGENT_KINDS.has(t);
 
 /* ============================================================
    Codec — a summary is a tiny object, kept tiny on purpose
@@ -120,6 +130,10 @@ export function summaryText(summary, { locale = "en-PK" } = {}) {
       return { title: `${who} joined ${where}`, body: s.n ? `${s.n} members now` : "Shared space" };
     case "leave":
       return { title: `${who} left ${where}`, body: s.n ? `${s.n} members now` : "Shared space" };
+    case "remind":
+      return { title: `${who} reminded you to settle up`, body: dot(total, where) };
+    case "test":
+      return { title: "Batwa notifications work", body: "This is the test you sent from Settings" };
     default:
       return { title: "Batwa", body: "New activity in a shared space" };
   }

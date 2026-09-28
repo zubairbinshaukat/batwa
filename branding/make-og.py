@@ -1,4 +1,4 @@
-"""Marketing artwork for batwa.zubyr.dev — OG card, avatar, hero webp set.
+"""Marketing artwork for batwa.zubyr.dev — OG card and avatar.
 
 Usage:  python branding/make-og.py
 
@@ -6,8 +6,9 @@ Writes
   screenshots/og-batwa.png        1200x630 social card
   icons/author-192.webp           transparent circular avatar (1x)
   icons/author-384.webp           transparent circular avatar (2x)
-  screenshots/hero-home.webp      + hero-home-sm.webp   (800px tall)
-  screenshots/hero-spaces.webp    + hero-spaces-sm.webp (800px tall)
+
+The about page's hero images (AVIF + WebP at four widths) moved to
+tools/make-images.mjs, which measured smaller files at better quality.
 
 Nothing here belongs to the app shell: none of these files is precached by
 sw.js. `make-icons.py` still owns the PWA icon set; the two do not overlap.
@@ -31,9 +32,6 @@ VIOLET_B = (98, 72, 245)   # #6248F5
 # alpha bbox, i.e. head and shoulders.
 HEAD_OFFSET = 0
 
-# Never upscale: the hero renders are ~1330px tall already.
-HERO_MAX_H = 1400
-HERO_SM_H = 800
 
 
 def kb(path):
@@ -163,29 +161,9 @@ def make_avatar():
         print("wrote icons/author-%d.webp  %dx%d  %s" % (size, size, size, kb(out)))
 
 
-# ---------------------------------------------------------------- heroes
-def make_hero(name):
-    src = Image.open(os.path.join(ROOT, "screenshots", "%s.png" % name)).convert("RGBA")
-    for suffix, max_h in (("", HERO_MAX_H), ("-sm", HERO_SM_H)):
-        img = src
-        if src.height > max_h:  # never upscale
-            w = round(src.width * max_h / src.height)
-            img = src.resize((w, max_h), Image.LANCZOS)
-        out = os.path.join(ROOT, "screenshots", "%s%s.webp" % (name, suffix))
-        quality = 80
-        img.save(out, "WEBP", quality=quality, method=6)
-        while os.path.getsize(out) > 220 * 1024 and quality > 55:
-            quality -= 6
-            img.save(out, "WEBP", quality=quality, method=6)
-        print("wrote screenshots/%s%s.webp  %dx%d  q%d  %s"
-              % (name, suffix, img.width, img.height, quality, kb(out)))
-
-
 def main():
     make_og()
     make_avatar()
-    make_hero("hero-home")
-    make_hero("hero-spaces")
 
 
 if __name__ == "__main__":

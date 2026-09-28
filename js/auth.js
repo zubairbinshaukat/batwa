@@ -11,6 +11,7 @@ import { saveSession, restoreSession, clearSession, touchHidden, touchVisible } 
 import { $, el, esc, anim, animTo, motionOK, buzz } from "./util/dom.js";
 import { perfTier, mark } from "./perf.js";
 import { icon } from "./ui/icons.js";
+import { installContext, installButton, isIOS } from "./installguide.js";
 
 const HAS_LOCK_KEY = "batwa.hasLock";
 /** Set whenever a PIN exists — the boot-shell overlay's only gate (index.html head script). */
@@ -807,8 +808,20 @@ export function showOnboarding() {
           <li><span class="onb-tick">${icon("check", 13)}</span> Bills, salaries and balances in one screen</li>
         </ul>
       `);
-      card.append(el("div", { class: "onb-actions" },
-        el("button", { class: "onb-btn", onclick: () => { buzz(8); choice(); } }, "Get started")));
+      const actions = el("div", { class: "onb-actions" },
+        el("button", { class: "onb-btn", onclick: () => { buzz(8); choice(); } }, "Get started"));
+      card.append(actions);
+      // A phone browser tab: offer the install BEFORE any data exists. On an
+      // iPhone this matters — Safari and the home-screen app keep separate
+      // storage, so a ledger started here would not follow the install.
+      const ctx = installContext();
+      if (ctx !== "installed" && ctx !== "desktop") {
+        actions.append(installButton({ className: "onb-btn onb-btn-ghost" }));
+        if (isIOS()) {
+          card.append(el("p", { class: "onb-foot", style: "margin-top:var(--s-2)" },
+            "On iPhone, install first: Safari and the home-screen app keep separate data."));
+        }
+      }
       card.append(el("div", {
         style: "display:flex;justify-content:center;margin-top:var(--s-3)",
       }, aboutLink()));

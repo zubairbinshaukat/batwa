@@ -20,12 +20,13 @@ import {
   createSpace, previewInvite, joinSpace, adoptInvite, renameSpace, renameMe, leaveSpace,
   rotateSpace, forgetSpace, inviteCodeFor, profile, saveProfile, suggestName,
   nameTaken, setNotifDetails, relayConfigured, pullSpace, onSpacesChange,
-  spacePushState, enableSpacePush, disableSpacePush,
+  spacePushState, enableSpacePush, disableSpacePush, sendTestNotification, pushDiagnostics,
   contactOf, linkCandidates, linkMembers, unlinkMember, acrossSpaces,
   compactionFor, compactionPreview, compactSpace, staleIn, pendingRotation,
   memberNameIn, STALE_DAYS,
 } from "../spaces.js";
 import { inviteLink } from "../spaces/crypto.js";
+import { installButton } from "../installguide.js";
 import { qrSvg } from "../vendor/qrcode.js";
 
 /* ============================================================
@@ -1004,17 +1005,89 @@ async function paintNotifyRow(slot, refresh) {
     slot.onclick = null;
   }
 
-  slot.nextElementSibling?.classList.contains("sp-notify-note") && slot.nextElementSibling.remove();
+  while (slot.nextElementSibling?.matches(".sp-notify-note, .sp-push-health")) {
+    slot.nextElementSibling.remove();
+  }
+  if (st === "on") slot.insertAdjacentElement("afterend", pushHealthPanel());
   const note = st === "not-installed"
     ? "Install Batwa to the home screen first \u2014 iOS and Chrome only deliver notifications to an installed app."
     : st === "denied"
       ? "Notifications are blocked for Batwa. Allow them in your browser or phone settings, then come back."
       : "";
   if (note) {
-    slot.insertAdjacentElement("afterend", el("div", {
+    const box = el("div", {
       class: "sp-notify-note", style: "padding:0 16px 12px",
-    }, el("p", { class: "xsmall muted" }, note)));
+    }, el("p", { class: "xsmall muted" }, note));
+    // The fix for "not installed" is one tap away, so the tap is right here.
+    if (st === "not-installed") {
+      const btn = installButton({ className: "btn btn-ghost btn-sm" });
+      btn.style.marginTop = "8px";
+      box.append(btn);
+    }
+    slot.insertAdjacentElement("afterend", box);
   }
+}
+
+const PUSH_SERVICES = {
+  "fcm.googleapis.com": "Google push",
+  "web.push.apple.com": "Apple push",
+  "updates.push.services.mozilla.com": "Mozilla push",
+};
+
+const serviceName = (host) =>
+  !host ? null : PUSH_SERVICES[host] || (host.endsWith(".windows.com") ? "Microsoft push" : host);
+
+/** One line about the last send, in words, or "". */
+function lastSendText(last) {
+  if (!last) return "";
+  if (last.error === "push-not-configured") return "Last send failed: the relay has no notification keys.";
+  if (last.error) return `Last send failed (${last.error}).`;
+  if (last.via === "write") return last.queued ? "Last send: handed to the relay." : "";
+  const parts = [];
+  if (last.sent) parts.push(`${last.sent} delivered`);
+  if (last.rejected) parts.push(`${last.rejected} refused by the push service`);
+  if (last.gone) parts.push(`${last.gone} expired`);
+  if (last.retryLater) parts.push(`${last.retryLater} to retry`);
+  return parts.length ? `Last send: ${parts.join(", ")}.` : "Last send: nobody else has notifications on.";
+}
+
+/**
+ * Why did a banner arrive or not? Permission, the push service this phone is
+ * on, how many spaces the relay knows it in, what the last send did, and a
+ * button that sends one banner to this phone alone (plan 2.6).
+ */
+function pushHealthPanel() {
+  const wrap = el("div", { class: "sp-push-health", style: "padding:0 16px 12px" });
+  const line = el("p", { class: "xsmall muted", style: "margin:0 0 8px" }, "Checking\u2026");
+  const result = el("p", { class: "xsmall", role: "status", style: "margin:8px 0 0", hidden: true });
+  const btn = el("button", { class: "btn btn-ghost btn-sm", type: "button" }, "Send test notification");
+
+  async function paintLine() {
+    const d = await pushDiagnostics();
+    const bits = [
+      d.permission === "granted" ? "Allowed" : d.permission === "denied" ? "Blocked" : "Not allowed yet",
+      d.subscribed ? serviceName(d.host) : "no subscription on this phone",
+      `registered in ${d.registered} of ${d.total} space${d.total === 1 ? "" : "s"}`,
+    ].filter(Boolean);
+    line.textContent = `${bits.join(" \u00b7 ")}. ${lastSendText(d.last)}`.trim();
+  }
+
+  btn.addEventListener("click", async () => {
+    buzz(8);
+    btn.disabled = true;
+    btn.textContent = "Sending\u2026";
+    const res = await sendTestNotification();
+    result.hidden = false;
+    result.textContent = res.reason;
+    result.style.color = res.ok ? "var(--c-pos)" : "var(--c-neg)";
+    btn.disabled = false;
+    btn.textContent = "Send test notification";
+    paintLine();
+  });
+
+  wrap.append(line, btn, result);
+  paintLine();
+  return wrap;
 }
 
 /**

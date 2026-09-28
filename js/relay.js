@@ -93,19 +93,35 @@ export async function relayGet(space, { knownVersion = null } = {}) {
   };
 }
 
+/** Browsers refuse a keepalive request whose body is over 64 KiB. */
+const KEEPALIVE_MAX = 60 * 1024;
+
 /**
  * Write the space. `version` is the version you last saw — 0 to create.
  * The relay stores version + 1 and returns it. A concurrent writer means a
  * `conflict` error carrying the current `{ version, blob }`.
+ *
+ * `notify` — `{ payload, exceptDeviceId, urgent }` — rides on the same
+ * request: the relay pushes it only once the write has landed, so the banner
+ * can never arrive before the data it announces. `keepalive` asks the browser
+ * to finish the request even if the page is being closed; it is only honoured
+ * for small bodies, which is what a space nearly always is.
  */
-export async function relayPut(space, version, blob) {
+export async function relayPut(space, version, blob, { notify = null, keepalive = false } = {}) {
+  const body = JSON.stringify(notify ? { version, blob, notify } : { version, blob });
   const res = await call(spaceUrl(space), {
     method: "PUT",
     headers: { ...tokenHeaders(space), "If-Match": `"${version}"` },
-    body: JSON.stringify({ version, blob }),
+    body,
+    keepalive: !!keepalive && body.length < KEEPALIVE_MAX,
   });
-  const body = await readJson(res);
-  return { version: body?.version ?? versionOf(res), updatedAt: body?.updatedAt ?? null };
+  const out = await readJson(res);
+  return {
+    version: out?.version ?? versionOf(res),
+    updatedAt: out?.updatedAt ?? null,
+    notified: !!out?.notified,
+    notifyError: out?.notifyError || null,
+  };
 }
 
 /** Version only — for the 3-minute poll. */
@@ -136,16 +152,31 @@ export async function relayUnsubscribe(space, deviceId) {
  * Fan out one opaque notification. `payloadB64` is already encrypted with the
  * space's notification key by the caller; the relay cannot read it.
  */
-export async function relayNotify(space, payloadB64, exceptDeviceId = null) {
-  const res = await call(spaceUrl(space, "/notify"), {
-    method: "POST",
-    // X-Space-Id is what the relay wraps the payload with, so the service
-    // worker can find the right notification key (relay/README.md).
-    headers: { ...tokenHeaders(space), "X-Space-Id": space.id },
-    body: JSON.stringify({ payload: payloadB64, exceptDeviceId }),
-  });
+export async function relayNotify(space, payloadB64, exceptDeviceId = null, {
+  onlyDeviceId = null, onlyMemberId = null, urgent = false,
+} = {}) {
+  let res;
+  try {
+    res = await call(spaceUrl(space, "/notify"), {
+      method: "POST",
+      // The relay takes the space id from the URL; the header is kept for
+      // relays deployed before it did.
+      headers: { ...tokenHeaders(space), "X-Space-Id": space.id },
+      body: JSON.stringify({ payload: payloadB64, exceptDeviceId, onlyDeviceId, onlyMemberId, urgent }),
+      keepalive: true,
+    });
+  } catch (err) {
+    // 503 is the relay saying its VAPID secrets are missing or malformed.
+    if (String(err?.message) === "http-503") throw relayError("push-not-configured");
+    throw err;
+  }
   const body = await readJson(res);
-  return { sent: body?.sent ?? 0, gone: body?.gone ?? 0 };
+  return {
+    sent: body?.sent ?? 0,
+    gone: body?.gone ?? 0,
+    rejected: body?.rejected ?? 0,
+    retryLater: body?.retryLater ?? 0,
+  };
 }
 
 /** Swap the write token so old invites stop working. Data key rotation is local. */

@@ -1,0 +1,14 @@
+{
+  "name": "batwa-tools",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Dev-only helpers for Batwa. Never loaded by the app.",
+  "license": "MIT",
+  "scripts": {
+    "images": "node make-images.mjs"
+  },
+  "devDependencies": {
+    "sharp": "^0.34.4"
+  }
+}

@@ -8,7 +8,7 @@ import { state, addEntry, updateEntry, deleteEntry, deleteSeriesFuture, restoreE
 import {
   spaces, getSpace, membersOf, splitEqually, proposeShared, rejectShared,
   colorHex, MEMBER_COLORS, initialsOf,
-  hasSpaces, peopleForTransfer, coversFor, settleWithPerson, memberNameIn,
+  hasSpaces, peopleForTransfer, coversFor, settleWithPerson, memberNameIn, owedTo, owedBy,
   settlementStatus, nudgeSettlement, sharedEntry,
 } from "../spaces.js";
 import { isoDate, fmtMoney, fmtCompact, shortDate } from "../util/format.js";
@@ -1354,6 +1354,18 @@ function buildTransferForm(prefill = null) {
     return coverList.reduce((sum, c) => sum + (ticked.has(c.sharedEntryId) ? c.remaining : 0), 0);
   }
 
+  /**
+   * The amount to pre-fill for the ticked covers. The covers are my gross
+   * shares; what the space says I owe is the NET of both directions (their
+   * shares I fronted come off it). Sending more than the net would only be a
+   * transfer that settles nothing (owe rules, merge.js), so the fill stops at
+   * the net. The oldest covers are paid first, as always.
+   */
+  function fillFor(sum) {
+    const owed = toPerson ? owedTo(toPerson.spaceId, toPerson.memberId) : 0;
+    return owed > 0 ? Math.min(sum, owed) : sum;
+  }
+
   function paintCovers() {
     coversF.innerHTML = "";
     if (!toPerson) { coversF.hidden = true; coverList = []; return; }
@@ -1361,9 +1373,18 @@ function buildTransferForm(prefill = null) {
     for (const id of [...ticked]) if (!coverList.some((c) => c.sharedEntryId === id)) ticked.delete(id);
     if (!coverList.length) {
       coversF.hidden = false;
+      const theyOwe = owedBy(toPerson.spaceId, toPerson.memberId);
+      const iOwe = owedTo(toPerson.spaceId, toPerson.memberId);
+      const where = toPerson.spaceName || "this space";
+      // A transfer only ever pays MY debt down (owe rules, merge.js), so say
+      // plainly what this one will and will not do before it is sent.
+      const text = iOwe > 0
+        ? `You owe ${toPerson.name} ${fmtMoney(iOwe)} in ${where}. This pays it down; anything above it is a plain transfer.`
+        : theyOwe > 0
+          ? `${toPerson.name} already owes you ${fmtMoney(theyOwe)} in ${where}. This transfer won't change that.`
+          : `You don't owe ${toPerson.name} anything in ${where}. This is a plain transfer and won't change what anyone owes.`;
       coversF.append(el("label", {}, "Covers"),
-        el("p", { class: "muted xsmall", style: "margin:0" },
-          `You don't owe ${toPerson.name} anything in ${toPerson.spaceName || "this space"} — this goes across as a plain settlement.`));
+        el("p", { class: "muted xsmall", style: "margin:0" }, text));
       return;
     }
     coversF.hidden = false;
@@ -1386,7 +1407,7 @@ function buildTransferForm(prefill = null) {
       row.addEventListener("click", () => {
         buzz(6);
         if (on) ticked.delete(c.sharedEntryId); else ticked.add(c.sharedEntryId);
-        const sum = tickedTotal();
+        const sum = fillFor(tickedTotal());
         amt.value = sum > 0 ? String(sum) : "";
         paintCovers();
         checkFunds();
@@ -1404,8 +1425,34 @@ function buildTransferForm(prefill = null) {
   // A transfer moves money now, so there is no "plan it anyway" case here:
   // over the source balance and the button is off.
   const funds = fundsNote();
+  // Under the amount: how much of it pays a debt and how much is only a
+  // transfer. Empty when there is nothing worth saying.
+  const splitHint = el("p", { class: "xsmall muted", style: "margin:6px 0 0", hidden: true });
+  amtF.append(splitHint);
+  function paintSplitHint(amount) {
+    if (!toPerson || amount == null || amount <= 0) { splitHint.hidden = true; return; }
+    const owed = owedTo(toPerson.spaceId, toPerson.memberId);
+    const extra = amount - owed;
+    if (owed > 0 && extra > 0) {
+      splitHint.hidden = false;
+      splitHint.textContent =
+        `${fmtMoney(owed)} pays off what you owe. The other ${fmtMoney(extra)} is a plain transfer.`;
+      return;
+    }
+    // Shares listed as covers, yet nothing owed overall: they owe me at least
+    // as much, so this money would settle nothing.
+    if (owed <= 0 && coverList.length) {
+      splitHint.hidden = false;
+      splitHint.textContent =
+        `Overall you don't owe ${toPerson.name} anything here: what they owe you covers these. This would be a plain transfer.`;
+      return;
+    }
+    splitHint.hidden = true;
+  }
+
   function checkFunds() {
     save.textContent = toPerson ? `Send to ${toPerson.name}` : "Transfer";
+    paintSplitHint(parseAmount(amt.value));
     const bal = fromId ? accountBalance(fromId) : null;
     const amount = parseAmount(amt.value);
     if (bal == null) { funds.set(null); save.disabled = false; return; }
@@ -1434,7 +1481,7 @@ function buildTransferForm(prefill = null) {
   }
   paintBoth();
   if (toPerson && ticked.size) {
-    const sum = tickedTotal();
+    const sum = fillFor(tickedTotal());
     if (sum > 0) { amt.value = String(sum); checkFunds(); }
   }
 

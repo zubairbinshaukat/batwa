@@ -22,6 +22,16 @@ VAPID_PUBLIC_KEY = "BD15vxCPRqUUfyzO6h8dvFhRZafCh3P1TC4Md9K-ec83FFDEWQ_sUL4qI3DH
 name = "SPACES"
 class_name = "Space"
 
+# The install counter: one object for the whole relay (src/stats.js). It holds
+# three whole numbers and week-old random nonces, nothing about anyone.
+[[durable_objects.bindings]]
+name = "STATS"
+class_name = "Stats"
+
 [[migrations]]
 tag = "v1"
 new_sqlite_classes = ["Space"]
+
+[[migrations]]
+tag = "v2"
+new_sqlite_classes = ["Stats"]

@@ -59,18 +59,19 @@ describe("js/relay.js happy path", () => {
 
     const bumped = await relay.relayPut(s, 1, "cipher-2");
     assert.equal(bumped.version, 2);
+    assert.equal(bumped.notified, false, "no notify field, nothing pushed");
     assert.equal((await relay.relayGet(s)).blob, "cipher-2");
 
     const box = "client" + Math.random().toString(36).slice(2, 10);
     const sub = await makeSubscription(base, box);
     await relay.relaySubscribe(s, "dev-1", "member-1", sub.json);
     const fan = await relay.relayNotify(s, "opaque-b64", "dev-2");
-    assert.deepEqual(fan, { sent: 1, gone: 0 });
+    assert.deepEqual(fan, { sent: 1, gone: 0, rejected: 0, retryLater: 0 });
     const plain = await decryptPush((await deliveries(base, box))[0].body, sub);
     assert.deepEqual(JSON.parse(plain), { s: s.id, p: "opaque-b64" });
 
     await relay.relayUnsubscribe(s, "dev-1");
-    assert.deepEqual(await relay.relayNotify(s, "opaque-b64"), { sent: 0, gone: 0 });
+    assert.deepEqual(await relay.relayNotify(s, "opaque-b64"), { sent: 0, gone: 0, rejected: 0, retryLater: 0 });
 
     const newTok = newToken();
     await relay.relayRotate(s, await sha256Hex(newTok));

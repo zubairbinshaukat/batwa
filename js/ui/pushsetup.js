@@ -162,7 +162,12 @@ export function installPushMessageHandlers({ onSpacesChanged, onOpen, onResubscr
   const handler = (e) => {
     const d = e && e.data;
     if (!d || typeof d !== "object") return;
-    if (d.type === "spaces-changed" && onSpacesChanged) onSpacesChanged(d.spaceId || null);
+    if (d.type === "spaces-changed" && onSpacesChanged) {
+      const s = d.summary && typeof d.summary === "object" ? d.summary : null;
+      onSpacesChanged(d.spaceId || null, s && typeof s.title === "string"
+        ? { title: s.title.slice(0, 120), body: String(s.body || "").slice(0, 160) }
+        : null);
+    }
     else if (d.type === "open" && onOpen) onOpen(String(d.url || "./"));
     else if (d.type === "push-resubscribe" && onResubscribe) onResubscribe();
   };

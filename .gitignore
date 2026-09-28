@@ -25,6 +25,9 @@ yarn.lock
 !relay/package-lock.json
 relay/.wrangler/
 
+# ...and the dev-only image tool (tools/make-images.mjs). Never loaded by the app.
+!tools/package.json
+
 # Local scratch
 *.log
 tmp/

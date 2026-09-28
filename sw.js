@@ -1,10 +1,10 @@
 /* Batwa service worker — app shell cache only. Never touches user data. */
-const CACHE = "batwa-v34";
+const CACHE = "batwa-v35";
 
 /* Marketing / SEO files. They are never precached, never runtime-cached, and
    the navigate branch below lets /about.html reach the network. The app's
    cache stays the app's cache; these change on their own schedule. */
-const NO_CACHE = /\/(about\.html|css\/about\.css|robots\.txt|sitemap\.xml|llms\.txt|humans\.txt|fonts\/fraunces-var\.woff2|screenshots\/(og-batwa\.png|hero-[a-z-]+\.webp|0[1-4]-[a-z]+\.webp))$/;
+const NO_CACHE = /\/(about\.html|css\/about-page\.css|robots\.txt|sitemap\.xml|llms\.txt|humans\.txt|fonts\/fraunces-var\.woff2|icons\/logo-68\.webp|screenshots\/(og-batwa\.png|hero-[a-z]+-\d+\.(avif|webp)|0[1-4]-[a-z]+\.(avif|webp)))$/;
 
 const SHELL = [
   "./",
@@ -14,6 +14,7 @@ const SHELL = [
   "./css/base.css",
   "./css/components.css",
   "./css/onboarding.css",
+  "./css/installguide.css",
   "./fonts/outfit-var.woff2",
   "./fonts/caveat-var.woff2",
   "./js/vendor/gsap.min.js",
@@ -40,6 +41,8 @@ const SHELL = [
   "./js/spaces/merge.js",
   "./js/spaces/crypto.js",
   "./js/spaces/notify.js",
+  "./js/installguide.js",
+  "./js/installcount.js",
   "./js/ui/home.js",
   "./js/ui/reveal.js",
   "./js/ui/monthsheet.js",
@@ -350,6 +353,10 @@ function spaceSummaryText(summary, locale) {
       return { title: `${who} joined ${where}`, body: n ? `${n} members now` : "Shared space" };
     case "leave":
       return { title: `${who} left ${where}`, body: n ? `${n} members now` : "Shared space" };
+    case "remind":
+      return { title: `${who} reminded you to settle up`, body: dot(total, where) };
+    case "test":
+      return { title: "Batwa notifications work", body: "This is the test you sent from Settings" };
     default:
       return SPACE_FALLBACK;
   }
@@ -418,11 +425,6 @@ async function onSpacePush(raw) {
     // not ours, or damaged - still worth waking any open page
   }
 
-  // Always tell the pages: a background tab pulls silently instead of waiting
-  // for the next poll, and a focused one makes the banner unnecessary (9.22).
-  const clients = await tellClients({ type: "spaces-changed", spaceId });
-  if (clients.some((c) => c.focused)) return;
-
   let text = SPACE_FALLBACK;
   if (spaceId && payload) {
     try {
@@ -433,11 +435,25 @@ async function onSpacePush(raw) {
     }
   }
 
+  // Tell the pages first: a background tab pulls at once instead of waiting
+  // for the next poll, and a focused one shows the same words as a toast.
+  const clients = await tellClients({
+    type: "spaces-changed", spaceId,
+    summary: { title: text.title || SPACE_FALLBACK.title, body: text.body || SPACE_FALLBACK.body },
+  });
+  const focused = clients.some((c) => c.focused);
+
+  // EVERY push shows a notification, focused app or not. Safari revokes the
+  // subscription of a site whose push shows nothing, after which that iPhone
+  // never gets another one; Chrome shows its own "updated in the background"
+  // banner instead. With the app in front of the user it arrives silently -
+  // the toast is the loud half.
   try {
     await self.registration.showNotification(text.title || SPACE_FALLBACK.title, {
       body: text.body || SPACE_FALLBACK.body,
       tag: "space-" + (spaceId || "unknown"),
-      renotify: true,
+      renotify: !focused,
+      silent: focused,
       icon: "icons/icon-192-v2.png",
       badge: "icons/icon-maskable-192-v2.png",
       data: { url: "./?open=pending&space=" + encodeURIComponent(spaceId || "") },

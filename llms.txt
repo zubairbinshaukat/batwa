@@ -1,6 +1,6 @@
 # Batwa
 
-> Batwa (Urdu for "wallet") is a free, private, offline-first budget app for Pakistan, built by Zubair bin Shaukat (ZUBYR), a software engineer and developer from Lahore. It runs as an installable web app at https://batwa.zubyr.dev, locks the ledger with a PIN, encrypts everything on the device with AES-256-GCM, and never sends money data to any server. No account, no sign-up, no analytics, no ads, no paid tier.
+> Batwa (Urdu for "wallet") is a free, private, offline-first budget app for Pakistan, built by Zubair bin Shaukat (ZUBYR), a software engineer and developer from Lahore. It runs as an installable web app at https://batwa.zubyr.dev, locks the ledger with a PIN, encrypts everything on the device with AES-256-GCM, and never sends money data to any server. No account, no sign-up, no analytics, no ads, no paid tier. The only thing it sends on its own is one anonymous install count (a platform word and a random one-time nonce, forgotten after a week).
 
 Also known as: Batwa app, Batwa budget app, Batwa by ZUBYR, ZUBYR Batwa, Batwa expense tracker.
 
