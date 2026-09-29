@@ -458,6 +458,8 @@ h1, h2, h3 { text-wrap: balance; }
 @media (min-width: 900px) { .ab-avatar { width: 112px; height: 112px; } }
 .ab-author h2 { max-width: none; font-size: clamp(1.5rem, 5vw, 2rem); }
 .ab-author p { color: var(--c-ink-soft); max-width: 46ch; }
+.ab-ph { display: inline-block; line-height: 0; margin-top: var(--s-4); }
+.ab-ph img { max-width: 100%; height: auto; }
 
 /* =================== Footer =================== */
 /* The footer mirrors the hero: the same detached shell, closing the page the
