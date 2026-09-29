@@ -81,7 +81,7 @@
           "https://batwa.zubyr.dev/screenshots/01-home.png",
           "https://batwa.zubyr.dev/screenshots/02-reports.png"
         ],
-        "softwareVersion": "35",
+        "softwareVersion": "35.1",
         "isAccessibleForFree": true,
         "codeRepository": "https://github.com/zubairbinshaukat/batwa",
         "author": { "@id": "https://zubyr.dev/#person" },
@@ -233,16 +233,22 @@
 
   </div><!-- /.ab-shell -->
 
-  <!-- Live install counter. Its space is held from the first paint (a dash
-       until the relay answers) so the page never jumps; it is removed if the
-       relay cannot be reached, and it never shows 0. -->
+  <!-- Install counter: "1,284+ / Downloads so far". The inline script paints
+       the last figure this browser saw before the first frame; the module
+       script below replaces it with the relay's as soon as it answers. -->
   <section class="ab-count" id="installs" aria-labelledby="installs-label">
     <div class="ab-wrap">
-      <span class="ab-count-num" data-count aria-hidden="true">&ndash;</span>
-      <span class="ab-count-live">Live</span>
-      <h2 class="ab-count-label" id="installs-label">phones carry Batwa</h2>
-      <p class="ab-count-note">Counted anonymously: one ping when Batwa is installed, no ID, no tracking. <a href="#faq-count">What is sent</a></p>
-      <p class="sr-only" aria-live="polite" data-count-say></p>
+      <h2 id="installs-label">
+        <span class="ab-count-num" id="installs-num" data-count>&nbsp;</span>
+        <span class="ab-count-label">Downloads so far</span>
+      </h2>
+      <script>
+        try {
+          var n = Number(localStorage.getItem("batwa.installsSeen"));
+          if (n > 0) document.getElementById("installs-num").textContent =
+            new Intl.NumberFormat("en-PK").format(n) + "+";
+        } catch (e) {}
+      </script>
     </div>
   </section>
 
@@ -531,7 +537,7 @@
       <span>&copy; 2026 ZUBYR</span>
       <span>Open source, free forever</span>
       <span>No account, no tracking</span>
-      <span>v35 &middot; install guide, live install count, fairer shared balances</span>
+      <span>v35.1 &middot; saves large ledgers reliably, install guide, fairer shared balances</span>
       <span class="ab-hand">batwa = wallet in Urdu</span>
     </p>
     <div class="ab-foot-mark" aria-hidden="true">Batwa</div>
@@ -554,52 +560,34 @@
   const installEl = document.getElementById("install-btn");
   if (installEl) installButton({ element: installEl });
 
-  /* ---- Live install counter ------------------------------------------
-     GET /v1/stats on the relay: { total, android, ios, other }. Polled every
-     15 s while the tab is visible, stopped after 15 minutes on the page, with
-     backoff on errors. The band stays hidden until the first answer and is
-     never shown with a made-up number. */
+  /* ---- Install counter -----------------------------------------------
+     GET /v1/stats on the relay: { total, android, ios, other }. Asked at
+     once (the connection is preconnected in <head>), then every 15 s while
+     the tab is visible, for at most 15 minutes, with backoff on errors.
+     Shown as "1,284+": installs are counted once each, and a count can only
+     be a floor (uninstalls are invisible), so "+" is the honest reading.
+     The last figure is kept in localStorage so the next visit paints it
+     instantly. With no figure at all, ever, the band is removed, never "0". */
   const band = document.getElementById("installs");
   const numEl = band?.querySelector("[data-count]");
-  const sayEl = band?.querySelector("[data-count-say]");
   const fmt = new Intl.NumberFormat("en-PK");
-  const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
   const base = relayUrl() ? relayUrl().replace(/\/+$/, "") : "";
+  const SEEN_KEY = "batwa.installsSeen";
   const POLL_MS = 15_000;
   const STOP_AFTER_MS = 15 * 60_000;
   const startedAt = Date.now();
-  let shown = null;        // the figure on screen
-  let seen = false;        // band has been scrolled into view at least once
-  let pending = null;      // a figure that arrived before the band was seen
   let delay = POLL_MS;
   let timer = null;
 
-  function tween(from, to) {
-    if (reduce || from === to) { numEl.textContent = fmt.format(to); return; }
-    const t0 = performance.now();
-    const dur = from === 0 ? 900 : 600;
-    const step = (now) => {
-      const k = Math.min(1, (now - t0) / dur);
-      const eased = 1 - Math.pow(1 - k, 3);
-      numEl.textContent = fmt.format(Math.round(from + (to - from) * eased));
-      if (k < 1) requestAnimationFrame(step);
-    };
-    requestAnimationFrame(step);
-    if (from !== 0) {
-      numEl.classList.remove("is-pop");
-      void numEl.offsetWidth; // restart the animation
-      numEl.classList.add("is-pop");
-    }
-  }
+  const remembered = () => {
+    try { return Number(localStorage.getItem(SEEN_KEY)) || 0; } catch { return 0; }
+  };
 
   function show(total) {
-    if (!Number.isFinite(total) || total <= 0) return; // never a sad "0"
+    if (!Number.isFinite(total) || total <= 0) return;
+    numEl.textContent = `${fmt.format(total)}+`;
     band.hidden = false;
-    if (!seen) { pending = total; return; }
-    const from = shown ?? 0;
-    shown = total;
-    tween(from, total);
-    if (from === 0 && sayEl) sayEl.textContent = `${fmt.format(total)} phones carry Batwa`;
+    try { localStorage.setItem(SEEN_KEY, String(total)); } catch {}
   }
 
   async function poll() {
@@ -609,31 +597,23 @@
     try {
       const res = await fetch(base + "/v1/stats", { cache: "no-store", credentials: "omit" });
       if (!res.ok) throw new Error(String(res.status));
-      const body = await res.json();
-      show(Number(body.total));
+      show(Number((await res.json()).total));
       delay = POLL_MS;
     } catch {
-      if (shown == null && pending == null) { band.hidden = true; }
+      // A figure this browser has seen before stays up: it was true, and the
+      // "+" already says "at least". Only a page with no figure at all hides.
+      if (!remembered()) band.hidden = true;
       delay = Math.min(delay * 2, 5 * 60_000);
     }
     timer = setTimeout(poll, delay);
   }
 
-  if (band && !base) band.hidden = true;
+  if (band && numEl && !base) band.hidden = true;
   if (band && numEl && base) {
-    new IntersectionObserver((entries, obs) => {
-      if (!entries.some((e) => e.isIntersecting)) return;
-      seen = true;
-      obs.disconnect();
-      if (pending != null) { const v = pending; pending = null; show(v); }
-    }, { rootMargin: "0px 0px -10% 0px" }).observe(band);
-
     document.addEventListener("visibilitychange", () => {
       if (document.visibilityState === "visible" && !timer) poll();
     });
-    const go = () => poll();
-    if ("requestIdleCallback" in window) requestIdleCallback(go, { timeout: 3000 });
-    else setTimeout(go, 1200);
+    poll();
   }
 
   // FAQ: <details> snaps open by default. Animate the answer's height with the

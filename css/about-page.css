@@ -552,36 +552,25 @@ body { padding-bottom: 96px; }
 @media (prefers-reduced-motion: reduce) { .rise { opacity: 1; transform: none; } }
 
 /* =================== Install counter =================== */
-/* A number that is live: polled every 15 s while the tab is visible, so it
-   must never make the page jump. The band's height is reserved before the
-   first figure arrives, and the whole band goes if the relay never answers. */
+/* "1,284+ / Downloads so far". The last figure this browser saw is painted
+   before the first frame (an inline script under the number), then quietly
+   replaced by the relay's; a first-ever visit holds the number's height so
+   nothing below it moves when the figure lands. */
 .ab-count { padding: clamp(32px, 6vw, 64px) 0; text-align: center; }
 .ab-count[hidden] { display: none; }
-.ab-count .ab-wrap { display: flex; flex-direction: column; align-items: center; gap: var(--s-2); }
+.ab-count h2 {
+  display: flex; flex-direction: column; align-items: center; gap: var(--s-2);
+  max-width: none; margin-inline: auto;
+}
 .ab-count-num {
-  display: block; min-height: 1.05em; min-width: 3ch;
+  display: block; min-height: 1.05em;
   font-family: var(--font-display); font-weight: 700;
   font-size: clamp(3rem, 12vw, 6rem); line-height: 1.05; letter-spacing: -0.03em;
   font-variant-numeric: tabular-nums lining-nums;
   color: var(--c-violet);
 }
-.ab-count-num.is-pop { animation: ab-pop 0.5s var(--ease-out); }
-@keyframes ab-pop { 40% { transform: scale(1.06); } }
 .ab-count-label {
   font-family: var(--font-display); font-weight: 600;
-  font-size: clamp(1.125rem, 3.4vw, 1.5rem); color: var(--c-ink);
+  font-size: clamp(1.125rem, 3.4vw, 1.5rem); line-height: 1.3; letter-spacing: -0.01em;
+  color: var(--c-ink);
 }
-.ab-count-note { font-size: var(--fs-sm); color: var(--ab-muted); max-width: 44ch; }
-.ab-count-note a { font-weight: 600; }
-.ab-count-live {
-  display: inline-flex; align-items: center; gap: 8px;
-  font-size: var(--fs-xs); font-weight: 600; letter-spacing: 0.06em;
-  text-transform: uppercase; color: var(--c-violet);
-}
-.ab-count-live::before {
-  content: ""; width: 8px; height: 8px; border-radius: 50%; background: #2FB6A0;
-  box-shadow: 0 0 0 3px rgba(47, 182, 160, 0.22);
-}
-/* Stay stacked and centered on every width — a side-by-side layout made the
-   big number read left-anchored on desktop. */
-@media (prefers-reduced-motion: reduce) { .ab-count-num.is-pop { animation: none; } }

@@ -1,5 +1,5 @@
 /* Batwa service worker — app shell cache only. Never touches user data. */
-const CACHE = "batwa-v35";
+const CACHE = "batwa-v35.1";
 
 /* Marketing / SEO files. They are never precached, never runtime-cached, and
    the navigate branch below lets /about.html reach the network. The app's

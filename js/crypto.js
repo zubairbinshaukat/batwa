@@ -6,11 +6,28 @@ const ITERATIONS = 150000;
 const te = new TextEncoder();
 const td = new TextDecoder();
 
+/*
+ * Bytes <-> base64, in chunks. `String.fromCharCode(...bytes)` passes every
+ * byte as its own argument, and engines cap how many arguments a call may
+ * take: past roughly 120 KB of ciphertext (about 500 ledger entries) it threw
+ * "Maximum call stack size exceeded" and every save failed. 32 KB per call
+ * stays far below any engine's limit and is just as fast.
+ */
+const CHUNK = 0x8000;
+
 export function b64(buf) {
-  return btoa(String.fromCharCode(...new Uint8Array(buf)));
+  const bytes = buf instanceof Uint8Array ? buf : new Uint8Array(buf);
+  let bin = "";
+  for (let i = 0; i < bytes.length; i += CHUNK) {
+    bin += String.fromCharCode.apply(null, bytes.subarray(i, i + CHUNK));
+  }
+  return btoa(bin);
 }
 export function unb64(str) {
-  return Uint8Array.from(atob(str), (c) => c.charCodeAt(0));
+  const bin = atob(str);
+  const out = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+  return out;
 }
 
 export function randomSalt() {
