@@ -76,7 +76,7 @@ export const RELAY_URL = "https://batwa-relay.<your-subdomain>.workers.dev";
 export const VAPID_PUBLIC_KEY = "<the same Public Key from step 3>";
 ```
 
-Then bump the cache name in `sw.js` (for example `batwa-v25` to `batwa-v26`) and deploy the app the same way you always do. Installed phones get the "New version ready" toast.
+Then rebuild and deploy the app the same way you always do (`npm run build`; Vercel runs it for you). There is no cache name to bump: the build names the service worker cache after a hash of what it precaches, so a changed `js/config.js` opens a new cache by itself. Installed phones get the "New version ready" toast.
 
 ## 7. Check it works
 
@@ -118,6 +118,6 @@ The full write-up is in `relay/README.md`.
 ## Troubleshooting
 
 - **`wrangler deploy` complains about Durable Objects.** Your account needs the free-plan SQLite-backed Durable Objects. In the dashboard open Workers and Pages, then Plans, and make sure Workers Free is active. Retry the deploy.
-- **The app says "Relay not configured".** `RELAY_URL` in `js/config.js` is empty or the app you are running is an older cached version. Bump the `sw.js` cache and redeploy.
+- **The app says "Relay not configured".** `RELAY_URL` in `js/config.js` is empty or the app you are running is an older cached version. Rebuild and redeploy, then accept the "New version ready" toast (or close and reopen the app).
 - **CORS error in the browser console.** `ALLOWED_ORIGIN` does not match the origin the app is served from. It must be scheme plus host only, no trailing slash or path.
 - **Notifications never arrive.** Open Settings → Shared spaces → Notify me → **Send test notification**; it names the problem. Then check both secret *names* with `wrangler secret list`, that `VAPID_PUBLIC_KEY` is identical in `wrangler.toml` and `js/config.js`, and that the app is installed to the home screen. iPhones need iOS 16.4 or newer and the app installed. `wrangler tail` shows one line per push (`push web.push.apple.com 201`): a `403` there means Apple refused the VAPID subject or keys.

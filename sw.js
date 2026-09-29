@@ -1,4 +1,17 @@
 /* Batwa service worker — app shell cache only. Never touches user data. */
+
+/* Build-time values. `npm run build` (build/vite-plugin-sw.js) writes this
+   file to dist/sw.js with three things replaced and every other byte kept:
+     CACHE     -> "batwa-v<APP_VERSION from js/config.js>-<hash of the precache>",
+                  so it changes by itself whenever a shipped file does;
+     SHELL     -> "./", "./index.html", the public/ files listed below, then
+                  every hashed chunk and stylesheet the app can load;
+     NO_CACHE  -> this regex plus the about page's own hashed files.
+   What stays here are the v35.1 hand-written values, as defaults that keep
+   this file valid on its own. Only the public/ entries in SHELL still
+   matter: add a file here when a new public file must work offline. The
+   source-file entries are ignored by the build (Vite's manifest replaces
+   them), and `vite dev` never registers this worker. */
 const CACHE = "batwa-v35.1";
 
 /* Marketing / SEO files. They are never precached, never runtime-cached, and

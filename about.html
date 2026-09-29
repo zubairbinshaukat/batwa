@@ -30,7 +30,7 @@
   <meta name="twitter:image" content="https://batwa.zubyr.dev/screenshots/og-batwa.png">
 
   <link rel="manifest" href="manifest.webmanifest">
-  <link rel="icon" href="/favicon.ico" sizes="48x48">
+  <link rel="icon" href="/favicon.ico" sizes="48x48" vite-ignore>
   <link rel="icon" href="icons/favicon-96.png" type="image/png" sizes="96x96">
   <link rel="icon" href="icons/favicon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="icons/apple-touch-icon-180-v2.png">
@@ -41,9 +41,12 @@
   <link rel="preconnect" href="https://batwa-relay.liter-book.workers.dev" crossorigin>
   <!-- One stylesheet, light only (it used to be four, one of them the app's
        97 KB components.css). The install sheet's styles are only needed once
-       somebody taps "How to install", so they never block the first paint. -->
+       somebody taps "How to install", so they never block the first paint.
+       Vite bundles about-page.css; installguide.css is served as-is from
+       public/ (`vite-ignore`), because Vite would otherwise fold it into
+       that one blocking stylesheet. -->
   <link rel="stylesheet" href="css/about-page.css">
-  <link rel="stylesheet" href="css/installguide.css" media="print" onload="this.media='all'">
+  <link rel="stylesheet" href="css/installguide.css" media="print" onload="this.media='all'" vite-ignore>
   <!-- The reveal-on-scroll classes start invisible; without JS they must not
        hide the page's content from a reader (or a crawler). -->
   <noscript><style>.rise { opacity: 1; transform: none; } #installs, #install-btn { display: none; }</style></noscript>
@@ -81,7 +84,7 @@
           "https://batwa.zubyr.dev/screenshots/01-home.png",
           "https://batwa.zubyr.dev/screenshots/02-reports.png"
         ],
-        "softwareVersion": "35.1",
+        "softwareVersion": "36",
         "isAccessibleForFree": true,
         "codeRepository": "https://github.com/zubairbinshaukat/batwa",
         "author": { "@id": "https://zubyr.dev/#person" },
@@ -156,7 +159,7 @@
           {
             "@type": "Question",
             "name": "Is it open source?",
-            "acceptedAnswer": { "@type": "Answer", "text": "Yes. The whole app is on GitHub, including the relay that shared spaces use. There is no build step, so the code you read is the code that runs." }
+            "acceptedAnswer": { "@type": "Answer", "text": "Yes. The whole app is on GitHub, including the relay that shared spaces use. It is built with Vite and has no runtime dependencies." }
           },
           {
             "@type": "Question",
@@ -233,10 +236,12 @@
 
   </div><!-- /.ab-shell -->
 
-  <!-- Install counter: "1,284+ / Downloads so far". The inline script paints
-       the last figure this browser saw before the first frame; the module
-       script below replaces it with the relay's as soon as it answers. -->
-  <section class="ab-count" id="installs" aria-labelledby="installs-label">
+  <!-- Install counter: "1,280+ / Downloads so far". Hidden until there are
+       at least 5, and always rounded DOWN to a multiple of 5 (12 -> 10+,
+       17 -> 15+). The inline script paints the last figure this browser saw
+       before the first frame; the module script below replaces it with the
+       relay's as soon as it answers. Keep the rounding in both in step. -->
+  <section class="ab-count" id="installs" aria-labelledby="installs-label" hidden>
     <div class="ab-wrap">
       <h2 id="installs-label">
         <span class="ab-count-num" id="installs-num" data-count>&nbsp;</span>
@@ -244,9 +249,12 @@
       </h2>
       <script>
         try {
-          var n = Number(localStorage.getItem("batwa.installsSeen"));
-          if (n > 0) document.getElementById("installs-num").textContent =
-            new Intl.NumberFormat("en-PK").format(n) + "+";
+          var n = Math.floor(Number(localStorage.getItem("batwa.installsSeen")) / 5) * 5;
+          if (n >= 5) {
+            document.getElementById("installs-num").textContent =
+              new Intl.NumberFormat("en-PK").format(n) + "+";
+            document.getElementById("installs").hidden = false;
+          }
         } catch (e) {}
       </script>
     </div>
@@ -271,7 +279,7 @@
         <div class="card">
           <b>100%</b>
           <h3>of the code on GitHub</h3>
-          <p>No build step either, so the code you read is the code that runs.</p>
+          <p>Built with Vite, with no runtime dependencies.</p>
         </div>
       </div>
     </div>
@@ -482,7 +490,7 @@
         <details>
           <summary><span>Is it open source?</span><i aria-hidden="true"></i></summary>
           <div class="ab-faq-body">
-            <p>Yes. The whole app is on GitHub, including the relay that shared spaces use. There is no build step, so the code you read is the code that runs.</p>
+            <p>Yes. The whole app is on GitHub, including the relay that shared spaces use. It is built with Vite and has no runtime dependencies.</p>
           </div>
         </details>
         <details>
@@ -537,7 +545,7 @@
       <span>&copy; 2026 ZUBYR</span>
       <span>Open source, free forever</span>
       <span>No account, no tracking</span>
-      <span>v35.1 &middot; saves large ledgers reliably, install guide, fairer shared balances</span>
+      <span>v36 &middot; saves large ledgers reliably, install guide, fairer shared balances</span>
       <span class="ab-hand">batwa = wallet in Urdu</span>
     </p>
     <div class="ab-foot-mark" aria-hidden="true">Batwa</div>
@@ -564,10 +572,11 @@
      GET /v1/stats on the relay: { total, android, ios, other }. Asked at
      once (the connection is preconnected in <head>), then every 15 s while
      the tab is visible, for at most 15 minutes, with backoff on errors.
-     Shown as "1,284+": installs are counted once each, and a count can only
-     be a floor (uninstalls are invisible), so "+" is the honest reading.
+     Shown as "1,280+": the real count rounded DOWN to a multiple of 5, and
+     not shown at all below 5. Installs are counted once each and a count can
+     only be a floor (uninstalls are invisible), so "+" is the honest reading.
      The last figure is kept in localStorage so the next visit paints it
-     instantly. With no figure at all, ever, the band is removed, never "0". */
+     instantly. The band starts hidden and never shows "0". */
   const band = document.getElementById("installs");
   const numEl = band?.querySelector("[data-count]");
   const fmt = new Intl.NumberFormat("en-PK");
@@ -579,15 +588,23 @@
   let delay = POLL_MS;
   let timer = null;
 
+  const MIN_SHOWN = 5;
+  const STEP = 5;
+  /** 12 -> 10, 17 -> 15, 4 -> 0 (below MIN_SHOWN, so not shown). */
+  const floorTo = (n) => Math.floor(n / STEP) * STEP;
+
   const remembered = () => {
     try { return Number(localStorage.getItem(SEEN_KEY)) || 0; } catch { return 0; }
   };
 
   function show(total) {
+    // A 0 (a reset relay) must not wipe the figure this browser remembers.
     if (!Number.isFinite(total) || total <= 0) return;
-    numEl.textContent = `${fmt.format(total)}+`;
-    band.hidden = false;
     try { localStorage.setItem(SEEN_KEY, String(total)); } catch {}
+    const shown = floorTo(total);
+    if (shown < MIN_SHOWN) { band.hidden = true; return; }
+    numEl.textContent = `${fmt.format(shown)}+`;
+    band.hidden = false;
   }
 
   async function poll() {
@@ -601,8 +618,8 @@
       delay = POLL_MS;
     } catch {
       // A figure this browser has seen before stays up: it was true, and the
-      // "+" already says "at least". Only a page with no figure at all hides.
-      if (!remembered()) band.hidden = true;
+      // "+" already says "at least". Otherwise the band stays hidden.
+      if (floorTo(remembered()) < MIN_SHOWN) band.hidden = true;
       delay = Math.min(delay * 2, 5 * 60_000);
     }
     timer = setTimeout(poll, delay);

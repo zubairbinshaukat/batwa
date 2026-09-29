@@ -1,7 +1,8 @@
 """Regenerate the Batwa PWA icon set from the clay wallet source render.
 
 Usage:  python branding/make-icons.py [source.png]
-Default source is branding/logo-source.png. Outputs into icons/.
+Default source is branding/logo-source.png. Outputs into public/icons/ and
+public/favicon.ico (public/ is served as-is by the Vite build, same URLs).
 """
 import os
 import sys
@@ -47,7 +48,7 @@ def render(subject, size, scale, bg=None):
 def main():
     source = sys.argv[1] if len(sys.argv) > 1 else os.path.join(ROOT, "branding", "logo-source.png")
     subject = load_clean(source)
-    out = os.path.join(ROOT, "icons")
+    out = os.path.join(ROOT, "public", "icons")
 
     jobs = [
         # transparent, near-full-bleed: browsers and Android "any" slots
@@ -65,7 +66,7 @@ def main():
         if bg is not None:
             img = img.convert("RGB")
         img.save(os.path.join(out, name), optimize=True)
-        print("wrote icons/%s  %dx%d" % (name, size, size))
+        print("wrote public/icons/%s  %dx%d" % (name, size, size))
 
     # Search-result favicon. Google fetches the icon it finds on the home page
     # and wants a raster that is a multiple of 48px; it also tries /favicon.ico
@@ -73,10 +74,10 @@ def main():
     # lavender plate so the wallet reads at 16px instead of dissolving.
     fav = render(subject, 96, 0.84, PLATE).convert("RGB")
     fav.save(os.path.join(out, "favicon-96.png"), optimize=True)
-    print("wrote icons/favicon-96.png  96x96")
+    print("wrote public/icons/favicon-96.png  96x96")
     ico = render(subject, 256, 0.84, PLATE).convert("RGB")
-    ico.save(os.path.join(ROOT, "favicon.ico"), sizes=[(16, 16), (32, 32), (48, 48)])
-    print("wrote favicon.ico  16/32/48")
+    ico.save(os.path.join(ROOT, "public", "favicon.ico"), sizes=[(16, 16), (32, 32), (48, 48)])
+    print("wrote public/favicon.ico  16/32/48")
 
 
 if __name__ == "__main__":

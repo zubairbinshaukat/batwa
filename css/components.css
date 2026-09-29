@@ -811,8 +811,15 @@ html[data-perf="low"] .bottom-nav {
   -webkit-backdrop-filter: none;
   /* the inset+drop stack above is a literal, not a token, so it needs its
      own low-tier override here too (tokens.css only simplifies the ones that
-     already went through --shadow-*/--clay-* names) */
-  box-shadow: var(--shadow-xs);
+     already went through --shadow-* and --clay-* names).
+     v36 note: through v35.1 this comment was written with "--shadow-*" then
+     "/--clay-*", and that star-slash closed the comment early. Browsers then
+     read the rest of the comment plus the declaration below as one invalid
+     declaration and dropped it, so the override never applied. Vite's CSS
+     parser (postcss) refuses that text outright. The declaration stays
+     commented out so the low tier looks exactly as it did; turning it on is
+     a visual change for its own release.
+  box-shadow: var(--shadow-xs); */
 }
 .bottom-nav .nav-inner {
   height: 100%;

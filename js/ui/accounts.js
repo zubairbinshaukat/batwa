@@ -3,7 +3,7 @@
 import { $, el, esc, anim, motionOK, buzz, tune } from "../util/dom.js";
 import { fmtMoney, fmtCompact, dueHint, shortDate } from "../util/format.js";
 import { state, addAccount, updateAccount, removeAccountWithEntries, restoreAccountWithEntries, accountBalance, accountBreakdown, pendingExpenses, reconcileAccount, deleteEntry, reorderAccounts } from "../ledger.js";
-import { openSheet, closeSheet, confirmSheet } from "./modals.js";
+import { openSheet, closeSheet, confirmSheet } from "./sheet.js";
 import { toast } from "./toast.js";
 import { icon } from "./icons.js";
 import { isRevealed } from "./reveal.js";

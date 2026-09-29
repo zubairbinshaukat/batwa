@@ -9,7 +9,7 @@ import { state, replaceAll, mergeData } from "./ledger.js";
 import { timeAgo } from "./util/format.js";
 import { downloadBlob } from "./util/download.js";
 import { toast } from "./ui/toast.js";
-import { chooseSheet, confirmSheet, sheetOpen, openSheet, closeSheet } from "./ui/modals.js";
+import { chooseSheet, confirmSheet, sheetOpen, openSheet, closeSheet } from "./ui/sheet.js";
 import { el } from "./util/dom.js";
 import { icon } from "./ui/icons.js";
 

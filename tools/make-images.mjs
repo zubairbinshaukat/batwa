@@ -2,8 +2,9 @@
 //
 //   cd tools && npm install && npm run images
 //
-// Dev-only: the app never loads this, and nothing here runs at build time
-// (there is no build). Commit the files it writes.
+// Dev-only: the app never loads this, and nothing here runs as part of
+// `npm run build`. It writes into public/ (served as-is by Vite, same URLs);
+// commit the files it writes.
 //
 // Why these settings: measured against the original PNGs with SSIM, AVIF at
 // quality 62 comes out BOTH smaller and closer to the source than the WebP
@@ -16,7 +17,8 @@ import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
-const SHOTS = join(ROOT, "screenshots");
+const PUBLIC = join(ROOT, "public");
+const SHOTS = join(PUBLIC, "screenshots");
 
 const AVIF = { quality: 62, effort: 7 };
 const WEBP = { quality: 82, effort: 6, smartSubsample: true };
@@ -55,11 +57,11 @@ for (const name of SCREENS) {
 // a 68px WebP (2x) instead of the 192px PNG, same render, a tenth the bytes.
 console.log("logo");
 await write(
-  sharp(join(ROOT, "icons", "icon-192-v2.png")).resize(68, 68).webp({ quality: 90, effort: 6 }),
-  join(ROOT, "icons", "logo-68.webp"),
+  sharp(join(PUBLIC, "icons", "icon-192-v2.png")).resize(68, 68).webp({ quality: 90, effort: 6 }),
+  join(PUBLIC, "icons", "logo-68.webp"),
 );
 
-// Install-guide screenshots, when they exist: screenshots/install/*.png ->
+// Install-guide screenshots, when they exist: public/screenshots/install/*.png ->
 // 720px AVIF + WebP next to them (see js/installguide.js, SHOTS).
 const GUIDE = join(SHOTS, "install");
 if (existsSync(GUIDE)) {

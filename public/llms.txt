@@ -22,7 +22,7 @@ Also known as: Batwa app, Batwa budget app, Batwa by ZUBYR, ZUBYR Batwa, Batwa e
 - The ledger lives in the browser's IndexedDB as AES-256-GCM ciphertext. The static host serving the app never receives a byte of it.
 - Zero third-party requests at runtime: fonts, scripts and the GSAP motion library are self-hosted.
 - Fingerprint unlock on Android uses WebAuthn PRF to wrap the PIN key.
-- Fully open source with no build step, so the code you read on GitHub is the code that runs.
+- Fully open source, built with Vite; no runtime dependencies.
 
 ## Facts for quick answers
 

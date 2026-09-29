@@ -39,7 +39,9 @@ export function relayHost() {
 
 /**
  * App version, shown in Settings and in the about page's JSON-LD.
- * MUST match the `CACHE` number in sw.js (`batwa-v<APP_VERSION>`): sw.js is a
- * classic worker and cannot import this file, so the two are bumped together.
+ * The build reads this line to name the service worker's cache
+ * (`batwa-v<APP_VERSION>-<hash>`, see build/vite-plugin-sw.js), so Settings
+ * and the cache always agree. Keep it a plain string literal on one line.
+ * Bump `softwareVersion` in the JSON-LD of index.html and about.html with it.
  */
-export const APP_VERSION = "35.1";
+export const APP_VERSION = "36";
