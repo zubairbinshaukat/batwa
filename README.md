@@ -53,7 +53,7 @@ Everything is encrypted with a key derived from your PIN before it touches stora
 | Layer | Choice | Why |
 |---|---|---|
 | Language | Vanilla JavaScript, native ES modules | No framework. The modules are plain browser JavaScript; `npm run dev` serves them as they are. |
-| Build | [Vite](https://vite.dev) (dev-only dependency) | Bundles and hashes the modules and CSS, and fills in the service worker's precache list and cache name. |
+| Build | [Vite](https://vite.dev) (dev-only dependency) | An instant dev server with hot reload. A production build with minified JS, split so Home loads only what it needs. Hashed filenames, so the service worker's precache list and cache name are generated and every update reliably reaches phones. Dev-only, so nothing extra ships to users. |
 | Styling | Plain CSS with design tokens (`css/tokens.css`) | One file defines colour, type, spacing, radius and depth for both themes. |
 | Storage | IndexedDB | Large, structured, offline, per-origin. |
 | Crypto | Web Crypto API: PBKDF2 (150k iterations) + AES-256-GCM | Standard primitives, no custom crypto. |
@@ -122,8 +122,9 @@ Needs Node 20.19+ or 22.12+.
 ```bash
 git clone https://github.com/zubairbinshaukat/batwa.git
 cd batwa
-npm ci
+npm install
 npm run dev          # http://localhost:8000, source files as they are, live reload
+npm run build        # production build in dist/
 ```
 
 `npm run dev` never registers the service worker (it would cache source files). A worker left on `localhost:8000` by an earlier session (the old `python -m http.server 8000`, or a preview build) is replaced by a clean-up worker that clears its caches and reloads the page once, so your local data stays and the dev app takes over. Both commands use port 8000 and stop with an error if it is taken, rather than moving to another port (a different origin, without your local data). To try the real thing, offline mode and updates included, build and serve the output:
@@ -256,3 +257,7 @@ Issues and pull requests are welcome. Keep changes small and focused, follow the
 ## Acknowledgements
 
 Runs on the Web Platform and nothing else: IndexedDB, Web Crypto, WebAuthn, Service Workers, Web Share Target. Bundled with [Vite](https://vite.dev). Animations by [GSAP](https://gsap.com). Typefaces [Outfit](https://fonts.google.com/specimen/Outfit), [Caveat](https://fonts.google.com/specimen/Caveat) and [Fraunces](https://fonts.google.com/specimen/Fraunces).
+
+## License
+
+Batwa is MIT licensed. See [LICENSE](LICENSE).
