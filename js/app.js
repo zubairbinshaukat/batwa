@@ -10,10 +10,9 @@ import { loadLedger, onChange, state } from "./ledger.js";
 import { scheduleSync, syncNow, getSyncState, onSyncState } from "./sync.js";
 import { $, el, anim } from "./util/dom.js";
 import { renderHome, paintSpacesSlot } from "./ui/home.js";
-import { renderReports } from "./ui/reports.js";
-import { renderHistory } from "./ui/history.js";
-import { renderSettings } from "./ui/settings.js";
-import { addMoneySheet, addExpenseSheet, quickAddSheet, sheetOpen, closeSheet } from "./ui/modals.js";
+import { sheetOpen, closeSheet } from "./ui/sheet.js";
+// Reports, History, Settings, the space view and the forms load on demand.
+import { load, loaded, use, prefetchAll, isLoadFailure } from "./ui/lazy.js";
 import { toast } from "./ui/toast.js";
 import { icon } from "./ui/icons.js";
 import { mountBackupNudge } from "./nudge.js";
@@ -33,23 +32,23 @@ import {
   installContext, installButton, openInstallGuide, onInstallContextChange,
   promptInstall as nativeInstallPrompt,
 } from "./installguide.js";
-import { pendingSheet } from "./ui/pendingcard.js";
-import { renderSpace, setSpaceTarget, spaceTarget } from "./ui/spaceview.js";
-import { spacesSwitcherSheet, openJoinFromLink } from "./ui/spaces.js";
+import { setSpaceTarget, spaceTarget } from "./ui/spacetarget.js";
 import { startSmoothnessCheck, mark, logMarks } from "./perf.js";
 
 /* ============================================================
    Views + nav
    ============================================================ */
 
+// Home paints from the start-up bundle. Every other view names the module
+// (a js/ui/lazy.js loader) and the export that paints it; see renderView().
 const VIEWS = {
-  home:     { label: "Home",     render: renderHome,     iconName: "home" },
-  reports:  { label: "Reports",  render: renderReports,  iconName: "bar-chart" },
-  history:  { label: "History",  render: renderHistory,  iconName: "clock" },
-  settings: { label: "Settings", render: renderSettings, iconName: "settings" },
+  home:     { label: "Home",     render: renderHome,                           iconName: "home" },
+  reports:  { label: "Reports",  module: "reports",   render: "renderReports",  iconName: "bar-chart" },
+  history:  { label: "History",  module: "history",   render: "renderHistory",  iconName: "clock" },
+  settings: { label: "Settings", module: "settings",  render: "renderSettings", iconName: "settings" },
   // A view with no dock item: reached only through go("space", { id }), so the
   // dock shows nothing active while it is open (plan §4.5).
-  space:    { label: "Space",    render: renderSpace,    iconName: null, offDock: true },
+  space:    { label: "Space",    module: "spaceview", render: "renderSpace",    iconName: null, offDock: true },
 };
 
 let currentView = "home";
@@ -81,7 +80,10 @@ function renderNav() {
 function fabSlot() {
   return el("button", {
     class: "nav-fab", "aria-label": "Quick add",
-    onclick: () => { if (!sheetOpen()) quickAddSheet("expense"); },
+    // Checked again once the forms are here, in case a sheet opened meanwhile.
+    onclick: () => {
+      if (!sheetOpen()) use("modals", (m) => { if (!sheetOpen()) m.quickAddSheet("expense"); });
+    },
     html: icon("plus", 22),
   });
 }
@@ -144,8 +146,16 @@ document.addEventListener("keydown", (e) => {
   if (e.key === "Escape" && currentView === "space" && !sheetOpen()) goBackFromSpace();
 });
 
+/**
+ * Bumped by every renderView(). A view whose module is still on its way checks
+ * it on arrival, so a slow load can never paint over a view the user has
+ * already moved on to (tapping through the dock before the prefetch lands).
+ */
+let renderToken = 0;
+
 function renderView() {
   if (!unlocked) return;
+  const token = ++renderToken;
   const viewEl = $("#view");
   // The canopy belongs to the page, not to one tab: reset it here, because
   // onChange() and unlockFlow() come through this function too, not only go().
@@ -158,8 +168,48 @@ function renderView() {
   $("#canopy")?.classList.remove("is-negative");
   const hello = $("#hello");
   if (hello && showCanopy) hello.textContent = greeting();
+  const v = VIEWS[currentView];
+  // Home, and any view whose module has arrived (all of them, once
+  // prefetchAll() has run), paint right here, synchronously, as always.
+  const mod = v.module ? loaded(v.module) : null;
+  if (!v.module || mod) { paintView(viewEl, v.module ? mod[v.render] : v.render); return; }
+  // Still loading: clear the old view so it can't pass for this one, then
+  // paint on arrival unless another renderView() has happened since. If the
+  // code never arrives, the screen says so, with a way out, rather than
+  // staying blank (tapping the same tab again would not retry: go() ignores
+  // a tap on the view that is already current).
+  viewEl.innerHTML = "";
+  load[v.module]().then((m) => {
+    if (token !== renderToken || !unlocked) return;
+    paintView(viewEl, m[v.render]);
+  }, (err) => {
+    if (token !== renderToken || !unlocked) return;
+    paintLoadFailure(viewEl, err);
+  });
+}
+
+/** In place of a screen whose code could not be loaded (or threw on load). */
+function paintLoadFailure(viewEl, err) {
+  if (!isLoadFailure(err)) console.error(err);
+  viewEl.innerHTML = "";
+  const box = el("div", { class: "empty" });
+  box.innerHTML = isLoadFailure(err)
+    ? `<div class="empty-ico">${icon("refresh", 26)}</div>
+       <h3>This screen didn't load</h3>
+       <p>Your data is safe. Reload Batwa to try again.</p>`
+    : `<div class="empty-ico">${icon("frown", 26)}</div>
+       <h3>Something went wrong</h3>
+       <p>${String((err && err.message) || err)}</p>`;
+  box.append(el("button", {
+    class: "btn btn-primary", type: "button", style: "margin-top:16px",
+    onclick: () => location.reload(),
+  }, "Reload"));
+  viewEl.append(box);
+}
+
+function paintView(viewEl, render) {
   try {
-    VIEWS[currentView].render(viewEl);
+    render(viewEl);
     if (currentView === "home") mountHomeBanners();
   } catch (err) {
     console.error(err);
@@ -214,7 +264,9 @@ export function refreshBadges() {
 function initSpacesButton() {
   const b = $("#spaces-btn");
   if (!b) return;
-  b.addEventListener("click", () => { if (!sheetOpen()) spacesSwitcherSheet(); });
+  b.addEventListener("click", () => {
+    if (!sheetOpen()) use("spacesUI", (m) => { if (!sheetOpen()) m.spacesSwitcherSheet(); });
+  });
   refreshBadges();
 }
 
@@ -277,7 +329,7 @@ async function openPendingFromLink(spaceId) {
   }
   const wasOpen = sheetOpen();
   if (wasOpen) closeSheet();
-  setTimeout(() => pendingSheet(id), wasOpen ? 260 : 0);
+  setTimeout(() => use("pendingcard", (m) => m.pendingSheet(id)), wasOpen ? 260 : 0);
 }
 
 /**
@@ -290,7 +342,7 @@ function handleOpenUrl(url) {
   try { q = new URL(String(url || "./"), location.href).searchParams; } catch { return; }
   if (!unlocked) { deferredOpen = String(url || "./"); return; }
   if (q.get("open") === "pending") openPendingFromLink(q.get("space"));
-  else if (q.get("join")) openJoinFromLink(q.get("join"));
+  else if (q.get("join")) use("spacesUI", (m) => m.openJoinFromLink(q.get("join")));
 }
 
 /** A push that landed while the app was locked, shown once the PIN is in. */
@@ -468,6 +520,12 @@ function readSharedPayload() {
 
 /** Parse the message and open the matching sheet, pre-filled and fully editable. */
 async function openSharedSheet(text) {
+  // The forms load on demand. Wait for them first, so each sheet below still
+  // opens before its toast, as it always has. A failed load has already
+  // offered a reload; the shared text is lost either way on a reload.
+  let forms;
+  try { forms = await load.modals(); } catch { return; }
+  const { addMoneySheet, addExpenseSheet } = forms;
   const note = String(text || "").slice(0, 300);
   const parsed = parseTransactionSms(text);
 
@@ -505,6 +563,16 @@ async function openSharedSheet(text) {
 
 async function registerSW() {
   if (!("serviceWorker" in navigator)) return;
+  // Only a production build registers the worker. Under `vite dev` it would
+  // precache the source SHELL and serve stale source files cache-first; drop
+  // any worker a previous dev session left behind instead. Vite replaces
+  // import.meta.env.PROD with a literal at build time.
+  if (!import.meta.env.PROD) {
+    navigator.serviceWorker.getRegistrations()
+      .then((regs) => regs.forEach((r) => r.unregister()))
+      .catch(() => {});
+    return;
+  }
   try {
     const reg = await navigator.serviceWorker.register("sw.js");
     sendConfig(reg);
@@ -622,6 +690,9 @@ async function unlockFlow() {
   logMarks();
   renderNav();
   renderView();
+  // Home is on screen: fetch the other views and the forms while the user
+  // looks at it, so no tab or sheet ever waits on the network (js/ui/lazy.js).
+  prefetchAll();
   updateSyncPill();
   initSpacesButton();
   if (firstRun) await showAccountsStep(); // sits over the freshly rendered home
@@ -677,15 +748,23 @@ async function boot() {
     // PWA shortcut deep links (long-press icon)
     const query = new URLSearchParams(location.search);
     const action = query.get("action");
-    if (action === "add-expense") addExpenseSheet();
-    if (action === "add-money") addMoneySheet();
+    // Wait for the forms (loaded on demand) so the sheet still opens before
+    // the URL is scrubbed below, in the same order as before.
+    const forms = action === "add-expense" || action === "add-money"
+      ? await load.modals().catch(() => null) : null;
+    if (action === "add-expense") forms?.addExpenseSheet();
+    if (action === "add-money") forms?.addMoneySheet();
     if (action) history.replaceState({ view: "home" }, "", "./");
 
     // ?join=<invite> — the same after-unlock, scrub-the-URL pattern as ?action=
     const join = query.get("join");
     if (join) {
       history.replaceState({ view: "home" }, "", "./");
-      openJoinFromLink(join);
+      // Waits for the spaces sheets only, never for the join itself. A failed
+      // load has already offered a reload; anything else still lands in the
+      // catch below, as it always did.
+      await use("spacesUI", (m) => { m.openJoinFromLink(join); })
+        .catch((err) => { if (!isLoadFailure(err)) throw err; });
     }
 
     // ?open=pending&space=<id> — a tapped notification on a cold start
@@ -709,6 +788,9 @@ async function boot() {
 
 // No unhandled error ever lands on a blank screen.
 window.addEventListener("unhandledrejection", (e) => {
+  // A screen or sheet that couldn't load has already said so, with a Reload
+  // button (js/ui/lazy.js). A second, vaguer toast would only confuse.
+  if (isLoadFailure(e.reason)) { e.preventDefault(); return; }
   console.error(e.reason);
   toast("Something went wrong — nothing was lost", { icon: icon("alert", 18) });
 });

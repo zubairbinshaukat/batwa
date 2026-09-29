@@ -25,20 +25,15 @@ import {
   memberStack, netLine, STATUS_TEXT, spaceSettingsSheet, inviteSheet, memberLinkSheet,
 } from "./spaces.js";
 import { pendingCard, waitingCard } from "./pendingcard.js";
+import { spaceTarget, spaceMonth, setSpaceMonth } from "./spacetarget.js";
 
-/** Which space and which month the view is looking at. */
-let currentId = null;
-let currentMonth = thisMonth();
-
-export function setSpaceTarget(id) {
-  if (id && id !== currentId) currentMonth = thisMonth();
-  currentId = id || currentId;
-}
-
-export const spaceTarget = () => currentId;
+// Which space and which month the view is looking at: kept in
+// js/ui/spacetarget.js, on the start-up path, because the router sets it
+// before this module has necessarily loaded. Re-exported for older importers.
+export { setSpaceTarget, spaceTarget } from "./spacetarget.js";
 
 export function renderSpace(view) {
-  const space = getSpace(currentId);
+  const space = getSpace(spaceTarget());
   if (!space) {
     view.innerHTML = `<div class="empty"><div class="empty-ico">${icon("users", 26)}</div>
       <h3>This space isn't on this phone</h3>
@@ -180,20 +175,20 @@ function paintCanopy(space) {
    ============================================================ */
 
 function monthNav(view) {
-  const isNow = currentMonth === thisMonth();
+  const isNow = spaceMonth() === thisMonth();
   const nav = el("div", { class: "month-nav" });
   nav.append(el("button", {
     class: "icon-btn", "aria-label": "Previous month", html: icon("chevron-left", 18),
-    onclick: () => { currentMonth = shiftMonth(currentMonth, -1); renderSpace(view); },
+    onclick: () => { setSpaceMonth(shiftMonth(spaceMonth(), -1)); renderSpace(view); },
   }));
-  nav.append(el("div", { class: "month-label" }, monthLabel(currentMonth)));
+  nav.append(el("div", { class: "month-label" }, monthLabel(spaceMonth())));
   nav.append(el("button", {
     class: "icon-btn", "aria-label": "Next month", html: icon("chevron-right", 18),
     disabled: isNow || undefined,
     style: isNow ? "opacity:.35" : undefined,
     onclick: () => {
-      if (currentMonth >= thisMonth()) return;
-      currentMonth = shiftMonth(currentMonth, 1);
+      if (spaceMonth() >= thisMonth()) return;
+      setSpaceMonth(shiftMonth(spaceMonth(), 1));
       renderSpace(view);
     },
   }));
@@ -364,7 +359,7 @@ function recordsFor(blob, ym, spaceId) {
 }
 
 function recordsBlock(space, blob) {
-  const list = recordsFor(blob, currentMonth, space.id);
+  const list = recordsFor(blob, spaceMonth(), space.id);
   const wrap = el("div", { class: "sv-section", id: "sv-records" });
   const head = el("div", { class: "spread", style: "margin:var(--s-5) 0 var(--s-2)" });
   head.append(el("h2", {}, "Records"));

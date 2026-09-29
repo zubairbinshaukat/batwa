@@ -77,12 +77,13 @@
   --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
 }
 
+/* Root-relative on purpose, same as css/base.css: public file, unhashed. */
 @font-face {
   font-family: "Outfit";
   font-style: normal;
   font-weight: 100 900;
   font-display: swap;
-  src: url("../fonts/outfit-var.woff2") format("woff2");
+  src: url("/fonts/outfit-var.woff2") format("woff2");
 }
 /* ---- Borrowed from components.css: the only app components this page uses ---- */
 .card {
@@ -164,7 +165,7 @@ ul, ol { margin: 0; padding: 0; list-style: none; }
   font-style: normal;
   font-weight: 400 700;
   font-display: swap;
-  src: url("../fonts/fraunces-var.woff2") format("woff2");
+  src: url("/fonts/fraunces-var.woff2") format("woff2");
 }
 
 :root {
@@ -552,10 +553,13 @@ body { padding-bottom: 96px; }
 @media (prefers-reduced-motion: reduce) { .rise { opacity: 1; transform: none; } }
 
 /* =================== Install counter =================== */
-/* "1,284+ / Downloads so far". The last figure this browser saw is painted
-   before the first frame (an inline script under the number), then quietly
-   replaced by the relay's; a first-ever visit holds the number's height so
-   nothing below it moves when the figure lands. */
+/* "1,280+ / Downloads so far": the count rounded down to a multiple of 5, and
+   not shown at all below 5. The band is hidden in the HTML so a small count
+   never flashes. A returning visitor who has seen a count of 5 or more gets it
+   painted before the first frame (inline script), so nothing moves; a
+   first-ever visit shows the band when the relay answers, which moves the
+   content below it once. The band sits under the hero, so that shift is below
+   the first screen on phones (measured CLS 0.045 on desktop, still "good"). */
 .ab-count { padding: clamp(32px, 6vw, 64px) 0; text-align: center; }
 .ab-count[hidden] { display: none; }
 .ab-count h2 {

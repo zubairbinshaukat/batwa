@@ -12,7 +12,7 @@ import { $, el, esc, anim, buzz } from "../util/dom.js";
 import { getMeta, setMeta } from "../db.js";
 import { icon } from "./icons.js";
 import { toast } from "./toast.js";
-import { openSheet, closeSheet, sheetOpen } from "./modals.js";
+import { openSheet, closeSheet, sheetOpen } from "./sheet.js";
 import { fmtMoney } from "../util/format.js";
 import {
   SPACE_COLORS, MEMBER_COLORS, colorHex, initialsOf,

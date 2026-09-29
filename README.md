@@ -15,16 +15,16 @@
 </p>
 
 <p align="center">
-  <img alt="No build step" src="https://img.shields.io/badge/build-none-8257F6">
+  <img alt="Built with Vite" src="https://img.shields.io/badge/build-Vite-8257F6">
   <img alt="Dependencies" src="https://img.shields.io/badge/runtime%20deps-0-8257F6">
   <img alt="PWA" src="https://img.shields.io/badge/PWA-installable-8257F6">
   <img alt="Encryption" src="https://img.shields.io/badge/AES--256--GCM-on%20device-8257F6">
 </p>
 
 <p align="center">
-  <img src="screenshots/01-home.png" alt="Home" width="200">
-  <img src="screenshots/02-reports.png" alt="Reports" width="200">
-  <img src="screenshots/03-history.png" alt="History" width="200">
+  <img src="public/screenshots/01-home.png" alt="Home" width="200">
+  <img src="public/screenshots/02-reports.png" alt="Reports" width="200">
+  <img src="public/screenshots/03-history.png" alt="History" width="200">
 </p>
 
 ---
@@ -52,7 +52,8 @@ Everything is encrypted with a key derived from your PIN before it touches stora
 
 | Layer | Choice | Why |
 |---|---|---|
-| Language | Vanilla JavaScript, native ES modules | Zero build step. Open the folder, serve it, it runs. |
+| Language | Vanilla JavaScript, native ES modules | No framework. The modules are plain browser JavaScript; `npm run dev` serves them as they are. |
+| Build | [Vite](https://vite.dev) (dev-only dependency) | Bundles and hashes the modules and CSS, and fills in the service worker's precache list and cache name. |
 | Styling | Plain CSS with design tokens (`css/tokens.css`) | One file defines colour, type, spacing, radius and depth for both themes. |
 | Storage | IndexedDB | Large, structured, offline, per-origin. |
 | Crypto | Web Crypto API: PBKDF2 (150k iterations) + AES-256-GCM | Standard primitives, no custom crypto. |
@@ -65,7 +66,7 @@ Everything is encrypted with a key derived from your PIN before it touches stora
 | Shared spaces (optional) | Cloudflare Worker + Durable Objects, Web Push (VAPID) | Stores only ciphertext keyed by random ids and forwards encrypted notifications. Code in [relay/](relay/). |
 | Install count | The same Worker, one `Stats` Durable Object | Three whole numbers (android, ios, other) and week-old random nonces. Shown live on the about page. |
 
-No framework, no bundler, no npm install, no runtime dependencies.
+No framework and no runtime dependencies. Vite is the only npm package, and it only runs at build time: nothing from npm ships to the phone except the bundled app code itself.
 
 ## Our motto: you own your data, we know nothing
 
@@ -94,14 +95,21 @@ Hosting the relay takes about 20 minutes on Cloudflare's free plan. The steps ar
 
 ### Use it
 
-Deploy the folder to any static host and open the URL on your phone.
+Build it once, then deploy the `dist/` folder to any static host and open the URL on your phone.
+
+```bash
+npm ci
+npm run build        # writes dist/
+```
 
 | Host | How |
 |---|---|
-| Netlify Drop | Drag the folder onto [app.netlify.com/drop](https://app.netlify.com/drop) |
-| GitHub Pages | Push to a repo, then Settings, Pages, deploy from branch |
-| Cloudflare Pages | Create a project, direct upload, drag the folder |
-| Vercel | Run `npx vercel` inside the folder |
+| Vercel | Import the repo or run `npx vercel`. `vercel.json` runs the build and serves `dist/` |
+| Netlify Drop | Drag the `dist` folder onto [app.netlify.com/drop](https://app.netlify.com/drop) |
+| Cloudflare Pages | Build command `npm run build`, output directory `dist` |
+| GitHub Pages | Publish `dist/` with a Pages workflow (GitHub Actions) |
+
+Only `dist/` is deployed. It holds the two pages, the service worker, the hashed bundles in `assets/` and everything in `public/`; the relay, tests and tools stay out of it.
 
 Then install it: on Android Chrome accept the install prompt or use *Add to Home screen*; on iPhone Safari tap ••• (or Share), then *Add to Home Screen*. The app and the about page show an **Install app** button where the browser offers a prompt and a **How to install** guide everywhere else (`js/installguide.js`).
 
@@ -109,20 +117,27 @@ Then install it: on Android Chrome accept the install prompt or use *Add to Home
 
 ### Run it locally
 
+Needs Node 20.19+ or 22.12+.
+
 ```bash
 git clone https://github.com/zubairbinshaukat/batwa.git
 cd batwa
-python -m http.server 8000     # or: npx serve
+npm ci
+npm run dev          # http://localhost:8000, source files as they are, live reload
 ```
 
-Open `http://localhost:8000`. That is the entire setup.
+`npm run dev` never registers the service worker (it would cache source files). A worker left on `localhost:8000` by an earlier session (the old `python -m http.server 8000`, or a preview build) is replaced by a clean-up worker that clears its caches and reloads the page once, so your local data stays and the dev app takes over. Both commands use port 8000 and stop with an error if it is taken, rather than moving to another port (a different origin, without your local data). To try the real thing, offline mode and updates included, build and serve the output:
+
+```bash
+npm run build && npm run preview     # http://localhost:8000
+```
 
 ## Developer guide
 
 ### How the app boots
 
 1. `index.html` paints the theme before first render using a tiny inline script, then loads `js/app.js` as a module.
-2. `app.js` registers the service worker, mounts the lock screen from `js/auth.js`, and waits for a PIN (or a fingerprint via `js/biometric.js`).
+2. `app.js` registers the service worker (production builds only), mounts the lock screen from `js/auth.js`, and waits for a PIN (or a fingerprint via `js/biometric.js`).
 3. The PIN derives the key in `js/crypto.js`. `js/db.js` reads the encrypted ledger from IndexedDB and `js/ledger.js` decrypts it into memory.
 4. `app.js` renders the current view. Every ledger mutation fires an `onChange` that re-renders the active view, schedules a sync and refreshes the status pill.
 
@@ -130,15 +145,19 @@ Open `http://localhost:8000`. That is the entire setup.
 
 ```
 index.html              app shell: header, view root, dock, sheet and toast roots
-manifest.webmanifest    PWA manifest: icons, shortcuts, share target
-sw.js                   service worker: precache list and cache version
+about.html              the marketing page (its own entry in the build)
+sw.js                   service worker; the build fills in its cache name and precache list
+package.json            Vite (dev only) and the dev, build, preview and test scripts
+vite.config.js          the build: two pages, relative URLs, dist/ as output
+vercel.json             build command, output folder and cache headers for Vercel
+build/
+  vite-plugin-sw.js     writes dist/sw.js: CACHE, SHELL and the about-page no-cache list
 
 css/
   tokens.css            design system: colours, type, spacing, radius, depth (light + dark)
   base.css              reset, layout primitives, focus and reduced-motion rules
   components.css        every component, grouped by section comments
   onboarding.css        first-run screens
-  installguide.css      the "How to install" sheet, shared with about.html
   about-page.css        about.html's only stylesheet (light only, never loaded by the app)
 
 js/
@@ -162,50 +181,63 @@ js/
   smsparse.js           bank and wallet SMS parser for the share target
   theme.js              light, dark and system theme handling
   ui/                   one module per screen or widget: home, reports, history,
-                        settings, accounts, modals (sheets), charts, icons, toast
+                        settings, accounts, sheet (the sheet layer), modals (the add/edit
+                        forms), charts, icons, toast; lazy.js loads everything Home
+                        doesn't need on demand
   util/                 format (currency, dates), dom (helpers, animation), expr (quick math)
-  vendor/gsap.min.js    animation library, self-hosted
+  vendor/qrcode.js      QR encoder, an ES module the app imports (bundled)
 
-fonts/                  Outfit and Caveat variable fonts
-icons/                  favicon and PWA icon set, generated from branding/logo-source.png
-screenshots/            store screenshots listed in the manifest (Chrome's rich install sheet),
+public/                 served as-is, never bundled or hashed, under the same URLs as before
+  manifest.webmanifest  PWA manifest: icons, shortcuts, share target
+  css/installguide.css  the "How to install" sheet, shared with about.html (loaded there
+                        without blocking, so it stays a separate file)
+  js/vendor/            gsap.min.js (animation) and exceljs.min.js (Excel export), classic
+                        scripts loaded by path, self-hosted
+  fonts/                Outfit, Caveat and Fraunces variable fonts
+  icons/                favicon and PWA icon set, generated from branding/logo-source.png
+  screenshots/          store screenshots listed in the manifest (Chrome's rich install sheet),
                         and the about page's AVIF/WebP images (regenerate with tools/)
+  branding/banks/       bank and wallet logos for the account picker
+  favicon.ico, robots.txt, sitemap.xml, llms.txt, humans.txt
 tools/
   make-images.mjs       dev-only: AVIF + WebP sets for the about page (cd tools && npm i && npm run images)
 branding/
   logo-source.png       master logo render; the one file to replace to rebrand
   logo.png              trimmed logo for the README and docs
-  make-icons.py         regenerates every icon in icons/ from the source render
-  banks/                bank and wallet logos for the account picker
+  make-icons.py         regenerates every icon in public/icons/ from the source render
 ```
 
 ### Conventions that keep the project simple
 
-- **Bump the cache when you ship.** Change `CACHE` in `sw.js` (`batwa-v29` to `batwa-v30`) whenever a file changes, and add new files to its precache list. Users get a "New version ready" toast instead of a stale app.
-- **Version the icon filenames when the logo changes.** Chrome decides an installed PWA needs re-packaging by diffing the manifest, so new artwork behind an old filename can sit stale on a phone for days. Bump `SUFFIX` in `branding/make-icons.py` and the references in `manifest.webmanifest`, `sw.js`, `index.html` and `js/auth.js`.
+- **The cache bumps itself.** `npm run build` names the service worker cache `batwa-v<APP_VERSION>-<hash>`, the hash covering every file in `dist/` the worker may cache (the precache and everything it caches on first use, such as bank logos and icons), and lists every bundle the app can load, so any shipped change reaches phones as a "New version ready" toast. For a release, bump `APP_VERSION` in `js/config.js` and `softwareVersion` in the JSON-LD of `index.html` and `about.html`. A new file in `public/` that must work offline goes into `SHELL` in `sw.js`.
+- **Version the icon filenames when the logo changes.** Chrome decides an installed PWA needs re-packaging by diffing the manifest, so new artwork behind an old filename can sit stale on a phone for days. Bump `SUFFIX` in `branding/make-icons.py` and the references in `public/manifest.webmanifest`, `sw.js`, `index.html` and `js/auth.js`.
 - **Colours and depth come from tokens.** Add or change a colour in `css/tokens.css` for both themes. Components should never hard-code a colour, except on surfaces that sit on the violet gradient in both themes.
 - **Pure logic stays pure.** `insights.js`, `ledger.js` math, `smsparse.js` and `util/expr.js` have no DOM access, so you can test them directly with `node`.
-- **One module owns one screen.** Each `ui/*.js` file renders its own markup and wires its own events. Cross-module UI goes through `modals.js` sheets.
-- **No dependencies.** If a feature needs a library, vendor it into `js/vendor/` so the app keeps working offline and the supply chain stays auditable.
+- **One module owns one screen.** Each `ui/*.js` file renders its own markup and wires its own events. Cross-module UI goes through sheets: `sheet.js` for the sheet layer (open, close, confirm, choose), `modals.js` for the add/edit forms.
+- **Home loads only what Home needs.** Reports, History, Settings, the space view, the forms and the spaces sheets are loaded through `js/ui/lazy.js` (`load.reports()`, `use("modals", …)`) and prefetched right after Home paints; the service worker precaches them all. Don't import one of them statically from the start-up path: the build warns (`INEFFECTIVE_DYNAMIC_IMPORT`) when that folds it back into the main bundle.
+- **No runtime dependencies.** If a feature needs a library, vendor it so the app keeps working offline and the supply chain stays auditable: an ES module the app imports goes in `js/vendor/` (bundled), a classic script loaded by path goes in `public/js/vendor/`.
 - **Privacy is a design constraint.** Anything stored outside the encrypted ledger must be justified in a code comment, as `reminders.js` does for due dates.
 
 ### Checking your work
 
 ```bash
+# unit tests: the owe rules and compaction (js/spaces/merge.js), crypto, report export
+npm test
+
+# the production build: fails if a precached file is missing from dist/
+npm run build
+
 # syntax check every module
 for f in js/*.js js/ui/*.js js/util/*.js; do node --check "$f"; done
 
 # exercise a pure module
 node -e "import('./js/util/expr.js').then(m => console.log(m.evalAmountExpr('120+80')))"
 
-# fixtures: the owe rules and compaction (js/spaces/merge.js), report export
-node --test test/*.test.mjs
-
 # the relay, end to end against a local wrangler dev
 cd relay && npm ci && npm test
 ```
 
-For UI changes, serve the folder and test on a real phone or a 390 x 844 viewport in devtools, in both themes.
+For UI changes, run `npm run dev` and test on a real phone or a 390 x 844 viewport in devtools, in both themes. For anything touching offline or updates, use `npm run build && npm run preview`.
 
 ### Enabling cloud sync during development
 
@@ -219,8 +251,8 @@ Sync runs on open, a few seconds after each change, when connectivity returns an
 
 ## Contributing
 
-Issues and pull requests are welcome. Keep changes small and focused, follow the conventions above, bump the service worker cache, and include screenshots for anything visual. If a change touches storage or crypto, explain the privacy impact in the pull request.
+Issues and pull requests are welcome. Keep changes small and focused, follow the conventions above, run `npm test` and `npm run build`, and include screenshots for anything visual. If a change touches storage or crypto, explain the privacy impact in the pull request.
 
 ## Acknowledgements
 
-Built with the Web Platform and nothing else: IndexedDB, Web Crypto, WebAuthn, Service Workers, Web Share Target. Animations by [GSAP](https://gsap.com). Typefaces [Outfit](https://fonts.google.com/specimen/Outfit), [Caveat](https://fonts.google.com/specimen/Caveat) and [Fraunces](https://fonts.google.com/specimen/Fraunces).
+Runs on the Web Platform and nothing else: IndexedDB, Web Crypto, WebAuthn, Service Workers, Web Share Target. Bundled with [Vite](https://vite.dev). Animations by [GSAP](https://gsap.com). Typefaces [Outfit](https://fonts.google.com/specimen/Outfit), [Caveat](https://fonts.google.com/specimen/Caveat) and [Fraunces](https://fonts.google.com/specimen/Fraunces).

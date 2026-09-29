@@ -12,12 +12,21 @@ desktop.ini
 docs/
 batwa-app-spec.md
 
-# Tooling that must never land in the repo (Batwa has no npm dependencies)
+# Build output (npm run build) and installed tooling
+dist/
 node_modules/
+
+# Stray package manifests. Batwa has no runtime dependencies; the only npm
+# projects are the root (Vite, dev only), the relay and tools/, allowed below.
 package.json
 package-lock.json
 pnpm-lock.yaml
 yarn.lock
+
+# ...except the root build: Vite as a devDependency, lockfile committed so
+# `npm ci` on Vercel installs exactly what was tested.
+!/package.json
+!/package-lock.json
 
 # ...except the relay Worker, which is a separate deployable with its own
 # toolchain (wrangler as a devDependency). Its node_modules stays ignored.

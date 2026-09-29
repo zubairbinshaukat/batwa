@@ -2,19 +2,24 @@
    Batwa — base: reset, typography, layout primitives
    ============================================================ */
 
+/* Font URLs are root-relative on purpose: /fonts/ lives in public/, and Vite
+   recognises a leading slash as a public file, leaves the file unhashed and
+   writes it back as "../fonts/…" next to the built CSS in assets/. That is
+   the same /fonts/<name>.woff2 the HTML preloads, so each font downloads
+   once, and the relative form keeps a sub-folder deploy working. */
 @font-face {
   font-family: "Outfit";
   font-style: normal;
   font-weight: 100 900;
   font-display: swap;
-  src: url("../fonts/outfit-var.woff2") format("woff2");
+  src: url("/fonts/outfit-var.woff2") format("woff2");
 }
 @font-face {
   font-family: "Caveat";
   font-style: normal;
   font-weight: 400 700;
   font-display: swap;
-  src: url("../fonts/caveat-var.woff2") format("woff2");
+  src: url("/fonts/caveat-var.woff2") format("woff2");
 }
 
 *, *::before, *::after { box-sizing: border-box; }

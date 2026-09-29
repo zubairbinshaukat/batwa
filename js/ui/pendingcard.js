@@ -19,7 +19,7 @@ import { icon, catIcon } from "./icons.js";
 import { logoTile } from "./accounts.js";
 import { categoryField } from "./catedit.js";
 import { toast } from "./toast.js";
-import { openSheet, closeSheet } from "./modals.js";
+import { openSheet, closeSheet } from "./sheet.js";
 import {
   getSpace, membersOf, sharedEntry, myShareOf, colorHex, MEMBER_COLORS, initialsOf,
   acceptShared, rejectShared, editShared, resolveUnassigned, unassignedOf,

@@ -3,9 +3,10 @@
 Usage:  python branding/make-og.py
 
 Writes
-  screenshots/og-batwa.png        1200x630 social card
-  icons/author-192.webp           transparent circular avatar (1x)
-  icons/author-384.webp           transparent circular avatar (2x)
+  public/screenshots/og-batwa.png   1200x630 social card
+  public/icons/author-192.webp      transparent circular avatar (1x)
+  public/icons/author-384.webp      transparent circular avatar (2x)
+(public/ is served as-is by the Vite build, under the same URLs.)
 
 The about page's hero images (AVIF + WebP at four widths) moved to
 tools/make-images.mjs, which measured smaller files at better quality.
@@ -18,8 +19,9 @@ import os
 from PIL import Image, ImageDraw, ImageFilter, ImageFont
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+PUBLIC = os.path.join(ROOT, "public")
 
-OUTFIT = os.path.join(ROOT, "fonts", "outfit-var.woff2")
+OUTFIT = os.path.join(PUBLIC, "fonts", "outfit-var.woff2")
 LOGO = os.path.join(ROOT, "branding", "logo.png")
 AUTHOR_SRC = os.path.join(ROOT, "branding", "author-source.webp")
 
@@ -107,7 +109,7 @@ def make_og():
            fill=(255, 255, 255, 205))
 
     # The home screen, cropped to the top of the phone and tilted into a card.
-    shot = Image.open(os.path.join(ROOT, "screenshots", "01-home.png")).convert("RGBA")
+    shot = Image.open(os.path.join(PUBLIC, "screenshots", "01-home.png")).convert("RGBA")
     target_w, target_h = 360, 540
     scale = target_w / shot.width
     shot = shot.resize((target_w, int(shot.height * scale)), Image.LANCZOS)
@@ -118,9 +120,9 @@ def make_og():
     card.alpha_composite(shadow.filter(ImageFilter.GaussianBlur(26)))
     card.alpha_composite(shot, (780, 76))
 
-    out = os.path.join(ROOT, "screenshots", "og-batwa.png")
+    out = os.path.join(PUBLIC, "screenshots", "og-batwa.png")
     card.convert("RGB").save(out, optimize=True)
-    print("wrote screenshots/og-batwa.png  %dx%d  %s" % (W, H, kb(out)))
+    print("wrote public/screenshots/og-batwa.png  %dx%d  %s" % (W, H, kb(out)))
 
 
 # ---------------------------------------------------------------- avatar
@@ -156,9 +158,9 @@ def make_avatar():
         # Keep the cut-out's own transparency AND clip it to the circle, so
         # the CSS plate (--c-violet-soft) shows through behind the shoulders.
         img.putalpha(Image.composite(alpha, Image.new("L", (size, size), 0), mask))
-        out = os.path.join(ROOT, "icons", "author-%d.webp" % size)
+        out = os.path.join(PUBLIC, "icons", "author-%d.webp" % size)
         img.save(out, "WEBP", quality=82, method=6)
-        print("wrote icons/author-%d.webp  %dx%d  %s" % (size, size, size, kb(out)))
+        print("wrote public/icons/author-%d.webp  %dx%d  %s" % (size, size, size, kb(out)))
 
 
 def main():

@@ -29,7 +29,7 @@
   <meta name="twitter:image" content="https://batwa.zubyr.dev/screenshots/og-batwa.png">
 
   <link rel="manifest" href="manifest.webmanifest">
-  <link rel="icon" href="/favicon.ico" sizes="48x48">
+  <link rel="icon" href="/favicon.ico" sizes="48x48" vite-ignore>
   <link rel="icon" href="icons/favicon-96.png" type="image/png" sizes="96x96">
   <link rel="icon" href="icons/favicon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="icons/apple-touch-icon-180-v2.png">
@@ -129,75 +129,28 @@
     })();
   </script>
 
+  <!-- Vite bundles these stylesheets into one hashed file in assets/. The
+       `vite-ignore` links and scripts in this file point at public/ and must
+       reach the browser under the same URL as before (installguide.css is
+       shared with about.html, which loads it non-blocking); Vite strips the
+       attribute and leaves the tag otherwise untouched. -->
   <link rel="stylesheet" href="css/tokens.css">
   <link rel="stylesheet" href="css/base.css">
   <link rel="stylesheet" href="css/components.css">
   <link rel="stylesheet" href="css/onboarding.css">
-  <link rel="stylesheet" href="css/installguide.css">
+  <link rel="stylesheet" href="css/installguide.css" vite-ignore>
 
-  <!-- Flattens js/app.js's static import waterfall: without these, the
-       browser only discovers a deeper module once its parent has finished
-       fetching + parsing, one level at a time (~5 levels here). Preloading
-       every module up front lets them all fetch in parallel instead, so the
-       lock/fingerprint path (which is at the bottom of that waterfall) is
-       ready far sooner.
-       This list is exactly the static import graph reachable from js/app.js
-       (walked with a throwaway script, not guessed) — lock-critical modules
-       first (auth + everything auth.js needs to decide and paint the lock
-       screen, plus ledger.js's own small dep chain, since js/ui/icons.js
-       imports it — see the icons.js/ledger.js/auth.js cycle note in
-       js/app.js), then the rest of the app in the order app.js's own imports
-       first reach them. If app.js's import graph changes — a new module, a
-       dropped one, a moved import — this list AND sw.js's SHELL array both
-       have to move with it, or a module either loads late again or (worse)
-       is fetched here but never actually served by the cache-first SW. -->
-  <link rel="modulepreload" href="js/app.js">
-  <link rel="modulepreload" href="js/db.js">
-  <link rel="modulepreload" href="js/config.js">
-  <link rel="modulepreload" href="js/auth.js">
-  <link rel="modulepreload" href="js/installguide.js">
-  <link rel="modulepreload" href="js/installcount.js">
-  <link rel="modulepreload" href="js/crypto.js">
-  <link rel="modulepreload" href="js/biometric.js">
-  <link rel="modulepreload" href="js/session.js">
-  <link rel="modulepreload" href="js/util/dom.js">
-  <link rel="modulepreload" href="js/perf.js">
-  <link rel="modulepreload" href="js/ui/icons.js">
-  <link rel="modulepreload" href="js/ledger.js">
-  <link rel="modulepreload" href="js/util/format.js">
-  <link rel="modulepreload" href="js/util/category.js">
-  <link rel="modulepreload" href="js/sync.js">
-  <link rel="modulepreload" href="js/ui/toast.js">
-  <link rel="modulepreload" href="js/ui/modals.js">
-  <link rel="modulepreload" href="js/spaces.js">
-  <link rel="modulepreload" href="js/relay.js">
-  <link rel="modulepreload" href="js/spaces/crypto.js">
-  <link rel="modulepreload" href="js/spaces/merge.js">
-  <link rel="modulepreload" href="js/spaces/notify.js">
-  <link rel="modulepreload" href="js/ui/pushsetup.js">
-  <link rel="modulepreload" href="js/ui/accounts.js">
-  <link rel="modulepreload" href="js/ui/reveal.js">
-  <link rel="modulepreload" href="js/util/expr.js">
-  <link rel="modulepreload" href="js/ui/catedit.js">
-  <link rel="modulepreload" href="js/ui/home.js">
-  <link rel="modulepreload" href="js/ui/monthsheet.js">
-  <link rel="modulepreload" href="js/insights.js">
-  <link rel="modulepreload" href="js/ui/pendingcard.js">
-  <link rel="modulepreload" href="js/ui/reports.js">
-  <link rel="modulepreload" href="js/ui/charts.js">
-  <link rel="modulepreload" href="js/ui/history.js">
-  <link rel="modulepreload" href="js/ui/settings.js">
-  <link rel="modulepreload" href="js/reminders.js">
-  <link rel="modulepreload" href="js/theme.js">
-  <link rel="modulepreload" href="js/ui/spaces.js">
-  <link rel="modulepreload" href="js/vendor/qrcode.js">
-  <link rel="modulepreload" href="js/nudge.js">
-  <link rel="modulepreload" href="js/smsparse.js">
-  <link rel="modulepreload" href="js/ui/dock.js">
-  <link rel="modulepreload" href="js/ui/spaceview.js">
+  <!-- defer, not a plain classic script: deferred classic scripts and module
+       scripts both execute in document order after parsing, so gsap is still
+       guaranteed to run (and define window.gsap) before js/app.js does — it
+       just never blocks the parser while it downloads. It sits in <head>, not
+       at the end of <body>, because the build injects the app's module script
+       at the end of <head>: gsap must come before it in the document for that
+       order to hold. Served as-is from public/. -->
+  <script defer src="js/vendor/gsap.min.js" vite-ignore></script>
 
-  <!-- Structured data. `softwareVersion` mirrors the sw.js cache number and
-       APP_VERSION in js/config.js — bump all three together. No LICENSE file
+  <!-- Structured data. `softwareVersion` mirrors APP_VERSION in js/config.js
+       (which the build also uses to name the sw.js cache) — bump them together. No LICENSE file
        in the repo, so no `license` key (a 404 there is worse than nothing). -->
   <script type="application/ld+json">
   {
@@ -220,7 +173,7 @@
       "https://batwa.zubyr.dev/screenshots/01-home.png",
       "https://batwa.zubyr.dev/screenshots/02-reports.png"
     ],
-    "softwareVersion": "35.1",
+    "softwareVersion": "36",
     "isAccessibleForFree": true,
     "codeRepository": "https://github.com/zubairbinshaukat/batwa",
     "author": {
@@ -272,13 +225,8 @@
   <div id="toast-root" class="toast-root" aria-live="polite"></div>
   <div id="lock-root"></div>
 
-  <!-- defer, not a plain classic script: deferred classic scripts and module
-       scripts both execute in document order after parsing, so gsap is still
-       guaranteed to run (and define window.gsap) before js/app.js does — it
-       just no longer blocks the parser from reaching the body's end while it
-       downloads, which used to add its own delay before app.js could even
-       start. -->
-  <script defer src="js/vendor/gsap.min.js"></script>
+  <!-- Vite replaces this tag with the built entry, injected at the end of
+       <head> (which is why gsap's tag sits in <head> too, see above). -->
   <script type="module" src="js/app.js"></script>
 
   <noscript>

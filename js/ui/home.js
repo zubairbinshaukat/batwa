@@ -3,7 +3,10 @@
 import { $, el, esc, anim, animTo, motionOK, buzz, tune } from "../util/dom.js";
 import { fmtMoney, fmtCompact, fmtNum, dueHint, shortDate, thisMonth, CURRENCY } from "../util/format.js";
 import { state, balances, pendingExpenses, markPaid, unmarkPaid, deleteEntry, deleteSeriesFuture, restoreEntries, limitStatus, monthSummary } from "../ledger.js";
-import { addMoneySheet, addExpenseSheet, confirmSheet, chooseSheet } from "./modals.js";
+import { confirmSheet, chooseSheet } from "./sheet.js";
+// The add/edit forms and the pending sheet load on demand; Home only needs
+// them once something is tapped (and by then prefetchAll() has them).
+import { use } from "./lazy.js";
 import { toast } from "./toast.js";
 import { renderAccountsRow, accountName, accountKind, logoTile } from "./accounts.js";
 import { icon, catIcon } from "./icons.js";
@@ -11,7 +14,6 @@ import { go } from "../app.js";
 import { isRevealed, setRevealed } from "./reveal.js";
 import { openMonthSheet } from "./monthsheet.js";
 import { allPending, myShareOf, colorHex, MEMBER_COLORS, initialsOf, membersOf } from "../spaces.js";
-import { pendingSheet } from "./pendingcard.js";
 
 let hasCountedUp = false;
 
@@ -276,7 +278,7 @@ function incomeCard(e) {
     const act = btn.dataset.act;
     buzz(10);
 
-    if (act === "edit") { addMoneySheet(e); return; }
+    if (act === "edit") { use("modals", (m) => m.addMoneySheet(e)); return; }
 
     if (act === "received") {
       await celebratePaid(card);
@@ -372,7 +374,7 @@ function expenseCard(e) {
     const act = btn.dataset.act;
     buzz(10);
 
-    if (act === "edit") { addExpenseSheet(e); return; }
+    if (act === "edit") { use("modals", (m) => m.addExpenseSheet(e)); return; }
 
     if (act === "paid") {
       await celebratePaid(card);
@@ -456,7 +458,11 @@ function celebratePaid(card) {
    through renderView() — so a proposal landing in the background while a sheet
    is open updates this card and touches nothing else (§9.29).
 
-   Zero pending, or zero spaces: the slot is emptied and the card is gone. */
+   Zero pending, or zero spaces: the slot is emptied and the card is gone.
+
+   Everything painted here comes from js/spaces.js, which is on the start-up
+   path, so the card lands in the same frame and the same place as always. Only
+   a tap needs the pending sheet (js/ui/pendingcard.js), loaded on demand. */
 
 export function paintSpacesSlot() {
   const slot = $("#spaces-slot");
@@ -476,7 +482,7 @@ export function paintSpacesSlot() {
     const who = membersOf(space.id).find((m) => m.memberId === entry.proposedBy);
     const row = el("button", {
       class: "shared-row",
-      onclick: () => { buzz(8); pendingSheet(); },
+      onclick: () => { buzz(8); use("pendingcard", (m) => m.pendingSheet()); },
     });
     row.innerHTML = `
       <span class="sp-av" style="width:26px;height:26px;background:${colorHex(who?.color, MEMBER_COLORS)}">${esc(initialsOf(who?.name || "?"))}</span>
@@ -490,7 +496,7 @@ export function paintSpacesSlot() {
 
   card.append(el("button", {
     class: "shared-all",
-    onclick: () => { buzz(8); pendingSheet(); },
+    onclick: () => { buzz(8); use("pendingcard", (m) => m.pendingSheet()); },
     html: `See all ${icon("chevron-right", 14)}`,
   }));
 

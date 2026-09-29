@@ -16,7 +16,8 @@ import os
 from PIL import Image, ImageDraw, ImageFilter, ImageFont
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-OUTFIT = os.path.join(ROOT, "fonts", "outfit-var.woff2")
+PUBLIC = os.path.join(ROOT, "public")  # fonts and screenshots live here since v36
+OUTFIT = os.path.join(PUBLIC, "fonts", "outfit-var.woff2")
 MONO = r"C:\Windows\Fonts\consola.ttf"
 OUT_DIR = os.path.join(ROOT, "zubyr-export", "images", "batwa")
 
@@ -57,7 +58,7 @@ def rounded(img, radius):
 
 def frame(name, height):
     """A flat screenshot as a rounded phone frame with a thin light bezel."""
-    shot = Image.open(os.path.join(ROOT, "screenshots", name)).convert("RGBA")
+    shot = Image.open(os.path.join(PUBLIC, "screenshots", name)).convert("RGBA")
     w = round(shot.width * height / shot.height)
     shot = shot.resize((w, height), Image.LANCZOS)
     r = round(height * 0.052)
@@ -118,7 +119,7 @@ def main():
     home = frame("01-home.png", centre_h)
     reports = frame("02-reports.png", side_h)
 
-    spaces = Image.open(os.path.join(ROOT, "screenshots", "hero-spaces.png")).convert("RGBA")
+    spaces = Image.open(os.path.join(PUBLIC, "screenshots", "hero-spaces.png")).convert("RGBA")
     sp_h = round(centre_h * 1.12)
     spaces = spaces.resize((round(spaces.width * sp_h / spaces.height), sp_h), Image.LANCZOS)
 

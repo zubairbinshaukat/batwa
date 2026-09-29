@@ -15,7 +15,7 @@ import {
   normalizeRange,
 } from "../report-export.js";
 import { downloadBlob } from "../util/download.js";
-import { openSheet, onSheetClosed, toggleRow } from "./modals.js";
+import { openSheet, onSheetClosed, toggleRow } from "./sheet.js";
 import { accountName } from "./accounts.js";
 import { toast } from "./toast.js";
 import { icon } from "./icons.js";

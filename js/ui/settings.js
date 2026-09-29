@@ -4,7 +4,7 @@ import { $, el, esc, anim, buzz, hapticsOn, setHaptics, canVibrate } from "../ut
 import { state, saveLimits, deleteCategory, countInCategory, RESERVED_CATEGORY } from "../ledger.js";
 import { changePin, disablePin, enablePin, getKeyMode, enrollBiometricWithPin } from "../auth.js";
 import { bioAvailable, isBioEnrolled, removeBio } from "../biometric.js";
-import { openSheet, closeSheet, confirmSheet, chooseSheet, toggleRow } from "./modals.js";
+import { openSheet, closeSheet, confirmSheet, chooseSheet, toggleRow } from "./sheet.js";
 import { getPerfMode, setPerfMode, perfLabel, onPerfChange } from "../perf.js";
 import { toast } from "./toast.js";
 import {

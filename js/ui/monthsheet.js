@@ -9,7 +9,7 @@ import {
 } from "../util/format.js";
 import { state } from "../ledger.js";
 import { dailySpend } from "../insights.js";
-import { openSheet } from "./modals.js";
+import { openSheet } from "./sheet.js";
 import { icon, catIcon } from "./icons.js";
 import { accountName } from "./accounts.js";
 import { isRevealed, setRevealed } from "./reveal.js";
